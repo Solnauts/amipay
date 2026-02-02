@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, Responder, post, web};
 use reqwest::{self, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::thread;
 
 use tokio;
 //the ai calling controller
@@ -30,8 +31,10 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
         "format":"json"
     });
 
-    let response = ai_api_call(payload.to_string(), client, url.to_string()).unwrap();
-    HttpResponse::Ok().body(response)
+    let response = thread::spawn(move || ai_api_call(payload.to_string(), client, url.to_string()))
+        .join()
+        .expect("thread panicked");
+    HttpResponse::Ok().body(response.unwrap())
 }
 
 #[tokio::main]
