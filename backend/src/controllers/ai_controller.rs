@@ -2,11 +2,7 @@ use actix_web::{HttpResponse, Responder, post, web};
 use reqwest::{self, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{thread, time::Duration};
-
-use tokio;
-//the ai calling controller
-//will use reqwest
+use std::time::Duration;
 
 //the value struct
 #[derive(Debug, Serialize, Deserialize)]
