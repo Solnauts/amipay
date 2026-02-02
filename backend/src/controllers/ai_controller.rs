@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, Responder, post, web};
 use reqwest::{self, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::thread;
+use std::{thread, time::Duration};
 
 use tokio;
 //the ai calling controller
@@ -14,12 +14,42 @@ pub struct RequestBody {
     value: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct AiResponse {
+    model: String,
+    created_at: String,
+    response: String,
+    //critical this must bea string
+    thinking: String,
+    done: bool,
+    context: Vec<u64>,
+    total_duration: u64,
+}
+
+#[derive(Deserialize, Debug)]
+struct InnerThinking {
+    input: String,
+    task: String,
+    output: InnerOutput,
+}
+
+#[derive(Deserialize, Debug)]
+struct InnerOutput {
+    title: String,
+    content: String,
+}
+
 #[post("/query")]
 async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
+    println!("the response is received");
+
     //call the ollama instance
     let url = "http://localhost:11434/api/generate";
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_mins(1))
+        .build()
+        .unwrap();
 
     let message_val = &data.value;
 
@@ -31,10 +61,18 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
         "format":"json"
     });
 
-    let response = thread::spawn(move || ai_api_call(payload.to_string(), client, url.to_string()))
-        .join()
-        .expect("thread panicked");
-    HttpResponse::Ok().body(response.unwrap())
+    let response = client
+        .post(url)
+        .body(payload.to_string())
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    println!("the response is : {}", response.to_string());
+    HttpResponse::Ok().body("response received")
 }
 
 #[tokio::main]
