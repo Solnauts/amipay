@@ -64,11 +64,8 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
         .await
         .unwrap();
 
-    println!("the response is : {}", response);
-
     let outer_response: AiResponse = serde_json::from_str(&response).unwrap();
     let main_response: MainResponse = serde_json::from_str(&outer_response.response).unwrap();
 
-    println!("the response is : {:?}", main_response);
     HttpResponse::Ok().json(main_response)
 }
