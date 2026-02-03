@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
 
-//the value struct
+//the request struct
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestBody {
     value: String,
@@ -66,20 +66,9 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
 
     println!("the response is : {}", response);
 
-    if response.contains("transaction_history") {}
     let outer_response: AiResponse = serde_json::from_str(&response).unwrap();
     let main_response: MainResponse = serde_json::from_str(&outer_response.response).unwrap();
 
     println!("the response is : {:?}", main_response);
     HttpResponse::Ok().json(main_response)
-}
-
-#[tokio::main]
-async fn ai_api_call(
-    payload: String,
-    client: Client,
-    url: String,
-) -> Result<String, reqwest::Error> {
-    let res = client.post(url).body(payload).send().await?.text().await?;
-    Ok(res)
 }
