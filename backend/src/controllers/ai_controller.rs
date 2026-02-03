@@ -18,21 +18,18 @@ pub struct AiResponse {
     //critical this must bea string
     thinking: String,
     done: bool,
+    done_reason: String,
     context: Vec<u64>,
     total_duration: u64,
 }
 
-#[derive(Deserialize, Debug)]
-struct InnerThinking {
-    input: String,
-    task: String,
-    output: InnerOutput,
-}
-
-#[derive(Deserialize, Debug)]
-struct InnerOutput {
-    title: String,
-    content: String,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MainResponse {
+    intent: String,
+    amount: u64,
+    currency: String,
+    recipient: String,
+    history_limit: Option<String>,
 }
 
 #[post("/query")]
@@ -43,7 +40,7 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
     let url = "http://localhost:11434/api/generate";
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_mins(1))
+        .timeout(Duration::from_mins(2))
         .build()
         .unwrap();
 
@@ -51,14 +48,14 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
 
     //create the json payload
     let payload = json!({
-        "model" : "qwen3:4b",
+        "model" : "bank_agent",
         "prompt" : message_val,
         "stream": false,
-        "format":"json"
     });
 
     let response = client
         .post(url)
+        .header("Content_Type", "application/json")
         .body(payload.to_string())
         .send()
         .await
@@ -67,8 +64,11 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
         .await
         .unwrap();
 
-    println!("the response is : {}", response.to_string());
-    HttpResponse::Ok().body("response received")
+    let outer_response: AiResponse = serde_json::from_str(&response).unwrap();
+    let main_response: MainResponse = serde_json::from_str(&outer_response.response).unwrap();
+
+    println!("the response is : {:?}", main_response);
+    HttpResponse::Ok().json(main_response)
 }
 
 #[tokio::main]
