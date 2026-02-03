@@ -12,9 +12,10 @@ pub struct User {
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
-pub struct NewUser<'a> {
-    pub name: &'a str,
-    pub password: &'a str,
+#[derive(Debug)]
+pub struct NewUser {
+    pub name: String,
+    pub password: String,
 }
 
 //fix for the password like need to encrypt this before sending to database
