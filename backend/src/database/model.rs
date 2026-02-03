@@ -1,5 +1,6 @@
 use crate::schema::user;
 use diesel::prelude::*;
+use serde::Deserialize;
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::user)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -12,7 +13,6 @@ pub struct User {
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
-#[derive(Debug)]
 pub struct NewUser {
     pub name: String,
     pub password: String,
