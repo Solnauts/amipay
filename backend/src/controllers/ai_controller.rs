@@ -26,10 +26,10 @@ pub struct AiResponse {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MainResponse {
     intent: String,
-    amount: u64,
-    currency: String,
-    recipient: String,
-    history_limit: Option<String>,
+    amount: Option<u64>,
+    currency: Option<String>,
+    recipient: Option<String>,
+    history_limit: Option<u64>,
 }
 
 #[post("/query")]
@@ -64,6 +64,9 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
         .await
         .unwrap();
 
+    println!("the response is : {}", response);
+
+    if response.contains("transaction_history") {}
     let outer_response: AiResponse = serde_json::from_str(&response).unwrap();
     let main_response: MainResponse = serde_json::from_str(&outer_response.response).unwrap();
 
