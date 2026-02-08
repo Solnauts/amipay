@@ -4,13 +4,20 @@ import { Contract } from "../target/types/contract";
 
 describe("contract", () => {
   // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
   const program = anchor.workspace.contract as Program<Contract>;
 
+
+  //make a signer keypair 
   it("Is initialized!", async () => {
     // Add your test here.
     const tx = await program.methods.initialize().rpc();
     console.log("Your transaction signature", tx);
   });
+
+
+  //make things crazy good 
+
 });

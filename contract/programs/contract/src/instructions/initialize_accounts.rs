@@ -25,5 +25,5 @@ pub struct InitializeMainAccounts<'info> {
 
     //create usdc_vault
     #[account(init, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"user_usdc_ata",usdc_mint.key().as_ref()], bump)]
-    pub usdc_vault: InterfaceAccount<'info, TokenAccount>,
+    pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
 }
