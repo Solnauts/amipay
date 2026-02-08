@@ -1,6 +1,15 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Contract } from "../target/types/contract";
+import {
+  createSolanaRpcSubscriptions,
+  sendAndConfirmTransactionFactory,
+} from '@solana/kit';
+import { address, createSolanaRpc } from "@solana/kit"
+
+
+
+const rpc = createSolanaRpc('https://api.devnet.solana.com');
 
 describe("contract", () => {
   // Configure the client to use the local cluster.
