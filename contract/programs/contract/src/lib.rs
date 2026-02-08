@@ -5,6 +5,7 @@ use anchor_spl::{
     token_interface::{self, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked},
 };
 mod datastructs;
+mod errors;
 
 use datastructs::MainAccountShape;
 
@@ -40,13 +41,13 @@ pub struct Initialize<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 
     //create usdc_vault
-    #[account(init, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program  = token_program, seeds = [b"user_usdc_ata",usdc_mint.key().as_ref()], bump)]
+    #[account(init, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"user_usdc_ata",usdc_mint.key().as_ref()], bump)]
     pub usdc_vault: InterfaceAccount<'info, TokenAccount>,
 }
 
 //for the transfer
 #[derive(Accounts)]
-pub struct Swap<'info> {
+pub struct TransferToVault<'info> {
     //signer
     #[account(mut)]
     pub signer: Signer<'info>,
@@ -64,6 +65,32 @@ pub struct Swap<'info> {
     pub main_state_account: Account<'info, MainAccountShape>,
 
     //user usdc account
-    #[account(init, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program  = token_program, seeds = [b"user_usdc_ata",usdc_mint.key().as_ref()], bump)]
-    pub usdc_vault: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
+}
+
+#[error_code]
+pub enum TransferToVaultError {
+    #[msg("insufficient amount to transfer")]
+    InsufficientAmountError,
+}
+
+impl<'info> TransferToVault<'info> {
+    //transfer from user wallet to the mainvault
+    pub fn main_transfer(&self, amount: u64) -> Result<()> {
+        //main the account is not working fine on this
+        //checks for the amount
+        Ok(())
+    }
+
+    fn checks(&self, amount: u64) -> Result<()> {
+        //if account has the sufficient amount
+        if self.user_usdc_ata.amount < amount {
+            return err!(TransferToVaultError::InsufficientAmountError);
+        }
+
+        Ok(())
+    }
+
+    fn transfer_to_main_vault() {}
 }
