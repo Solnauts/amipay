@@ -11,6 +11,7 @@ mod schema;
 
 //calling the db connection function
 
+//have to find the way to club multiple conttroller at one one for clean code
 #[actix_web::main]
 async fn main() -> Result<()> {
     //call the databse connection first
