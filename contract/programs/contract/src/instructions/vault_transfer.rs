@@ -1,11 +1,6 @@
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{self, Token},
-    token_interface::{self, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked},
-};
-
 use crate::brainstructs::MainAccountShape;
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
 //for the transfer
 #[derive(Accounts)]

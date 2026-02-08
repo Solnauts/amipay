@@ -1,14 +1,11 @@
-use crate::MainAccountShape;
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{self, Token},
-    token_interface::{self, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked},
-};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+
+use crate::brainstructs::MainAccountShape;
 
 //function for the initilizing the struct
 #[derive(Accounts)]
-pub struct Initialize<'info> {
+pub struct InitializeMainAccounts<'info> {
     //signer
     #[account(mut)]
     //key in the user behalf

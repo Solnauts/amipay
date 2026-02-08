@@ -1,11 +1,10 @@
 use anchor_lang::prelude::*;
-mod brainstructs;
-mod errors;
-mod instructions;
 
-use crate::instructions::initialize::Initialize;
-use crate::instructions::transfertovault::TransferToVault;
-use brainstructs::MainAccountShape;
+pub mod brainstructs;
+pub mod errors;
+pub mod instructions;
+
+use instructions::*;
 
 declare_id!("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5");
 
@@ -13,7 +12,7 @@ declare_id!("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5");
 pub mod contract {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    pub fn initialize(ctx: Context<InitializeMainAccounts>) -> Result<()> {
         //return the user public address from this function
         msg!("Greetings from: {:?}", ctx.program_id);
         Ok(())
