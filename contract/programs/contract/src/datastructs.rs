@@ -8,6 +8,8 @@ use anchor_spl::{
 //the acccount should be init before
 
 //account struct fo the mainbrain state
+
+
 #[account]
 #[derive(InitSpace)]
 pub struct MainAccountShape {
