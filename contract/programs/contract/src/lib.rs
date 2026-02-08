@@ -16,6 +16,8 @@ pub mod contract {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+
+    //return the user public address from this function
         msg!("Greetings from: {:?}", ctx.program_id);
         Ok(())
     }
@@ -73,6 +75,7 @@ pub struct TransferToVault<'info> {
     pub main_usdc_vault: InterfaceAccount<'info, TokenAccount>,
 }
 
+
 #[error_code]
 pub enum TransferToVaultError {
     #[msg("insufficient amount to transfer")]
@@ -83,7 +86,12 @@ impl<'info> TransferToVault<'info> {
     //transfer from user wallet to the mainvault
     pub fn main_transfer(&self, amount: u64) -> Result<()> {
         //main the account is not working fine on this
+
         //checks for the amount
+        self.checks(amount)?;
+        //transfer to the main vault
+        self.transfer_to_main_vault(amount)?;
+
         Ok(())
     }
 
@@ -139,6 +147,7 @@ impl<'info> TransferToVault<'info> {
     //    Ok(())
     //}
 
+    //transfer to the main vault
     fn transfer_to_main_vault(&self, amount: u64) -> Result<()> {
         let decimals = self.usdc_mint.decimals;
 
