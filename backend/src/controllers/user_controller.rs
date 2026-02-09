@@ -16,3 +16,12 @@ async fn create_user(data: web::Json<NewUser>) -> impl Responder {
 
     HttpResponse::Ok().body("user successfully created")
 }
+
+async fn create_wallet(data: web::Json<NewUser>) -> impl Responder {
+    //extract the data from the data
+    let web::Json(NewUser { name, password }) = data;
+
+    //call the create_user database function
+
+    HttpResponse::Ok().body("user successfully created")
+}
