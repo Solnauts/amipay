@@ -10,11 +10,12 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { assert, config, expect } from "chai";
-import { address, generateKeyPair, Address, KeyPairSigner, Lamports, lamports } from '@solana/kit';
-import { createClient } from './client';
+import { address, generateKeyPair, Address, KeyPairSigner, Lamports, lamports, sendAndConfirmTransactionFactory, generateKeyPairSigner } from '@solana/kit';
+import { createClient, getSendandConfirm } from './client';
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
-const client = createClient();
 
+const client = createClient();
+const sendAndConfirm = getSendandConfirm();
 
 
 describe("contract", () => {
@@ -24,7 +25,6 @@ describe("contract", () => {
 
   const program = anchor.workspace.contract as Program<Contract>;
   const connection = provider.connection;
-  const wallet = provider.wallet as anchor.Wallet;
 
   // Test accounts
   let usdcMint: Address;
@@ -40,17 +40,19 @@ describe("contract", () => {
   // Helper function to airdrop SOL
   async function airdropSol(address: Address,) {
     let airdropAmt = lamports(BigInt(10 * LAMPORTS_PER_SOL));
-    const signature = await client.rpc.requestAirdrop(address, airdropAmt, { commitment: "confirmed" }).send();
+    await client.rpc.requestAirdrop(address, airdropAmt, { commitment: "confirmed" }).send();
   }
-
+  let wallet: KeyPairSigner;
   // Setup before all tests
   before(async () => {
     console.log("Setting up test environment...");
+    wallet = await generateKeyPairSigner();
+    let amount = lamports(BigInt(1 * LAMPORTS_PER_SOL));
 
     // Airdrop SOL to the wallet if needed
-    const balance = await connection.getBalance(wallet.publicKey);
-    if (balance < LAMPORTS_PER_SOL) {
-      await airdropSol(wallet.publicKey);
+    const balance = await client.rpc.getBalance(wallet.address).send()
+    if (balance.value < amount) {
+      await airdropSol(wallet.address);
     }
 
     // Create a mock USDC mint
