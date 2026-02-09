@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                Int      @id @default(autoincrement())
+  name              String
+  password          String
+  amount            BigInt?
+  sentTransfers     Ledger[] @relation("SenderRelation")
+  receivedTransfers Ledger[] @relation("ReceiverRelation")
+}
+
+model Ledger {
+  id         Int  @id @default(autoincrement())
+  from       User @relation("SenderRelation", fields: [senderId], references: [id])
+  senderId   Int
+  to         User @relation("ReceiverRelation", fields: [receiverId], references: [id])
+  receiverId Int
+}

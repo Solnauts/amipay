@@ -1,22 +1,20 @@
-use diesel::sql_types::VarChar;
+// @generated automatically by Diesel CLI.
 
 diesel::table! {
-    user(id) {
-        name -> VarChar,
+    Ledger (id) {
         id -> Int4,
-        password -> VarChar,
-        address -> VarChar,
-        ledger -> Array<ledger>,
-        recipients -> Array<VarChar>
+        senderId -> Int4,
+        receiverId -> Int4,
     }
 }
 
 diesel::table! {
-    ledger(id){
-        from  -> VarChar,
-        id ->  Int4,
-        to -> Varchar,
-        amount -> BigInt
+    User (id) {
+        id -> Int4,
+        name -> Text,
+        password -> Text,
+        amount -> Nullable<Int8>,
     }
-
 }
+
+diesel::allow_tables_to_appear_in_same_query!(Ledger, User,);
