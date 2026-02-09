@@ -8,12 +8,13 @@ datasource db {
 }
 
 model User {
-  id                Int      @id @default(autoincrement())
+  id                Int         @id @default(autoincrement())
   name              String
   password          String
   amount            BigInt?
-  sentTransfers     Ledger[] @relation("SenderRelation")
-  receivedTransfers Ledger[] @relation("ReceiverRelation")
+  recipients        Recipient[]
+  sentTransfers     Ledger[]    @relation("SenderRelation")
+  receivedTransfers Ledger[]    @relation("ReceiverRelation")
 }
 
 model Ledger {
@@ -22,4 +23,11 @@ model Ledger {
   senderId   Int
   to         User @relation("ReceiverRelation", fields: [receiverId], references: [id])
   receiverId Int
+}
+
+model Recipient {
+  id     Int    @id @default(autoincrement())
+  name   String @unique
+  user   User   @relation(fields: [userid], references: [id])
+  userid Int
 }

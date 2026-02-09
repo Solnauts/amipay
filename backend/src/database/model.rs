@@ -1,18 +1,29 @@
-use crate::schema::user;
+use crate::schema::Recipient;
+use crate::schema::User;
+
 use diesel::prelude::*;
-use serde::Deserialize;
 #[derive(Queryable, Selectable)]
-#[diesel(table_name = crate::schema::user)]
+#[diesel(table_name = crate::schema::User)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct User {
-    pub name: String,
+pub struct DbUser {
     pub id: i32,
+    pub name: String,
     pub password: String,
-    pub recipients: Vec<String>,
+    pub amount: Option<i64>,
 }
 
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::schema::Recipient)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbRecipient {
+    pub name: String,
+    pub id: i32,
+    pub userid: i32,
+}
+//using the recipient
+
 #[derive(Insertable)]
-#[diesel(table_name = user)]
+#[diesel(table_name = User)]
 pub struct NewUser {
     pub name: String,
     pub password: String,

@@ -9,6 +9,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    Recipient (id) {
+        name -> Text,
+        userid -> Int4,
+        id -> Int4,
+    }
+}
+
+diesel::table! {
     User (id) {
         id -> Int4,
         name -> Text,
@@ -17,4 +25,6 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(Ledger, User,);
+diesel::joinable!(Recipient -> User (userid));
+
+diesel::allow_tables_to_appear_in_same_query!(Ledger, Recipient, User,);
