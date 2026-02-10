@@ -2,9 +2,11 @@ use crate::schema::Recipient;
 use crate::schema::User;
 
 use diesel::prelude::*;
+use serde::Serialize;
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::User)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
+#[derive(Serialize)]
 pub struct DbUser {
     pub id: i32,
     pub name: String,
