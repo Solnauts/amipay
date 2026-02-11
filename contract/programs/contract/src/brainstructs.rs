@@ -7,5 +7,6 @@ pub struct MainAccountShape {
     pub admin_signer: Pubkey,
     pub usdc_mint: Pubkey,
     pub main_vault_account: Pubkey,
-    pub bump: u8,
+    pub self_bump: u8,
+    pub main_usdc_vault_bump: u8,
 }

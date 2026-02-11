@@ -23,7 +23,7 @@ pub struct TransferToVault<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 
     //brain state account
-    #[account(seeds = [b"main_state", usdc_mint.key().as_ref(), signer.key().as_ref()], bump = main_state_account.bump)]
+    #[account(seeds = [b"main_state", usdc_mint.key().as_ref(), signer.key().as_ref()], bump = main_state_account.self_bump)]
     pub main_state_account: Account<'info, MainAccountShape>,
 
     //user usdc account
@@ -126,7 +126,7 @@ impl<'info> TransferToVault<'info> {
             b"main_state",
             usdc_mint.as_ref(),
             signer.as_ref(),
-            &[self.main_state_account.bump],
+            &[self.main_state_account.self_bump],
         ];
         let signer_seeds = &[&seeds[..]];
         let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
