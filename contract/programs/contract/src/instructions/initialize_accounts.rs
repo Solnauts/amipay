@@ -8,13 +8,11 @@ pub const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntuc
 //function for the initilizing the struct
 #[derive(Accounts)]
 pub struct InitializeMainAccounts<'info> {
-    //signer
-    #[account(mut)]
-    //key in the user behalf
+    //the signer is admin signer keypair sign for all the transactions
+    #[account(mut, constraint = signer.key() == main_state_account.admin_signer @InitializeAccountErrors::UnauthorizedSigner)]
     pub signer: Signer<'info>,
 
     //mint account for the tokens
-    //add validation for the mint address
     #[account(constraint = usdc_mint.key() == USDC_MINT @InitializeAccountErrors::IncorrectUscMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
 

@@ -1,15 +1,15 @@
 use crate::brainstructs::MainAccountShape;
 use crate::errors::InitializeAccountErrors;
+use crate::errors::TransferToVaultError;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
-
 const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT");
 
 //for the transfer
 #[derive(Accounts)]
 pub struct TransferToVault<'info> {
     //signer
-    #[account(mut)]
+    #[account(mut, constraint = signer.key() == main_state_account.admin_signer @InitializeAccountErrors::UnauthorizedSigner)]
     pub signer: Signer<'info>,
 
     //mint account for the tokens
@@ -23,6 +23,7 @@ pub struct TransferToVault<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 
     //brain state account
+    #[account(seeds = [b"main_state", usdc_mint.key().as_ref(), signer.key().as_ref()], bump = main_state_account.bump)]
     pub main_state_account: Account<'info, MainAccountShape>,
 
     //user usdc account
@@ -32,12 +33,6 @@ pub struct TransferToVault<'info> {
     //main vault account
     #[account(mut, token::authority = main_state_account)]
     pub main_usdc_vault: InterfaceAccount<'info, TokenAccount>,
-}
-
-#[error_code]
-pub enum TransferToVaultError {
-    #[msg("insufficient amount to transfer")]
-    InsufficientAmountError,
 }
 
 impl<'info> TransferToVault<'info> {
@@ -56,6 +51,11 @@ impl<'info> TransferToVault<'info> {
     //should be the private functions
 
     fn checks(&self, amount: u64) -> Result<()> {
+        //if transfering amount is zero
+        if amount > 0 {
+            return err!(TransferToVaultError::InvalidAmmount);
+        }
+
         //if account has the sufficient amount
         if self.user_usdc_ata.amount < amount {
             return err!(TransferToVaultError::InsufficientAmountError);
