@@ -58,7 +58,7 @@ describe("contract", () => {
     // Create a mock USDC mint
     usdcMint = await createMint(
       connection,
-      wallet.payer,
+      wallet.address,
       wallet.publicKey, // mint authority
       null, // freeze authority
       USDC_DECIMALS,
