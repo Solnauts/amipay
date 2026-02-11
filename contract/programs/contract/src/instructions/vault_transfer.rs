@@ -1,6 +1,9 @@
 use crate::brainstructs::MainAccountShape;
+use crate::errors::InitializeAccountErrors;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
+
+const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT");
 
 //for the transfer
 #[derive(Accounts)]
@@ -10,6 +13,7 @@ pub struct TransferToVault<'info> {
     pub signer: Signer<'info>,
 
     //mint account for the tokens
+    #[account(constraint = usdc_mint.key() == USDC_MINT @InitializeAccountErrors::IncorrectUscMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
 
     //system program field
@@ -22,7 +26,7 @@ pub struct TransferToVault<'info> {
     pub main_state_account: Account<'info, MainAccountShape>,
 
     //user usdc account
-    #[account(mut, token::authority = main_state_account)]
+    #[account(mut, token::authority = main_state_account, token::mint = usdc_mint)]
     pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
 
     //main vault account
@@ -115,9 +119,13 @@ impl<'info> TransferToVault<'info> {
         let cpi_program = self.token_program.to_account_info();
 
         let usdc_mint = self.main_state_account.usdc_mint;
+        let signer = self.signer.key();
+
+        // the seeds is of the account that owns the vault
         let seeds = [
-            b"pool_state_v3",
+            b"main_state",
             usdc_mint.as_ref(),
+            signer.as_ref(),
             &[self.main_state_account.bump],
         ];
         let signer_seeds = &[&seeds[..]];
