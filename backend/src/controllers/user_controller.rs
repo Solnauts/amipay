@@ -24,9 +24,8 @@ async fn trigger_solana_and_db() -> actix_web::Result<impl Responder> {
     let rpc_url = "https://api.devnet.solana.com".to_string();
     let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
 
-    // 2. DEFINE KEYS & INSTRUCTION
-    // TODO: Replace with your specific Contract/Program ID
-    let program_id = Pubkey::from_str("YourContractKeyHere1111111111111111111111111")
+    // DEFINE KEYS & INSTRUCTION
+    let program_id = Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5")
         .map_err(|e| error::ErrorBadRequest(format!("Invalid Program ID: {}", e)))?;
 
     // Load your wallet (Payer)
