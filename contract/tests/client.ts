@@ -1,8 +1,4 @@
 import {
-  Rpc,
-  RpcSubscriptions,
-  SolanaRpcApi,
-  SolanaRpcSubscriptionsApi,
   createSolanaRpc,
   createSolanaRpcSubscriptions,
   sendAndConfirmTransactionFactory,
@@ -14,20 +10,18 @@ import {
 const DEVNET_RPC_URL = "https://api.devnet.solana.com";
 const DEVNET_WS_URL = "wss://api.devnet.solana.com";
 
-export type Client = {
-  rpc: Rpc<SolanaRpcApi>;
-  rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-};
+// export type Client = {
+//   rpc: Rpc<SolanaRpcApi>;
+//   rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+// };
+//
+//let client : Clent || undefined
 
-let client: Client | undefined;
-
-export function createClient(): Client {
-  if (!client) {
-    client = {
-      rpc: createSolanaRpc(DEVNET_RPC_URL),
-      rpcSubscriptions: createSolanaRpcSubscriptions(DEVNET_WS_URL),
-    };
-  }
+export function createClient() {
+  let client = {
+    rpc: createSolanaRpc(DEVNET_RPC_URL),
+    rpcSubscriptions: createSolanaRpcSubscriptions(DEVNET_WS_URL),
+  };
   return client;
 }
 

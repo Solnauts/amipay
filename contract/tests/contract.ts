@@ -53,6 +53,8 @@ const addrEncoder = getAddressEncoder();
  * Derives the main_state PDA:
  *   seeds = [b"main_state", usdc_mint.key(), signer.key()]
  */
+
+console.log("this function is called");
 async function deriveMainStatePda(
   usdcMint: Address,
   signerAddr: Address,
@@ -70,6 +72,7 @@ async function deriveMainStatePda(
   return [pda, bump];
 }
 
+console.log("derive main state is working ");
 /**
  * Derives the user_usdc_ata PDA (the program-owned vault):
  *   seeds = [b"user_usdc_ata", usdc_mint.key()]
@@ -157,11 +160,12 @@ describe("contract", () => {
     const balance = await client.rpc
       .getBalance(adminAddr, { commitment: "confirmed" })
       .send();
-
+    console.log("admin thing is called");
     const minBalance = lamports(BigInt(1 * LAMPORTS_PER_SOL));
     if (balance.value < minBalance) {
       console.log("  Balance low – requesting airdrop …");
       await airdropSol(adminAddr);
+      console.log("solana balance thing is called");
     }
     console.log("  SOL balance :", balance.value.toString());
 
