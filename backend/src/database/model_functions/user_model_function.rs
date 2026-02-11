@@ -1,11 +1,19 @@
 use crate::{
     database::{
-        establish_connection,
+        db, establish_connection,
         model::{DbUser, NewUser},
     },
     schema::User,
 };
+use actix_web::Error;
+
 use diesel::prelude::*;
+use solana_sdk::pubkey::Pubkey;
+
+pub struct DBResponse {
+    pub success: bool,
+    pub data: DbUser,
+}
 
 pub fn get_user() -> Vec<DbUser> {
     use crate::schema::User::dsl::*;
@@ -22,13 +30,29 @@ pub fn get_user() -> Vec<DbUser> {
     results
 }
 
-pub fn create_user(conn: &mut PgConnection, name: String, password: String) -> DbUser {
+pub fn create_user(
+    conn: &mut PgConnection,
+    name: String,
+    password: String,
+    amount: i64,
+    pubkey: Pubkey,
+) -> DBResponse {
     let new_user = NewUser {
         name: name,
         password: password,
+        amount,
+        pubkey,
     };
-    diesel::insert_into(User::table)
+
+    //insert into database
+    let response = diesel::insert_into(User::table)
         .values(&new_user)
         .get_result(conn)
-        .expect("Error saving the user")
+        .expect("Error saving the user");
+
+    let dbresponse = DBResponse {
+        success: true,
+        data: response,
+    };
+    dbresponse
 }

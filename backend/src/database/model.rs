@@ -1,8 +1,8 @@
 use crate::schema::Recipient;
 use crate::schema::User;
-
 use diesel::prelude::*;
 use serde::Serialize;
+use solana_sdk::pubkey::Pubkey;
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::User)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -29,6 +29,8 @@ pub struct DbRecipient {
 pub struct NewUser {
     pub name: String,
     pub password: String,
+    pub amount: i64,
+    pub pubkey: Pubkey,
 }
 
 //fix for the password like need to encrypt this before sending to database
