@@ -1,8 +1,8 @@
+use crate::brainstructs::MainAccountShape;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
-use crate::brainstructs::MainAccountShape;
-
+const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT");
 //function for the initilizing the struct
 #[derive(Accounts)]
 pub struct InitializeMainAccounts<'info> {
@@ -12,6 +12,8 @@ pub struct InitializeMainAccounts<'info> {
     pub signer: Signer<'info>,
 
     //mint account for the tokens
+    //add validation for the mint address
+    #[account(constraint = usdc_mint.key() == USDC_MINT)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
 
     //system program field
