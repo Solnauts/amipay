@@ -1,5 +1,18 @@
-import { Rpc, RpcSubscriptions, SolanaRpcApi, SolanaRpcSubscriptionsApi } from '@solana/kit';
-import { createSolanaRpc, createSolanaRpcSubscriptions, sendAndConfirmTransactionFactory } from '@solana/kit';
+import {
+  Rpc,
+  RpcSubscriptions,
+  SolanaRpcApi,
+  SolanaRpcSubscriptionsApi,
+  createSolanaRpc,
+  createSolanaRpcSubscriptions,
+  sendAndConfirmTransactionFactory,
+} from "@solana/kit";
+
+// ═══════════════════════════════════════════════════════════════
+// Devnet RPC endpoints
+// ═══════════════════════════════════════════════════════════════
+const DEVNET_RPC_URL = "https://api.devnet.solana.com";
+const DEVNET_WS_URL = "wss://api.devnet.solana.com";
 
 export type Client = {
   rpc: Rpc<SolanaRpcApi>;
@@ -7,21 +20,21 @@ export type Client = {
 };
 
 let client: Client | undefined;
+
 export function createClient(): Client {
   if (!client) {
     client = {
-      rpc: createSolanaRpc('http://127.0.0.1:8899'),
-      rpcSubscriptions: createSolanaRpcSubscriptions('ws://127.0.0.1:8900'),
+      rpc: createSolanaRpc(DEVNET_RPC_URL),
+      rpcSubscriptions: createSolanaRpcSubscriptions(DEVNET_WS_URL),
     };
   }
   return client;
 }
 
-export function getSendandConfirm() {
+export function getSendAndConfirm() {
   const sendAndConfirm = sendAndConfirmTransactionFactory({
-    rpc: createSolanaRpc('http://127.0.0.1:8899'),
-    rpcSubscriptions: createSolanaRpcSubscriptions('ws://127.0.0.1:8900'),
-  }
-  )
-  return sendAndConfirm
+    rpc: createSolanaRpc(DEVNET_RPC_URL),
+    rpcSubscriptions: createSolanaRpcSubscriptions(DEVNET_WS_URL),
+  });
+  return sendAndConfirm;
 }

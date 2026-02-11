@@ -52,7 +52,7 @@ impl<'info> TransferToVault<'info> {
 
     fn checks(&self, amount: u64) -> Result<()> {
         //if transfering amount is zero
-        if amount > 0 {
+        if amount <= 0 {
             return err!(TransferToVaultError::InvalidAmmount);
         }
 

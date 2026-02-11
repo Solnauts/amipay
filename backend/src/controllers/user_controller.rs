@@ -67,7 +67,6 @@ async fn trigger_solana_and_db() -> actix_web::Result<impl Responder> {
     println!("Solana Transaction Confirmed. Signature: {}", signature);
 
     // 4. CALL DATABASE (Blocking)
-    // Diesel is synchronous. Running it directly here would block the Actix thread.
 
     //learn about the web::block
     // We use `web::block` to offload it to the thread pool.
