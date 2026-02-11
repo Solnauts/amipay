@@ -16,7 +16,7 @@ pub mod contract {
     //create main accounts
     //initialize
     pub fn create_main_accounts(ctx: Context<CreaateMainAccounts>) -> Result<()> {
-        let mut main_state_account = ctx.accounts.main_state_account.clone();
+        let main_state_account = &mut ctx.accounts.main_state_account;
         main_state_account.admin_signer = ctx.accounts.signer.key();
         main_state_account.usdc_mint = ctx.accounts.usdc_mint.key();
         main_state_account.main_vault_account = ctx.accounts.main_usdc_vault.key();
@@ -24,8 +24,6 @@ pub mod contract {
         main_state_account.main_usdc_vault_bump = ctx.bumps.main_usdc_vault;
 
         msg!("all main states created");
-
-        //return to client
         Ok(())
     }
 

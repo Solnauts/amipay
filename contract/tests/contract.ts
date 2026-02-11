@@ -9,6 +9,7 @@ import {
   getAccount,
   getAssociatedTokenAddress,
   getOrCreateAssociatedTokenAccount,
+  transfer,
 } from "@solana/spl-token";
 import { assert } from "chai";
 import {
@@ -135,7 +136,7 @@ async function deriveMainStatePda(
 }
 
 /**
- * Derives the user_usdc_ata PDA (the program-owned vault):
+ * Derives the user_usdc_ata PDA (the user-facing vault):
  *   seeds = [b"user_usdc_ata", usdc_mint.key()]
  */
 async function deriveUserUsdcAtaPda(
@@ -144,6 +145,25 @@ async function deriveUserUsdcAtaPda(
 ): Promise<[Address, number]> {
   const seeds = [
     utf8.encode("user_usdc_ata"),
+    addrEncoder.encode(usdcMint),
+  ];
+  const [pda, bump] = await getProgramDerivedAddress({
+    programAddress: programId,
+    seeds,
+  });
+  return [pda, bump];
+}
+
+/**
+ * Derives the main_usdc_vault PDA (the main program vault created by createMainAccounts):
+ *   seeds = [b"main_usdc_vault", usdc_mint.key()]
+ */
+async function deriveMainUsdcVaultPda(
+  usdcMint: Address,
+  programId: Address
+): Promise<[Address, number]> {
+  const seeds = [
+    utf8.encode("main_usdc_vault"),
     addrEncoder.encode(usdcMint),
   ];
   const [pda, bump] = await getProgramDerivedAddress({
@@ -201,6 +221,8 @@ describe("contract", () => {
   let mainStateBump: number;
   let userUsdcAtaPda: Address;
   let userUsdcAtaBump: number;
+  let mainUsdcVaultPda: Address;
+  let mainUsdcVaultBump: number;
 
   // User's personal USDC token account
   let userTokenAccount: PublicKey;
@@ -250,6 +272,12 @@ describe("contract", () => {
     );
     console.log("  user_usdc_ata PDA:", userUsdcAtaPda, " bump:", userUsdcAtaBump);
 
+    [mainUsdcVaultPda, mainUsdcVaultBump] = await deriveMainUsdcVaultPda(
+      usdcMintAddr,
+      programId
+    );
+    console.log("  main_usdc_vault PDA:", mainUsdcVaultPda, " bump:", mainUsdcVaultBump);
+
     // ── Get or create user's USDC token account ─────────────────
     // Uses getOrCreateAssociatedTokenAccount so it's idempotent
     // (won't fail if already exists from a previous run)
@@ -289,19 +317,155 @@ describe("contract", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
+  //  0. CREATE MAIN ACCOUNTS (must run first)
+  // ════════════════════════════════════════════════════════════════
+  describe("Create Main Accounts", () => {
+    it("should create (or re-initialize) main_state PDA and main_usdc_vault PDA", async () => {
+      /**
+       * This is the FIRST instruction that must be called.
+       * It creates (or updates if they already exist via init_if_needed):
+       *   1. main_state_account PDA (MainAccountShape) — stores admin, mint, vault, bumps
+       *   2. main_usdc_vault PDA — token account owned by main_state PDA
+       *
+       * After this, the main_state_account.admin_signer is set to our pubkey,
+       * which gates all future instructions.
+       *
+       * IDL instruction name: createMainAccounts
+       * Rust struct: CreaateMainAccounts
+       * Accounts:
+       *   - signer (mut, signer)
+       *   - usdcMint
+       *   - systemProgram
+       *   - mainStateAccount (init_if_needed, PDA: ["main_state", usdc_mint, signer])
+       *   - tokenProgram
+       *   - mainUsdcVault (init_if_needed, PDA: ["main_usdc_vault", usdc_mint])
+       */
+      const tx = await program.methods
+        .createMainAccounts()
+        .accountsPartial({
+          signer: adminSigner.publicKey,
+          usdcMint: USDC_MINT_PUBKEY,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          mainStateAccount: new PublicKey(mainStatePda),
+          tokenProgram: TOKEN_PROGRAM_ID,
+          mainUsdcVault: new PublicKey(mainUsdcVaultPda),
+        })
+        .rpc();
+
+      console.log("  createMainAccounts tx:", tx);
+
+      // ── Verify main_state_account was created via Solana Kit RPC ──
+      const stateAccountInfo = await client.rpc
+        .getAccountInfo(mainStatePda, {
+          commitment: "confirmed",
+          encoding: "base64",
+        })
+        .send();
+      assert.ok(stateAccountInfo.value, "main_state PDA should exist");
+      assert.equal(
+        stateAccountInfo.value!.owner,
+        programId,
+        "main_state PDA must be owned by the program"
+      );
+      console.log("  ✓ main_state PDA created and owned by program");
+
+      // ── Verify main_usdc_vault was created ──
+      const vaultInfo = await getAccount(
+        connection,
+        new PublicKey(mainUsdcVaultPda)
+      );
+      assert.ok(vaultInfo, "main_usdc_vault should exist");
+      assert.equal(
+        vaultInfo.mint.toBase58(),
+        USDC_MINT_PUBKEY.toBase58(),
+        "Vault mint should be USDC"
+      );
+      // The vault's token authority should be the main_state PDA
+      assert.equal(
+        vaultInfo.owner.toBase58(),
+        mainStatePda,
+        "Vault token authority must be main_state PDA"
+      );
+      console.log("  ✓ main_usdc_vault created with correct authority");
+      console.log("  Vault balance:", vaultInfo.amount.toString());
+    });
+
+    it("should fail on double creation (accounts already exist)", async () => {
+      try {
+        await program.methods
+          .createMainAccounts()
+          .accountsPartial({
+            signer: adminSigner.publicKey,
+            usdcMint: USDC_MINT_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            mainStateAccount: new PublicKey(mainStatePda),
+            tokenProgram: TOKEN_PROGRAM_ID,
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
+          })
+          .rpc();
+
+        assert.fail("Double creation should fail");
+      } catch (error) {
+        console.log("  ✓ Correctly prevented double creation");
+        assert.ok(error, "Double creation must throw");
+      }
+    });
+
+    it("should verify MainAccountShape fields are correctly set", async () => {
+      // Fetch the on-chain account data via Anchor
+      const stateAccount = await program.account.mainAccountShape.fetch(
+        new PublicKey(mainStatePda)
+      );
+
+      assert.equal(
+        stateAccount.adminSigner.toBase58(),
+        adminSigner.publicKey.toBase58(),
+        "admin_signer should be our pubkey"
+      );
+      console.log("  ✓ admin_signer =", stateAccount.adminSigner.toBase58());
+
+      assert.equal(
+        stateAccount.usdcMint.toBase58(),
+        USDC_MINT_PUBKEY.toBase58(),
+        "usdc_mint should match"
+      );
+      console.log("  ✓ usdc_mint    =", stateAccount.usdcMint.toBase58());
+
+      assert.equal(
+        stateAccount.mainVaultAccount.toBase58(),
+        mainUsdcVaultPda,
+        "main_vault_account should be the vault PDA"
+      );
+      console.log("  ✓ main_vault   =", stateAccount.mainVaultAccount.toBase58());
+
+      assert.ok(
+        stateAccount.selfBump > 0,
+        "self_bump should be set"
+      );
+      console.log("  ✓ self_bump    =", stateAccount.selfBump);
+
+      assert.ok(
+        stateAccount.mainUsdcVaultBump > 0,
+        "main_usdc_vault_bump should be set"
+      );
+      console.log("  ✓ vault_bump   =", stateAccount.mainUsdcVaultBump);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
   //  1. INITIALIZATION TESTS
   // ════════════════════════════════════════════════════════════════
   describe("Initialize", () => {
-    it("should successfully initialize the contract (creates the vault PDA)", async () => {
+    it("should successfully initialize the contract (creates the user_usdc_ata vault)", async () => {
       /**
-       * Account ownership model:
+       * Account ownership model (after createMainAccounts + initialize):
        *
        *   adminSigner (static keypair)
        *       │
        *       └──owns──▶ main_state PDA (MainAccountShape)
        *                       │
-       *                       ├── token::authority ──▶ user_usdc_ata (vault)
-       *                       └── (future) ──▶ main_usdc_vault
+       *                       ├── token::authority ──▶ user_usdc_ata (created here)
+       *                       └── token::authority ──▶ main_usdc_vault (created in createMainAccounts)
        */
       const tx = await program.methods
         .initialize()
@@ -413,17 +577,68 @@ describe("contract", () => {
 
   // ════════════════════════════════════════════════════════════════
   //  2. TRANSFER-TO-VAULT TESTS
+  //
+  //  Flow: user wallet ATA ──(spl transfer)──▶ user_usdc_ata PDA
+  //                                              │
+  //        program.transfertovault() ◀────────────┘
+  //                  │
+  //                  └───▶ main_usdc_vault PDA
+  //
+  //  Both user_usdc_ata and main_usdc_vault have
+  //  token::authority = main_state PDA.
+  //  The contract signs the CPI transfer with PDA seeds.
   // ════════════════════════════════════════════════════════════════
   describe("Transfer to Vault", () => {
-    it("should transfer tokens from user ATA → program vault", async () => {
+    const DEPOSIT_AMOUNT = 5 * 10 ** USDC_DECIMALS; // 5 USDC deposited into PDA
+
+    before(async () => {
+      /**
+       * Pre-step: deposit USDC from user's personal wallet ATA
+       * into the program's user_usdc_ata PDA.
+       *
+       * This is a standard SPL token transfer (user signs as source authority).
+       * The destination (user_usdc_ata PDA) is PDA-owned, but receiving
+       * tokens doesn't require destination authority signature.
+       */
+      console.log("\n  📥 Depositing USDC into user_usdc_ata PDA...");
+
+      const beforeBal = await getAccount(connection, new PublicKey(userUsdcAtaPda));
+      console.log(
+        "  PDA balance before deposit:",
+        Number(beforeBal.amount) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+
+      await transfer(
+        connection,
+        adminSigner,                     // payer + source authority
+        userTokenAccount,                // source: user's personal ATA
+        new PublicKey(userUsdcAtaPda),    // destination: PDA token account
+        adminSigner.publicKey,           // owner of the source account
+        DEPOSIT_AMOUNT,                  // amount in smallest units
+        [],
+        undefined,
+        TOKEN_PROGRAM_ID
+      );
+
+      const afterBal = await getAccount(connection, new PublicKey(userUsdcAtaPda));
+      console.log(
+        "  PDA balance after deposit :",
+        Number(afterBal.amount) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log("  ✓ Deposit complete\n");
+    });
+
+    it("should transfer tokens from user_usdc_ata PDA → main_usdc_vault PDA", async () => {
       const transferAmount = 2 * 10 ** USDC_DECIMALS; // 2 USDC
 
-      const initialUserBalance = (
-        await getAccount(connection, userTokenAccount)
+      const initialPdaBalance = (
+        await getAccount(connection, new PublicKey(userUsdcAtaPda))
       ).amount;
       console.log(
-        "  Initial user balance:",
-        Number(initialUserBalance) / 10 ** USDC_DECIMALS,
+        "  Initial PDA balance:",
+        Number(initialPdaBalance) / 10 ** USDC_DECIMALS,
         "USDC"
       );
 
@@ -435,23 +650,23 @@ describe("contract", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           mainStateAccount: new PublicKey(mainStatePda),
-          userUsdcAta: userTokenAccount,
-          mainUsdcVault: new PublicKey(userUsdcAtaPda),
+          userUsdcAta: new PublicKey(userUsdcAtaPda),
+          mainUsdcVault: new PublicKey(mainUsdcVaultPda),
         })
         .rpc();
 
       console.log("  Transfer tx:", tx);
 
-      const finalUserBalance = (
-        await getAccount(connection, userTokenAccount)
+      const finalPdaBalance = (
+        await getAccount(connection, new PublicKey(userUsdcAtaPda))
       ).amount;
       const vaultBalance = (
-        await getAccount(connection, new PublicKey(userUsdcAtaPda))
+        await getAccount(connection, new PublicKey(mainUsdcVaultPda))
       ).amount;
 
       console.log(
-        "  Final user balance:",
-        Number(finalUserBalance) / 10 ** USDC_DECIMALS,
+        "  Final PDA balance :",
+        Number(finalPdaBalance) / 10 ** USDC_DECIMALS,
         "USDC"
       );
       console.log(
@@ -461,9 +676,9 @@ describe("contract", () => {
       );
 
       assert.equal(
-        Number(initialUserBalance) - Number(finalUserBalance),
+        Number(initialPdaBalance) - Number(finalPdaBalance),
         transferAmount,
-        "User balance should decrease by the transfer amount"
+        "PDA balance should decrease by the transfer amount"
       );
     });
 
@@ -479,8 +694,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .rpc();
 
@@ -501,8 +716,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .rpc();
 
@@ -545,8 +760,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(attackerStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .signers([attackerKeypair])
           .simulate();
@@ -570,8 +785,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: fakeState.publicKey,
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .simulate();
 
@@ -594,8 +809,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: userTokenAccount, // wrong – same as source
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: userTokenAccount, // wrong – not the correct vault PDA
           })
           .simulate();
 
@@ -619,8 +834,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .signers([impersonator])
           .simulate();
@@ -649,8 +864,8 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .simulate();
 
@@ -660,18 +875,18 @@ describe("contract", () => {
       }
     });
 
-    it("should handle transfer of exact remaining balance", async () => {
+    it("should handle transfer of exact remaining PDA balance", async () => {
       const currentBalance = (
-        await getAccount(connection, userTokenAccount)
+        await getAccount(connection, new PublicKey(userUsdcAtaPda))
       ).amount;
       console.log(
-        "  Current balance:",
+        "  Current PDA balance:",
         Number(currentBalance) / 10 ** USDC_DECIMALS,
         "USDC"
       );
 
       if (currentBalance === BigInt(0)) {
-        console.log("  Skipping – balance is already zero");
+        console.log("  Skipping – PDA balance is already zero");
         return;
       }
 
@@ -684,20 +899,20 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
-            userUsdcAta: userTokenAccount,
-            mainUsdcVault: new PublicKey(userUsdcAtaPda),
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .rpc();
 
         const finalBalance = (
-          await getAccount(connection, userTokenAccount)
+          await getAccount(connection, new PublicKey(userUsdcAtaPda))
         ).amount;
         assert.equal(
           Number(finalBalance),
           0,
-          "Balance should be zero after exact transfer"
+          "PDA balance should be zero after exact transfer"
         );
-        console.log("  ✓ Exact balance transfer succeeded");
+        console.log("  ✓ Exact PDA balance transfer succeeded");
       } catch (error: any) {
         console.warn("  Exact balance transfer failed:", error.message);
       }
@@ -729,9 +944,9 @@ describe("contract", () => {
       console.log("  ✓ main_state PDA is owned by program:", programId);
     });
 
-    it("should verify vault PDA is owned by the Token Program", async () => {
+    it("should verify main_usdc_vault PDA is owned by the Token Program", async () => {
       const vaultInfo = await client.rpc
-        .getAccountInfo(userUsdcAtaPda, {
+        .getAccountInfo(mainUsdcVaultPda, {
           commitment: "confirmed",
           encoding: "base64",
         })
@@ -752,7 +967,7 @@ describe("contract", () => {
 
       const tokenAcct = await getAccount(
         connection,
-        new PublicKey(userUsdcAtaPda)
+        new PublicKey(mainUsdcVaultPda)
       );
       assert.equal(
         tokenAcct.owner.toBase58(),
