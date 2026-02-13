@@ -20,3 +20,4 @@ anyhow = "1.0.93"
 solana-signer = "=2.2.1"
 contract = {path = "../contract/programs/contract/", features = ["no-entrypoint"]}
 spl-token-interface = "2.0.0"
+bcrypt = "0.18.0"

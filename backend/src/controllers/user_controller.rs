@@ -1,88 +1,102 @@
-use actix_web::{HttpResponse, Responder, error, get, post, web};
-use serde::{Deserialize, Serialize};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_commitment_config::CommitmentConfig;
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::Transaction,
-};
-use std::str::FromStr;
-
-#[derive(Deserialize, Debug, Serialize)]
-pub struct NewUser {
-    name: String,
-    password: String,
-}
 use crate::database::model_functions::get_user;
+use crate::utility::create_user_ata;
+use actix_web::{HttpResponse, Responder, error, get, post, web};
+use serde::Deserialize;
+use bcrypt::{hash , verify, DEFAULT_COST};
 
-#[post("/trigger-transaction")]
-async fn trigger_solana_and_db() -> actix_web::Result<impl Responder> {
-    // SETUP SOLANA RPC CLIENT (Async)
-    // usage of nonblocking client is crucial for Actix performance
-    let rpc_url = "https://api.devnet.solana.com".to_string();
-    let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
+#[derive(Deserialize, Debug)]
+pub struct ContactPayload {
+    pub username: Option<String>,
+    pub contact_number: Option<i32>,
+    pub userpin:i32, 
+    pub email: Option<String>,
+}
 
-    // DEFINE KEYS & INSTRUCTION
-    let program_id = Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5")
-        .map_err(|e| error::ErrorBadRequest(format!("Invalid Program ID: {}", e)))?;
+#[derive(Deserialize, Debug)]
+pub struct WalletPayload {
+    pub pubkey: String,
+    pub username: String,
+    pub user_pin : i32,
+    pub pin: String,
+}
 
-    // Load your wallet (Payer)
-    // This is just for demonstration (generating a random ephemeral keypair).
-    let payer = Keypair::new();
+// #[derive(Deserialize, Debug)]
+// pub enum Means {
+//     ContactNumber(String),
+//     WalletAddress(String),
+// }
 
-    //check this in solana
-    // Construct the instruction specific to your contract
-    let instruction = Instruction::new_with_bincode(
-        program_id,
-        &[0], // DATA: Put your instruction data/arguments here
-        vec![
-            // ACCOUNTS: Add the accounts your contract requires
-            AccountMeta::new(payer.pubkey(), true),
-        ],
-    );
+// #[derive(Deserialize, Debug)]
+// pub struct CreaterUserRequest {
+//     //the signup method can be one from these two values of means enum
+//     pub signup_method: Means,
+//     //if user choose the phone number method
+//     pub payload: Option<Result<ContactPayload, WalletPayload>>,
+// }
 
-    // 3. BUILD AND SEND TRANSACTION
-    // We must get the latest blockhash strictly before sending
-    let latest_blockhash = client
-        .get_latest_blockhash()
-        .await
-        .map_err(|e| error::ErrorInternalServerError(format!("RPC Error: {}", e)))?;
+#[derive(Deserialize, Debug)]
+#[serde(tag = "signup_method", content = "payload")]
+#[serde(rename_all = "snake_case")]
+pub enum CreateUserRequest {
+    //the signup method can be one from these two values of means enum
+    ContactNumber(ContactPayload),
+    WalletAddress(WalletPayload), //if user choose the phone number method
+}
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer.pubkey()),
-        &[&payer],
-        latest_blockhash,
-    );
+#[derive(Debug)] // Derive Clone/Serialize if needed
+pub struct NormalizedUser {
+    pub username: String,
+    pub unique_id: String,
+    pub user_pin : String, // Holds either Phone Number or Pubkey
+    pub method_type: String, // "phone" or "wallet"
+    pub email: Option<String>,
+}
 
-    // Send and wait for confirmation (Async)
-    let signature = client
-        .send_and_confirm_transaction(&transaction)
-        .await
-        .map_err(|e| error::ErrorInternalServerError(format!("Solana Tx Failed: {}", e)))?;
+impl CreateUserRequest {
+    // This is the magic function that unifies the data
+    pub fn normalize(self) -> NormalizedUser {
+        
+        match self {
+            CreateUserRequest::ContactNumber(data) =>
+           { 
+            let user_pin = hash( data.userpin.to_string(), DEFAULT_COST).unwrap();
 
-    println!("Solana Transaction Confirmed. Signature: {}", signature);
+            let user_contact = hash( data.contact_number.unwrap().to_string(), DEFAULT_COST).unwrap();
+            
+            NormalizedUser {
+                // Handle Option<String> with a default or unwrap
+                username: data.username.unwrap_or_else(|| "Guest".to_string()),
+                // Convert number to String so it fits in 'unique_id'
+                unique_id: user_contact,
+                method_type: "phone".to_string(),
+                    user_pin,
+                email: data.email,
+            }
+            },
+            CreateUserRequest::WalletAddress(data) =>{
+            let user_pin = hash( data.user_pin.to_string(), DEFAULT_COST).unwrap();
+                NormalizedUser {
+                username: data.username,
+                unique_id: data.pubkey,// Pubkey maps to unique_id
+                user_pin,
+                method_type: "wallet".to_string(),
+                email: None, // Wallet has no email, so set to None
+            }
+            }
+        }
+    }
+}
 
-    // 4. CALL DATABASE (Blocking)
+#[post("/createaccount")]
+async fn create_user(data: web::Json<CreateUserRequest>) -> actix_web::Result<impl Responder> {
+    //call the solana rpc with particular changes in the payload
+    let user =  
 
-    //learn about the web::block
-    // We use `web::block` to offload it to the thread pool.
     let db_result = web::block(move || get_user()).await?; // Handle thread pool errors
 
-    // 5. SEND HTTP RESPONSE
+    //Send HTTP Response
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "database_message": db_result
     })))
-}
-
-async fn create_wallet(data: web::Json<NewUser>) -> impl Responder {
-    //extract the data from the data
-    let web::Json(NewUser { name, password }) = data;
-
-    //call the create_user database function
-
-    HttpResponse::Ok().body("user successfully created")
 }

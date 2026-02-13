@@ -66,6 +66,7 @@ pub async fn create_user_ata() -> Result<RpcResponse, Box<dyn Error>> {
         .await
         .unwrap();
 
+    //send the response from this t
     let response = RpcResponse {
         success: true,
         value: rpc_response,

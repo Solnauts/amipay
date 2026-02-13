@@ -6,7 +6,8 @@ use crate::database::establish_connection;
 mod controllers;
 mod database;
 mod schema;
-mod utilities;
+mod utility;
+
 //web server
 
 //calling the db connection function
