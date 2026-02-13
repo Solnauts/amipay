@@ -37,31 +37,39 @@ pub struct TransferToVault<'info> {
 
 impl<'info> TransferToVault<'info> {
     //transfer from user wallet to the mainvault
+    //transfer from user wallet to the mainvault
     pub fn main_transfer(&self, amount: u64) -> Result<()> {
         //main the account is not working fine on this
-
+        require_gt!(amount, 0, TransferToVaultError::InsufficientAmountError);
+        require_gt!(
+            self.user_usdc_ata.amount,
+            amount,
+            TransferToVaultError::InsufficientAmountError
+        );
         //checks for the amount
-        self.checks(amount)?;
-        //transfer to the main vault
-        self.transfer_to_main_vault(amount)?;
-
+        // self.checks(amount)?;
+        // //transfer to the main vault
+        // self.transfer_to_main_vault(amount)?;
         Ok(())
     }
 
     //should be the private functions
 
-    fn checks(&self, amount: u64) -> Result<()> {
-        //if transfering amount is zero
-        if amount <= 0 {
-            return err!(TransferToVaultError::InvalidAmmount);
-        }
+    // fn checks(&self, amount: u64) -> Result<()> {
+    //     //if transfering amount is zero
+    //     if amount <= 0 {
+    //         return err!(TransferToVaultError::InvalidAmmount);
+    //     }
+    //
+    //     //if account has the sufficient amount
+    //     if self.user_usdc_ata.amount < amount {
+    //         return err!(TransferToVaultError::InsufficientAmountError);
+    //     }
+    //
+    //     Ok(())
+    // }
 
-        //if account has the sufficient amount
-        if self.user_usdc_ata.amount < amount {
-            return err!(TransferToVaultError::InsufficientAmountError);
-        }
-        Ok(())
-    }
+    //should be the private functions
 
     ////fee
     //fn deduct_and_transfer_fee(self, amount_in: u64) -> u64 {
@@ -105,7 +113,7 @@ impl<'info> TransferToVault<'info> {
     //}
 
     //transfer to the main vault
-    fn transfer_to_main_vault(&self, amount: u64) -> Result<()> {
+    pub fn transfer_to_main_vault(&self, amount: u64) -> Result<()> {
         let decimals = self.usdc_mint.decimals;
 
         let cpi_accounts = TransferChecked {
@@ -118,13 +126,12 @@ impl<'info> TransferToVault<'info> {
         let cpi_program = self.token_program.to_account_info();
 
         let usdc_mint = self.main_state_account.usdc_mint;
-        let signer = self.signer.key();
-
+        let admin = self.signer.key();
         // the seeds is of the account that owns the vault
         let seeds = [
             b"main_state",
             usdc_mint.as_ref(),
-            signer.as_ref(),
+            admin.as_ref(),
             &[self.main_state_account.self_bump],
         ];
         let signer_seeds = &[&seeds[..]];
