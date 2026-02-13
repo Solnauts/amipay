@@ -5,7 +5,8 @@ use anchor_lang::prelude::*;
 pub enum InitializeAccountErrors {
     #[msg("incorrect usdc mint address")]
     IncorrectUscMint,
-
+    #[msg("Admin is not verify")]
+    InvalidAdmin,
     #[msg("unauthorized signer account")]
     UnauthorizedSigner,
 }

@@ -15,7 +15,7 @@ pub mod contract {
     use super::*;
     //create main accounts
     //initialize
-    pub fn create_main_accounts(ctx: Context<CreaateMainAccounts>) -> Result<()> {
+    pub fn create_main_accounts(ctx: Context<CreateMainAccounts>) -> Result<()> {
         let main_state_account = &mut ctx.accounts.main_state_account;
         main_state_account.admin_signer = ctx.accounts.signer.key();
         main_state_account.usdc_mint = ctx.accounts.usdc_mint.key();
