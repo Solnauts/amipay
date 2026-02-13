@@ -32,7 +32,7 @@ pub mod contract {
     }
 
     //initialize
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>, _unique_id: String) -> Result<()> {
         //return the user public address from this function
         msg!("Greetings from: {:?}", ctx.program_id);
 

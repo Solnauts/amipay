@@ -7,6 +7,7 @@ const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJok
 
 //function for the initilizing the struct
 #[derive(Accounts)]
+#[instruction(unique_id : String)]
 pub struct Initialize<'info> {
     //the signer is admin signer keypair sign for all the transactions
     #[account(mut, constraint = signer.key() == main_state_account.admin_signer @InitializeAccountErrors::UnauthorizedSigner)]
@@ -27,6 +28,6 @@ pub struct Initialize<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 
     //create user_usdc_ata (or reuse existing)
-    #[account(init_if_needed, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"user_usdc_ata",usdc_mint.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"user_usdc_ata",unique_id.as_bytes(), usdc_mint.key().as_ref()], bump)]
     pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
 }
