@@ -2,14 +2,15 @@ use crate::brainstructs::MainAccountShape;
 use crate::errors::InitializeAccountErrors;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
-
+// use std:
 const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT");
-
+const ADMIN: Pubkey = Pubkey::from_str_const("9XuNexvJhHUMxtKBdzsF1zsffAMzGbp4JuRAWaevxZAJ");
 //function for the initilizing the struct
+//THIS IS THE MAIN VAULT THAT CREATE ONCE AND HOLD THE ACCOUNTS
 #[derive(Accounts)]
-pub struct CreaateMainAccounts<'info> {
+pub struct CreateMainAccounts<'info> {
     //the signer is admin signer keypair sign for all the transactions
-    #[account(mut)]
+    #[account(mut, constraint=signer.key() == ADMIN @InitializeAccountErrors::InvalidAdmin)]
     pub signer: Signer<'info>,
 
     //mint account for the tokens
@@ -27,6 +28,6 @@ pub struct CreaateMainAccounts<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 
     //create usdc_vault (or reuse existing)
-    #[account(init_if_needed, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"main_usdc_vault",usdc_mint.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"main_usdc_vault",usdc_mint.key().as_ref(), signer.key.as_ref()], bump)]
     pub main_usdc_vault: InterfaceAccount<'info, TokenAccount>,
 }
