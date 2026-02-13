@@ -28,6 +28,6 @@ pub struct CreateMainAccounts<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 
     //create usdc_vault (or reuse existing)
-    #[account(init_if_needed, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"main_usdc_vault",usdc_mint.key().as_ref(), signer.key.as_ref()], bump)]
+    #[account(init_if_needed, payer = signer, token::mint= usdc_mint, token::authority = main_state_account, token::token_program = token_program, seeds = [b"main_usdc_vault",usdc_mint.key().as_ref(), signer.key().as_ref()], bump)]
     pub main_usdc_vault: InterfaceAccount<'info, TokenAccount>,
 }

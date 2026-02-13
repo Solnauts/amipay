@@ -5,7 +5,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT");
 
-//for the transfer
+//Transfer from Program own Usdc ata ==> to main vault of the program
 #[derive(Accounts)]
 pub struct TransferToVault<'info> {
     //signer
@@ -31,7 +31,7 @@ pub struct TransferToVault<'info> {
     pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
 
     //main vault account
-    #[account(mut, token::authority = main_state_account)]
+    #[account(mut, token::authority = main_state_account, token::mint = usdc_mint, seeds = [b"main_usdc_vault",usdc_mint.key().as_ref(), signer.key().as_ref()], bump)]
     pub main_usdc_vault: InterfaceAccount<'info, TokenAccount>,
 }
 
@@ -60,7 +60,6 @@ impl<'info> TransferToVault<'info> {
         if self.user_usdc_ata.amount < amount {
             return err!(TransferToVaultError::InsufficientAmountError);
         }
-
         Ok(())
     }
 
