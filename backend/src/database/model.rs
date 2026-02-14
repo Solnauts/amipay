@@ -11,7 +11,10 @@ pub struct DbUser {
     pub name: String,
     pub password: String,
     pub amount: Option<i64>,
-    pub pubkey: Vec<u8>,
+    pub unique_id: String,
+    pub method_type: String,
+    pub email: Option<String>,
+    pub user_usdc_ata: String,
 }
 
 #[derive(Queryable, Selectable)]
@@ -23,14 +26,15 @@ pub struct Dbrecipient {
     pub userid: i32,
 }
 
-//using the recipient
+// Insertable struct matching the new user table columns (id is auto-generated)
 #[derive(Insertable)]
 #[diesel(table_name = user)]
 pub struct NewUser {
     pub name: String,
     pub password: String,
-    pub amount: i64,
-    pub pubkey: [u8; 32],
+    pub amount: Option<i64>,
+    pub unique_id: String,
+    pub method_type: String,
+    pub email: Option<String>,
+    pub user_usdc_ata: String,
 }
-
-//fix for the password like need to encrypt this before sending to database

@@ -1,7 +1,7 @@
 use actix_web::{App, HttpServer};
 use std::io::Result;
 
-use crate::controllers::get_response;
+use crate::controllers::{get_response, create_user_handler};
 use crate::database::establish_connection;
 mod controllers;
 mod database;
@@ -19,8 +19,12 @@ async fn main() -> Result<()> {
     establish_connection();
 
     //create the server instance
-    HttpServer::new(|| App::new().service(get_response))
-        .bind(("127.0.0.1", 4000))?
-        .run()
-        .await
+    HttpServer::new(|| {
+        App::new()
+            .service(get_response)
+            .service(create_user_handler)
+    })
+    .bind(("127.0.0.1", 4000))?
+    .run()
+    .await
 }

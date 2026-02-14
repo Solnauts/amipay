@@ -22,7 +22,10 @@ diesel::table! {
         name -> Text,
         password -> Text,
         amount -> Nullable<Int8>,
-        pubkey -> Bytea
+        unique_id -> Text,
+        method_type -> Text,
+        email -> Nullable<Text>,
+        user_usdc_ata -> Text,
     }
 }
 

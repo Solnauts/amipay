@@ -20,10 +20,6 @@ pub fn get_user() -> Vec<DbUser> {
         .load(connection)
         .expect("error loading userdata");
 
-    let result2 = user
-        .load::<(i32, String, String, Option<i64>, Vec<u8>)>(connection)
-        .unwrap();
-
     results
 }
 
@@ -31,14 +27,19 @@ pub fn create_user(
     conn: &mut PgConnection,
     name: String,
     password: String,
-    amount: i64,
-    pubkey: [u8; 32],
+    unique_id: String,
+    method_type: String,
+    email: Option<String>,
+    user_usdc_ata: String,
 ) -> DBResponse {
     let new_user = NewUser {
-        name: name,
-        password: password,
-        amount,
-        pubkey,
+        name,
+        password,
+        amount: None, // New users start with no balance
+        unique_id,
+        method_type,
+        email,
+        user_usdc_ata,
     };
 
     //insert into database

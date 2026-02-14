@@ -1,12 +1,12 @@
 use anchor_client::{
     Client, Cluster,
     solana_sdk::{
-        signature::{Keypair, Signature, read_keypair_file},
+        signature::{Keypair, read_keypair_file},
         signer::Signer,
         system_program,
     },
 };
-use contract::{ID_CONST, accounts, instruction, program::Contract};
+use contract::{accounts, instruction};
 use solana_client::rpc_client::RpcClient;
 use solana_commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::{self, Pubkey};
@@ -17,21 +17,23 @@ use tokio::{self};
 //call the function in the solana rpc
 pub struct RpcResponse {
     pub success: bool,
-    pub value: Signature,
+    pub value: Pubkey,
 }
 
 #[tokio::main]
-pub async fn create_user_ata() -> Result<RpcResponse, Box<dyn Error>> {
+pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, Box<dyn Error>> {
     //call the solana rpc to call to create the accounts
     let payer = read_keypair_file("~/.config/solana/id.json").unwrap();
     let payer_pubkey = payer.pubkey();
     let payer_ref: &'static Keypair = Box::leak(Box::new(payer));
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
 
+    //let unique_id
+    let unique_id_ref: &'static String = Box::leak(Box::new(unique_id));
     let program = client.program(contract::ID).unwrap();
 
     //fetch the main_state_account
-    let required_state_account = get_accounts().unwrap().1;
+    let required_state_account = get_main_state_accounts().await.unwrap().1;
     let main_state_account =
         anchor_lang::prelude::Pubkey::from_str(&required_state_account.to_string()).unwrap();
 
@@ -53,6 +55,9 @@ pub async fn create_user_ata() -> Result<RpcResponse, Box<dyn Error>> {
     //place the request on the solana blockchain
     let rpc_response = program
         .request()
+        .args(instruction::Initialize {
+            _unique_id: unique_id_ref.to_string(),
+        })
         .accounts(accounts::Initialize {
             main_state_account,
             signer: payer_pubkey,
@@ -66,17 +71,20 @@ pub async fn create_user_ata() -> Result<RpcResponse, Box<dyn Error>> {
         .await
         .unwrap();
 
+    //get the user ata
+    let user_usdc_ata = get_user_ata(unique_id_ref.to_string()).await.unwrap();
+
     //send the response from this t
     let response = RpcResponse {
         success: true,
-        value: rpc_response,
+        value: user_usdc_ata.1,
     };
 
     Ok(response)
 }
 
-#[tokio::main]
-async fn get_accounts()
+//for geting main_state_account;
+async fn get_main_state_accounts()
 -> std::result::Result<(solana_sdk::account::Account, pubkey::Pubkey), Box<dyn Error>> {
     let client = RpcClient::new_with_commitment(
         String::from("https://api.devnet.solana.com"),
@@ -99,10 +107,39 @@ async fn get_accounts()
     let required_pda = pubkey::Pubkey::from_str(&pda).unwrap();
     let main_state_account = client.get_account(&required_pda);
 
+    //fix the issue
     match main_state_account {
         Ok(value) => {
             println!("Success! the value is : {:?}", value);
             Ok((value, required_pda))
+        }
+        Err(error) => {
+            println!("error while fetching account {:?} ", error);
+            Err(error.into())
+        }
+    }
+}
+
+//fn get user ata
+async fn get_user_ata(
+    unique_id: String,
+) -> std::result::Result<(solana_sdk::account::Account, pubkey::Pubkey), Box<dyn Error>> {
+    let client = RpcClient::new_with_commitment(
+        String::from("https://api.devnet.solana.com"),
+        CommitmentConfig::confirmed(),
+    );
+    let program_id = Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5").unwrap();
+    let usdc_mint = Pubkey::from_str("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT").unwrap();
+    let user_ata_seed = [b"user_usdc_ata", unique_id.as_bytes(), usdc_mint.as_ref()];
+    let user_ata_pda_address = Pubkey::find_program_address(&user_ata_seed, &program_id);
+
+    let user_usdc_ata_account = client.get_account(&user_ata_pda_address.0);
+
+    //fix the issue
+    match user_usdc_ata_account {
+        Ok(value) => {
+            println!("Success! the value is : {:?}", value);
+            Ok((value, user_ata_pda_address.0))
         }
         Err(error) => {
             println!("error while fetching account {:?} ", error);
