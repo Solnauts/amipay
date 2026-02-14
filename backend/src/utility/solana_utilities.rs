@@ -7,11 +7,12 @@ use anchor_client::{
     },
 };
 use contract::{accounts, instruction};
+use dotenv::dotenv;
 use solana_client::rpc_client::RpcClient;
 use solana_commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::{self, Pubkey};
 use spl_token_interface::id as token_program_value;
-use std::{error::Error, rc::Rc, str::FromStr};
+use std::{env, error::Error, rc::Rc, str::FromStr};
 use tokio::{self};
 
 //call the function in the solana rpc
@@ -22,8 +23,16 @@ pub struct RpcResponse {
 
 #[tokio::main]
 pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, Box<dyn Error>> {
+    // Load environment variables
+    dotenv().ok();
+    
+    let keypair_path = env::var("SOLANA_KEYPAIR_PATH").expect("SOLANA_KEYPAIR_PATH must be set");
+    let program_id_str = env::var("SOLANA_PROGRAM_ID").expect("SOLANA_PROGRAM_ID must be set");
+    let usdc_mint_str = env::var("SOLANA_USDC_MINT").expect("SOLANA_USDC_MINT must be set");
+    let user_usdc_ata_seed_str = env::var("SOLANA_SEED_USER_USDC_ATA").expect("SOLANA_SEED_USER_USDC_ATA must be set");
+
     //call the solana rpc to call to create the accounts
-    let payer = read_keypair_file("~/.config/solana/id.json").unwrap();
+    let payer = read_keypair_file(&keypair_path).unwrap();
     let payer_pubkey = payer.pubkey();
     let payer_ref: &'static Keypair = Box::leak(Box::new(payer));
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
@@ -38,22 +47,18 @@ pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, Box<dyn E
         anchor_lang::prelude::Pubkey::from_str(&required_state_account.to_string()).unwrap();
 
     //the program id of the program
-    let program_id =
-        anchor_lang::prelude::Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5")
-            .unwrap();
+    let program_id = anchor_lang::prelude::Pubkey::from_str(&program_id_str).unwrap();
 
     //fetch usdc_mint
-    let usdc_mint =
-        anchor_lang::prelude::Pubkey::from_str("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT")
-            .unwrap();
+    let usdc_mint = anchor_lang::prelude::Pubkey::from_str(&usdc_mint_str).unwrap();
     let needed_val = token_program_value().to_string();
     let token_program_id = anchor_lang::prelude::Pubkey::from_str(&needed_val).unwrap();
-    let user_usdc_ata_seed = [b"user_usdc_ata", usdc_mint.as_ref()];
+    let user_usdc_ata_seed = [user_usdc_ata_seed_str.as_bytes(), usdc_mint.as_ref()];
     let user_usdc_ata_pubkey =
         anchor_lang::prelude::Pubkey::find_program_address(&user_usdc_ata_seed, &program_id).0;
 
     //place the request on the solana blockchain
-    let rpc_response = program
+    let _rpc_response = program
         .request()
         .args(instruction::Initialize {
             _unique_id: unique_id_ref.to_string(),
@@ -86,19 +91,27 @@ pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, Box<dyn E
 //for geting main_state_account;
 async fn get_main_state_accounts()
 -> std::result::Result<(solana_sdk::account::Account, pubkey::Pubkey), Box<dyn Error>> {
+    dotenv().ok();
+    
+    let rpc_url = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL must be set");
+    let usdc_mint_str = env::var("SOLANA_USDC_MINT").expect("SOLANA_USDC_MINT must be set");
+    let program_id_str = env::var("SOLANA_PROGRAM_ID").expect("SOLANA_PROGRAM_ID must be set");
+    let keypair_path = env::var("SOLANA_KEYPAIR_PATH").expect("SOLANA_KEYPAIR_PATH must be set");
+    let main_state_seed = env::var("SOLANA_SEED_MAIN_STATE").expect("SOLANA_SEED_MAIN_STATE must be set");
+
     let client = RpcClient::new_with_commitment(
-        String::from("https://api.devnet.solana.com"),
+        rpc_url,
         CommitmentConfig::confirmed(),
     );
 
-    let usdc_mint = Pubkey::from_str("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT").unwrap();
-    let signer = read_keypair_file("~/.config/solana/id.json")
+    let usdc_mint = Pubkey::from_str(&usdc_mint_str).unwrap();
+    let signer = read_keypair_file(&keypair_path)
         .unwrap()
         .pubkey();
-    let account_seed = [b"main_state", usdc_mint.as_ref(), signer.as_ref()];
+    let account_seed = [main_state_seed.as_bytes(), usdc_mint.as_ref(), signer.as_ref()];
 
     //the program id of the program
-    let program_id = Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5").unwrap();
+    let program_id = Pubkey::from_str(&program_id_str).unwrap();
 
     let pda = Pubkey::find_program_address(&account_seed, &program_id)
         .0
@@ -124,13 +137,20 @@ async fn get_main_state_accounts()
 async fn get_user_ata(
     unique_id: String,
 ) -> std::result::Result<(solana_sdk::account::Account, pubkey::Pubkey), Box<dyn Error>> {
+    dotenv().ok();
+    
+    let rpc_url = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL must be set");
+    let program_id_str = env::var("SOLANA_PROGRAM_ID").expect("SOLANA_PROGRAM_ID must be set");
+    let usdc_mint_str = env::var("SOLANA_USDC_MINT").expect("SOLANA_USDC_MINT must be set");
+    let user_ata_seed_str = env::var("SOLANA_SEED_USER_USDC_ATA").expect("SOLANA_SEED_USER_USDC_ATA must be set");
+
     let client = RpcClient::new_with_commitment(
-        String::from("https://api.devnet.solana.com"),
+        rpc_url,
         CommitmentConfig::confirmed(),
     );
-    let program_id = Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5").unwrap();
-    let usdc_mint = Pubkey::from_str("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT").unwrap();
-    let user_ata_seed = [b"user_usdc_ata", unique_id.as_bytes(), usdc_mint.as_ref()];
+    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+    let usdc_mint = Pubkey::from_str(&usdc_mint_str).unwrap();
+    let user_ata_seed = [user_ata_seed_str.as_bytes(), unique_id.as_bytes(), usdc_mint.as_ref()];
     let user_ata_pda_address = Pubkey::find_program_address(&user_ata_seed, &program_id);
 
     let user_usdc_ata_account = client.get_account(&user_ata_pda_address.0);
