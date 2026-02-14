@@ -23,9 +23,9 @@ pub mod contract {
         main_state_account.main_vault_account = ctx.accounts.main_usdc_vault.key();
         main_state_account.self_bump = ctx.bumps.main_state_account;
         main_state_account.main_usdc_vault_bump = ctx.bumps.main_usdc_vault;
-
+        main_state_account.fee_collector_usdc_ata = ctx.accounts.fee_collector_usdc_ata.key();
         //Fee cant be higher than the 5%
-        require_gt!(500, fee, InitializeAccountErrors::FeeIsTooHigh);
+        require_gte!(500, fee, InitializeAccountErrors::FeeIsTooHigh);
         main_state_account.fee = fee;
         msg!("all main states created");
         Ok(())
