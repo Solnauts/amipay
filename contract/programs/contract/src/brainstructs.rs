@@ -10,4 +10,5 @@ pub struct MainAccountShape {
     pub self_bump: u8,
     pub main_usdc_vault_bump: u8,
     pub fee: u64,
+    pub fee_collector_usdc_ata: Pubkey,
 }

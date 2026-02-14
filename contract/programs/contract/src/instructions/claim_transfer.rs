@@ -26,6 +26,10 @@ pub struct ClaimByUser<'info> {
     #[account(seeds = [b"main_state", usdc_mint.key().as_ref(), signer.key().as_ref()], bump = main_state_account.self_bump)]
     pub main_state_account: Account<'info, MainAccountShape>,
 
+    //Program own fee_collector_usdc_ata
+    #[account(mut,associated_token::mint = usdc_mint, associated_token::authority = main_state_account )]
+    pub fee_collector_usdc_ata: InterfaceAccount<'info, TokenAccount>,
+
     //user which claim  usdc account ata
     #[account(mut, token::authority = main_state_account, token::mint = usdc_mint)]
     pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
@@ -78,6 +82,30 @@ impl<'info> ClaimByUser<'info> {
         let net_amount = amount - fee_amount;
 
         token_interface::transfer_checked(cpi_context, net_amount, decimals)?;
+
+        // Transfer the fee to the fee_collector_usdc_ata
+
+        let cpi_account = TransferChecked {
+            mint: self.usdc_mint.to_account_info(),
+            from: self.main_usdc_vault.to_account_info(),
+            to: self.fee_collector_usdc_ata.to_account_info(),
+            authority: self.main_state_account.to_account_info(),
+        };
+
+        let seeds = [
+            b"main_state",
+            usdc_mint.as_ref(),
+            admin.as_ref(),
+            &[self.main_state_account.self_bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+        let cpi_context = CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            cpi_account,
+            signer_seeds,
+        );
+
+        token_interface::transfer_checked(cpi_context, fee_amount, decimals)?;
 
         Ok(())
     }
