@@ -43,7 +43,7 @@ impl<'info> TransferToVault<'info> {
     pub fn main_transfer(&self, amount: u64) -> Result<()> {
         //main the account is not working fine on this
         require_gt!(amount, 0, TransferToVaultError::InsufficientAmountError);
-        require_gt!(
+        require_gte!(
             self.user_usdc_ata.amount,
             amount,
             TransferToVaultError::InsufficientAmountError

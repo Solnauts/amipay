@@ -9,6 +9,7 @@ import {
   getAccount,
   getAssociatedTokenAddress,
   getOrCreateAssociatedTokenAccount,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   transfer,
 } from "@solana/spl-token";
 import { assert } from "chai";
@@ -109,6 +110,16 @@ const USDC_DECIMALS = 6;
 const INITIAL_MINT_AMOUNT = 1_000 * 10 ** USDC_DECIMALS; // 1 000 USDC
 
 // ═══════════════════════════════════════════════════════════════════
+// FEE for createMainAccounts (basis points, max 500 = 5%)
+// ═══════════════════════════════════════════════════════════════════
+const FEE_BPS = new anchor.BN(100); // 1% fee
+
+// ═══════════════════════════════════════════════════════════════════
+// Unique ID for initialize instruction (used in PDA seed derivation)
+// ═══════════════════════════════════════════════════════════════════
+const UNIQUE_ID = "test_user_001";
+
+// ═══════════════════════════════════════════════════════════════════
 // PDA derivation helpers (Solana Kit)
 // ═══════════════════════════════════════════════════════════════════
 const utf8 = getUtf8Encoder();
@@ -137,14 +148,20 @@ async function deriveMainStatePda(
 
 /**
  * Derives the user_usdc_ata PDA (the user-facing vault):
- *   seeds = [b"user_usdc_ata", usdc_mint.key()]
+ *   seeds = [b"user_usdc_ata", unique_id.as_bytes(), usdc_mint.key()]
+ *
+ * NOTE: The Initialize instruction uses unique_id in the seed.
  */
+
+//function to deriveUserUsdcAtaPda
 async function deriveUserUsdcAtaPda(
+  uniqueId: string,
   usdcMint: Address,
   programId: Address
 ): Promise<[Address, number]> {
   const seeds = [
     utf8.encode("user_usdc_ata"),
+    utf8.encode(uniqueId),
     addrEncoder.encode(usdcMint),
   ];
   const [pda, bump] = await getProgramDerivedAddress({
@@ -156,21 +173,45 @@ async function deriveUserUsdcAtaPda(
 
 /**
  * Derives the main_usdc_vault PDA (the main program vault created by createMainAccounts):
- *   seeds = [b"main_usdc_vault", usdc_mint.key()]
+ *   seeds = [b"main_usdc_vault", usdc_mint.key(), signer.key()]
+ *
+ * NOTE: The CreateMainAccounts instruction includes signer in the seed.
  */
+
+//function to deriveMainUsdcVaultPda
 async function deriveMainUsdcVaultPda(
   usdcMint: Address,
+  signerAddr: Address,
   programId: Address
 ): Promise<[Address, number]> {
   const seeds = [
     utf8.encode("main_usdc_vault"),
     addrEncoder.encode(usdcMint),
+    addrEncoder.encode(signerAddr),
   ];
   const [pda, bump] = await getProgramDerivedAddress({
     programAddress: programId,
     seeds,
   });
   return [pda, bump];
+}
+
+/**
+ * Derives the fee_collector_usdc_ata (ATA for the main_state PDA):
+ * This is an associated token account with:
+ *   mint = usdc_mint
+ *   authority = main_state_account PDA
+ */
+async function deriveFeeCollectorAta(
+  usdcMint: PublicKey,
+  mainStatePda: PublicKey
+): Promise<PublicKey> {
+  return await getAssociatedTokenAddress(
+    usdcMint,
+    mainStatePda,
+    true, // allowOwnerOffCurve (PDA is off-curve)
+    TOKEN_PROGRAM_ID
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -182,7 +223,7 @@ async function deriveMainUsdcVaultPda(
 //         • ~0.003 SOL per transaction fee (x ~15 tests = ~0.05 SOL)
 //         • 0.00116 SOL for main_state PDA rent
 //         • Buffer for retries
-//
+
 //  USDC:  ~10 USDC
 //         • 2 USDC for the main transfer test
 //         • 1 USDC for unauthorized signer test (simulated, not spent)
@@ -193,9 +234,7 @@ async function deriveMainUsdcVaultPda(
 const MIN_SOL_REQUIRED = 2 * LAMPORTS_PER_SOL;
 const MIN_USDC_REQUIRED = 10 * 10 ** USDC_DECIMALS; // 10 USDC
 
-// ═══════════════════════════════════════════════════════════════════
 // TEST SUITE
-// ═══════════════════════════════════════════════════════════════════
 describe("contract", () => {
   // ────────────────────────────────────────────────────────────────
   // Anchor provider + program
@@ -223,6 +262,7 @@ describe("contract", () => {
   let userUsdcAtaBump: number;
   let mainUsdcVaultPda: Address;
   let mainUsdcVaultBump: number;
+  let feeCollectorAtaPubkey: PublicKey;
 
   // User's personal USDC token account
   let userTokenAccount: PublicKey;
@@ -236,6 +276,7 @@ describe("contract", () => {
     const adminAddr: Address = address(adminSigner.publicKey.toBase58());
     console.log("  Admin pubkey :", adminAddr);
     console.log("  USDC mint    :", usdcMintAddr);
+    console.log("  Unique ID    :", UNIQUE_ID);
 
     // ── Check SOL balance (no airdrop – keypair must be pre-funded) ──
     const solBalance = await connection.getBalance(
@@ -266,17 +307,28 @@ describe("contract", () => {
     );
     console.log("  main_state PDA  :", mainStatePda, " bump:", mainStateBump);
 
+    // user_usdc_ata PDA now includes unique_id in the seeds
     [userUsdcAtaPda, userUsdcAtaBump] = await deriveUserUsdcAtaPda(
+      UNIQUE_ID,
       usdcMintAddr,
       programId
     );
     console.log("  user_usdc_ata PDA:", userUsdcAtaPda, " bump:", userUsdcAtaBump);
 
+    // main_usdc_vault PDA now includes signer in the seeds
     [mainUsdcVaultPda, mainUsdcVaultBump] = await deriveMainUsdcVaultPda(
       usdcMintAddr,
+      adminAddr,
       programId
     );
     console.log("  main_usdc_vault PDA:", mainUsdcVaultPda, " bump:", mainUsdcVaultBump);
+
+    // ── Derive fee_collector_usdc_ata (ATA of main_state PDA) ──
+    feeCollectorAtaPubkey = await deriveFeeCollectorAta(
+      USDC_MINT_PUBKEY,
+      new PublicKey(mainStatePda)
+    );
+    console.log("  fee_collector ATA:", feeCollectorAtaPubkey.toBase58());
 
     // ── Get or create user's USDC token account ─────────────────
     // Uses getOrCreateAssociatedTokenAccount so it's idempotent
@@ -317,6 +369,77 @@ describe("contract", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
+  //  CLEANUP — Close stale PDAs from previous deployments
+  //  (needed when MainAccountShape struct layout changes)
+  // ════════════════════════════════════════════════════════════════
+  describe("Cleanup Stale Accounts", () => {
+    it("should close stale main_state and main_usdc_vault PDAs if they exist", async () => {
+      /**
+       * The MainAccountShape struct may have changed since the last deploy.
+       * If the old PDA exists with a different data layout (e.g., 106 bytes
+       * instead of the current 146 bytes), Anchor will fail to deserialize it.
+       *
+       * This cleanup step calls closeMainState to:
+       *   1. Close the main_usdc_vault token account (CPI to Token Program)
+       *   2. Zero-out and drain the main_state PDA lamports
+       *
+       * If the accounts don't exist or are already correct, this will
+       * simply skip (caught by the try/catch).
+       */
+      try {
+        // Check if the PDA exists at all
+        const stateAccountInfo = await connection.getAccountInfo(
+          new PublicKey(mainStatePda)
+        );
+
+        if (!stateAccountInfo) {
+          console.log("  ⏭ No stale main_state PDA found – skipping cleanup");
+          return;
+        }
+
+        // Check if the account size matches the expected size (8 discriminator + 138 struct = 146)
+        const expectedSize = 8 + 32 + 32 + 32 + 1 + 1 + 8 + 32; // 146 bytes
+        if (stateAccountInfo.data.length === expectedSize) {
+          // Try to deserialize — if it works, no cleanup needed
+          try {
+            await program.account.mainAccountShape.fetch(
+              new PublicKey(mainStatePda)
+            );
+            console.log("  ⏭ main_state PDA exists with correct layout – skipping cleanup");
+            return;
+          } catch {
+            console.log("  ⚠ main_state PDA exists but can't be deserialized – closing...");
+          }
+        } else {
+          console.log(
+            `  ⚠ main_state PDA exists with wrong size: ${stateAccountInfo.data.length} bytes (expected ${expectedSize}) – closing...`
+          );
+        }
+
+        const tx = await program.methods
+          .closeMainState()
+          .accountsPartial({
+            signer: adminSigner.publicKey,
+            usdcMint: USDC_MINT_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            mainStateAccount: new PublicKey(mainStatePda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .rpc();
+
+        console.log("  ✓ Closed stale PDAs, tx:", tx);
+
+        // Wait for confirmation
+        await connection.confirmTransaction(tx, "confirmed");
+      } catch (error: any) {
+        // If it fails (e.g., accounts don't exist, or it's already clean), that's fine
+        console.log("  ℹ Cleanup skipped or not needed:", error.message?.slice(0, 100));
+      }
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
   //  0. CREATE MAIN ACCOUNTS (must run first)
   // ════════════════════════════════════════════════════════════════
   describe("Create Main Accounts", () => {
@@ -324,35 +447,43 @@ describe("contract", () => {
       /**
        * This is the FIRST instruction that must be called.
        * It creates (or updates if they already exist via init_if_needed):
-       *   1. main_state_account PDA (MainAccountShape) — stores admin, mint, vault, bumps
+       *   1. main_state_account PDA (MainAccountShape) — stores admin, mint, vault, bumps, fee
        *   2. main_usdc_vault PDA — token account owned by main_state PDA
+       *   3. fee_collector_usdc_ata — ATA for fee collection owned by main_state PDA
        *
        * After this, the main_state_account.admin_signer is set to our pubkey,
        * which gates all future instructions.
        *
        * IDL instruction name: createMainAccounts
-       * Rust struct: CreaateMainAccounts
+       * Rust fn: create_main_accounts(ctx, fee)
        * Accounts:
-       *   - signer (mut, signer)
-       *   - usdcMint
+       *   - signer (mut, signer, constraint: signer == ADMIN)
+       *   - usdcMint (constraint: usdc_mint == USDC_MINT)
        *   - systemProgram
        *   - mainStateAccount (init_if_needed, PDA: ["main_state", usdc_mint, signer])
+       *   - feeCollectorUsdcAta (init_if_needed, ATA of main_state)
        *   - tokenProgram
-       *   - mainUsdcVault (init_if_needed, PDA: ["main_usdc_vault", usdc_mint])
+       *   - associatedTokenProgram
+       *   - mainUsdcVault (init_if_needed, PDA: ["main_usdc_vault", usdc_mint, signer])
        */
       const tx = await program.methods
-        .createMainAccounts()
+        .createMainAccounts(FEE_BPS)
         .accountsPartial({
           signer: adminSigner.publicKey,
           usdcMint: USDC_MINT_PUBKEY,
           systemProgram: anchor.web3.SystemProgram.programId,
           mainStateAccount: new PublicKey(mainStatePda),
+          feeCollectorUsdcAta: feeCollectorAtaPubkey,
           tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           mainUsdcVault: new PublicKey(mainUsdcVaultPda),
         })
         .rpc();
 
       console.log("  createMainAccounts tx:", tx);
+
+      // Wait for confirmation before verifying with Solana Kit RPC
+      await connection.confirmTransaction(tx, "confirmed");
 
       // ── Verify main_state_account was created via Solana Kit RPC ──
       const stateAccountInfo = await client.rpc
@@ -388,18 +519,33 @@ describe("contract", () => {
       );
       console.log("  ✓ main_usdc_vault created with correct authority");
       console.log("  Vault balance:", vaultInfo.amount.toString());
+
+      // ── Verify fee_collector_usdc_ata was created ──
+      const feeCollectorInfo = await getAccount(
+        connection,
+        feeCollectorAtaPubkey
+      );
+      assert.ok(feeCollectorInfo, "fee_collector_usdc_ata should exist");
+      assert.equal(
+        feeCollectorInfo.mint.toBase58(),
+        USDC_MINT_PUBKEY.toBase58(),
+        "Fee collector mint should be USDC"
+      );
+      console.log("  ✓ fee_collector_usdc_ata created");
     });
 
     it("should fail on double creation (accounts already exist)", async () => {
       try {
         await program.methods
-          .createMainAccounts()
+          .createMainAccounts(FEE_BPS)
           .accountsPartial({
             signer: adminSigner.publicKey,
             usdcMint: USDC_MINT_PUBKEY,
             systemProgram: anchor.web3.SystemProgram.programId,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
           .rpc();
@@ -449,6 +595,43 @@ describe("contract", () => {
         "main_usdc_vault_bump should be set"
       );
       console.log("  ✓ vault_bump   =", stateAccount.mainUsdcVaultBump);
+
+      assert.equal(
+        stateAccount.fee.toNumber(),
+        FEE_BPS.toNumber(),
+        "fee should match what we set"
+      );
+      console.log("  ✓ fee          =", stateAccount.fee.toNumber(), "bps");
+
+      assert.equal(
+        stateAccount.feeCollectorUsdcAta.toBase58(),
+        feeCollectorAtaPubkey.toBase58(),
+        "fee_collector_usdc_ata should match"
+      );
+      console.log("  ✓ fee_collector=", stateAccount.feeCollectorUsdcAta.toBase58());
+    });
+
+    it("should reject fee higher than 5% (500 bps)", async () => {
+      try {
+        await program.methods
+          .createMainAccounts(new anchor.BN(600)) // 6% > 5% max
+          .accountsPartial({
+            signer: adminSigner.publicKey,
+            usdcMint: USDC_MINT_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
+          })
+          .simulate();
+
+        assert.fail("Should have rejected fee > 5%");
+      } catch (error) {
+        console.log("  ✓ Correctly rejected excessive fee");
+        assert.ok(error, "Excessive fee must throw");
+      }
     });
   });
 
@@ -466,9 +649,13 @@ describe("contract", () => {
        *                       │
        *                       ├── token::authority ──▶ user_usdc_ata (created here)
        *                       └── token::authority ──▶ main_usdc_vault (created in createMainAccounts)
+       *
+       * The initialize instruction takes a unique_id: String argument
+       * which becomes part of the user_usdc_ata PDA seed:
+       *   seeds = [b"user_usdc_ata", unique_id.as_bytes(), usdc_mint.key()]
        */
       const tx = await program.methods
-        .initialize()
+        .initialize(UNIQUE_ID)
         .accountsPartial({
           signer: adminSigner.publicKey,
           usdcMint: USDC_MINT_PUBKEY,
@@ -509,6 +696,26 @@ describe("contract", () => {
       console.log("  Vault balance:", vaultInfo.amount.toString());
     });
 
+    it("should create a different PDA for a different unique_id", async () => {
+      const differentUniqueId = "test_user_002";
+
+      const [differentPda] = await deriveUserUsdcAtaPda(
+        differentUniqueId,
+        usdcMintAddr,
+        programId
+      );
+
+      // The PDA should be different from the first user's PDA
+      assert.notEqual(
+        differentPda,
+        userUsdcAtaPda,
+        "Different unique_id should produce a different PDA"
+      );
+      console.log("  ✓ Different unique_id produces a different PDA");
+      console.log("  user_001 PDA:", userUsdcAtaPda);
+      console.log("  user_002 PDA:", differentPda);
+    });
+
     it("should fail when initializing with an incorrect USDC mint", async () => {
       // Create a throwaway mint on devnet
       const fakeMint = await createMint(
@@ -528,11 +735,11 @@ describe("contract", () => {
         address(adminSigner.publicKey.toBase58()),
         programId
       );
-      const [fakeVaultPda] = await deriveUserUsdcAtaPda(fakeMintAddr, programId);
+      const [fakeVaultPda] = await deriveUserUsdcAtaPda(UNIQUE_ID, fakeMintAddr, programId);
 
       try {
         await program.methods
-          .initialize()
+          .initialize(UNIQUE_ID)
           .accountsPartial({
             signer: adminSigner.publicKey,
             usdcMint: fakeMint,
@@ -556,7 +763,7 @@ describe("contract", () => {
     it("should fail on double initialization (account already exists)", async () => {
       try {
         await program.methods
-          .initialize()
+          .initialize(UNIQUE_ID)
           .accountsPartial({
             signer: adminSigner.publicKey,
             usdcMint: USDC_MINT_PUBKEY,
@@ -582,7 +789,8 @@ describe("contract", () => {
   //                                              │
   //        program.transfertovault() ◀────────────┘
   //                  │
-  //                  └───▶ main_usdc_vault PDA
+  //                  ├───▶ main_usdc_vault PDA (net amount after fee)
+  //                  └───▶ fee_collector_usdc_ata (fee amount)
   //
   //  Both user_usdc_ata and main_usdc_vault have
   //  token::authority = main_state PDA.
@@ -630,15 +838,31 @@ describe("contract", () => {
       console.log("  ✓ Deposit complete\n");
     });
 
-    it("should transfer tokens from user_usdc_ata PDA → main_usdc_vault PDA", async () => {
+    it("should transfer tokens from user_usdc_ata PDA → main_usdc_vault PDA (with fee deduction)", async () => {
       const transferAmount = 2 * 10 ** USDC_DECIMALS; // 2 USDC
 
       const initialPdaBalance = (
         await getAccount(connection, new PublicKey(userUsdcAtaPda))
       ).amount;
+      const initialVaultBalance = (
+        await getAccount(connection, new PublicKey(mainUsdcVaultPda))
+      ).amount;
+      const initialFeeBalance = (
+        await getAccount(connection, feeCollectorAtaPubkey)
+      ).amount;
       console.log(
-        "  Initial PDA balance:",
+        "  Initial PDA balance    :",
         Number(initialPdaBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log(
+        "  Initial Vault balance  :",
+        Number(initialVaultBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log(
+        "  Initial Fee balance    :",
+        Number(initialFeeBalance) / 10 ** USDC_DECIMALS,
         "USDC"
       );
 
@@ -650,6 +874,7 @@ describe("contract", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           mainStateAccount: new PublicKey(mainStatePda),
+          feeCollectorUsdcAta: feeCollectorAtaPubkey,
           userUsdcAta: new PublicKey(userUsdcAtaPda),
           mainUsdcVault: new PublicKey(mainUsdcVaultPda),
         })
@@ -660,25 +885,44 @@ describe("contract", () => {
       const finalPdaBalance = (
         await getAccount(connection, new PublicKey(userUsdcAtaPda))
       ).amount;
-      const vaultBalance = (
+      const finalVaultBalance = (
         await getAccount(connection, new PublicKey(mainUsdcVaultPda))
+      ).amount;
+      const finalFeeBalance = (
+        await getAccount(connection, feeCollectorAtaPubkey)
       ).amount;
 
       console.log(
-        "  Final PDA balance :",
+        "  Final PDA balance      :",
         Number(finalPdaBalance) / 10 ** USDC_DECIMALS,
         "USDC"
       );
       console.log(
-        "  Vault balance     :",
-        Number(vaultBalance) / 10 ** USDC_DECIMALS,
+        "  Final Vault balance    :",
+        Number(finalVaultBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log(
+        "  Final Fee balance      :",
+        Number(finalFeeBalance) / 10 ** USDC_DECIMALS,
         "USDC"
       );
 
+      // The total deducted from user PDA should equal the transfer amount
       assert.equal(
         Number(initialPdaBalance) - Number(finalPdaBalance),
         transferAmount,
         "PDA balance should decrease by the transfer amount"
+      );
+
+      // Vault + fee collector should have received the full amount
+      const totalReceived =
+        Number(finalVaultBalance) - Number(initialVaultBalance) +
+        Number(finalFeeBalance) - Number(initialFeeBalance);
+      assert.equal(
+        totalReceived,
+        transferAmount,
+        "Vault + Fee collector should have received the full transfer amount"
       );
     });
 
@@ -694,6 +938,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -716,6 +961,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -730,7 +976,135 @@ describe("contract", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  //  3. SECURITY TESTS — No airdrops, use static generated keypairs
+  //  3. CLAIM BY USER TESTS
+  //
+  //  Flow: main_usdc_vault PDA ──(program CPI)──▶ user_usdc_ata PDA
+  //                                  │
+  //                                  └───▶ fee_collector_usdc_ata (fee)
+  //
+  //  This is the reverse of transfertovault — the admin claims
+  //  tokens from the main vault back to a user's ATA.
+  // ════════════════════════════════════════════════════════════════
+  describe("Claim by User", () => {
+    it("should claim tokens from main_usdc_vault → user_usdc_ata (with fee deduction)", async () => {
+      const claimAmount = 1 * 10 ** USDC_DECIMALS; // 1 USDC
+
+      const initialPdaBalance = (
+        await getAccount(connection, new PublicKey(userUsdcAtaPda))
+      ).amount;
+      const initialVaultBalance = (
+        await getAccount(connection, new PublicKey(mainUsdcVaultPda))
+      ).amount;
+      const initialFeeBalance = (
+        await getAccount(connection, feeCollectorAtaPubkey)
+      ).amount;
+
+      console.log(
+        "  Initial user ATA balance:",
+        Number(initialPdaBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log(
+        "  Initial vault balance   :",
+        Number(initialVaultBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+
+      // Skip if vault has insufficient funds
+      if (Number(initialVaultBalance) < claimAmount) {
+        console.log("  ⚠ Vault balance too low for claim test – skipping");
+        return;
+      }
+
+      const tx = await program.methods
+        .claimByUser(new anchor.BN(claimAmount))
+        .accountsPartial({
+          signer: adminSigner.publicKey,
+          usdcMint: USDC_MINT_PUBKEY,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          mainStateAccount: new PublicKey(mainStatePda),
+          feeCollectorUsdcAta: feeCollectorAtaPubkey,
+          userUsdcAta: new PublicKey(userUsdcAtaPda),
+          mainUsdcVault: new PublicKey(mainUsdcVaultPda),
+        })
+        .rpc();
+
+      console.log("  Claim tx:", tx);
+
+      const finalPdaBalance = (
+        await getAccount(connection, new PublicKey(userUsdcAtaPda))
+      ).amount;
+      const finalVaultBalance = (
+        await getAccount(connection, new PublicKey(mainUsdcVaultPda))
+      ).amount;
+      const finalFeeBalance = (
+        await getAccount(connection, feeCollectorAtaPubkey)
+      ).amount;
+
+      console.log(
+        "  Final user ATA balance  :",
+        Number(finalPdaBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log(
+        "  Final vault balance     :",
+        Number(finalVaultBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+      console.log(
+        "  Final fee balance       :",
+        Number(finalFeeBalance) / 10 ** USDC_DECIMALS,
+        "USDC"
+      );
+
+      // The total deducted from vault should equal the claim amount
+      const totalDeducted = Number(initialVaultBalance) - Number(finalVaultBalance);
+      assert.equal(
+        totalDeducted,
+        claimAmount,
+        "Vault balance should decrease by the claim amount"
+      );
+
+      // User ATA + fee collector should have received the full amount
+      const totalReceived =
+        Number(finalPdaBalance) - Number(initialPdaBalance) +
+        Number(finalFeeBalance) - Number(initialFeeBalance);
+      assert.equal(
+        totalReceived,
+        claimAmount,
+        "User ATA + Fee collector should have received the full claim amount"
+      );
+    });
+
+    it("should fail when claiming more than vault balance", async () => {
+      const excessiveAmount = 100_000 * 10 ** USDC_DECIMALS;
+
+      try {
+        await program.methods
+          .claimByUser(new anchor.BN(excessiveAmount))
+          .accountsPartial({
+            signer: adminSigner.publicKey,
+            usdcMint: USDC_MINT_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
+            userUsdcAta: new PublicKey(userUsdcAtaPda),
+            mainUsdcVault: new PublicKey(mainUsdcVaultPda),
+          })
+          .rpc();
+
+        assert.fail("Should have failed – insufficient vault funds");
+      } catch (error: any) {
+        console.log("  ✓ Correctly rejected excessive claim");
+        assert.ok(error, "Insufficient vault balance must throw");
+      }
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  //  4. SECURITY TESTS — No airdrops, use static generated keypairs
   // ════════════════════════════════════════════════════════════════
   describe("Security Tests", () => {
     it("should reject an unauthorized signer", async () => {
@@ -760,6 +1134,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(attackerStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -785,6 +1160,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: fakeState.publicKey,
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -809,6 +1185,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: userTokenAccount, // wrong – not the correct vault PDA
           })
@@ -834,6 +1211,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -849,7 +1227,7 @@ describe("contract", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  //  4. EDGE CASE TESTS
+  //  5. EDGE CASE TESTS
   // ════════════════════════════════════════════════════════════════
   describe("Edge Cases", () => {
     it("should reject max u64 amount (overflow / insufficient balance)", async () => {
@@ -864,6 +1242,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -899,6 +1278,7 @@ describe("contract", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             mainStateAccount: new PublicKey(mainStatePda),
+            feeCollectorUsdcAta: feeCollectorAtaPubkey,
             userUsdcAta: new PublicKey(userUsdcAtaPda),
             mainUsdcVault: new PublicKey(mainUsdcVaultPda),
           })
@@ -920,7 +1300,7 @@ describe("contract", () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  //  5. ACCOUNT OWNERSHIP VERIFICATION (Solana Kit RPC)
+  //  6. ACCOUNT OWNERSHIP VERIFICATION (Solana Kit RPC)
   // ════════════════════════════════════════════════════════════════
   describe("Account Ownership Verification (Solana Kit)", () => {
     it("should verify main_state PDA is owned by the program", async () => {
@@ -975,6 +1355,39 @@ describe("contract", () => {
         "Token-level authority must be the main_state PDA"
       );
       console.log("  ✓ Vault token authority = main_state PDA");
+    });
+
+    it("should verify fee_collector_usdc_ata is owned by the Token Program", async () => {
+      const feeInfo = await client.rpc
+        .getAccountInfo(address(feeCollectorAtaPubkey.toBase58()), {
+          commitment: "confirmed",
+          encoding: "base64",
+        })
+        .send();
+
+      if (!feeInfo.value) {
+        console.log("  ⚠ fee_collector not yet created – skipping");
+        return;
+      }
+
+      const tokenProgramAddr = address(TOKEN_PROGRAM_ID.toBase58());
+      assert.equal(
+        feeInfo.value.owner,
+        tokenProgramAddr,
+        "Fee collector on-chain owner must be the Token Program"
+      );
+      console.log("  ✓ Fee collector is owned by Token Program");
+
+      const tokenAcct = await getAccount(
+        connection,
+        feeCollectorAtaPubkey
+      );
+      assert.equal(
+        tokenAcct.owner.toBase58(),
+        mainStatePda,
+        "Fee collector token-level authority must be the main_state PDA"
+      );
+      console.log("  ✓ Fee collector token authority = main_state PDA");
     });
   });
 });
