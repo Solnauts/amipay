@@ -12,13 +12,18 @@ pub struct DBResponse {
     pub data: DbUser,
 }
 
-pub fn get_user() -> Vec<DbUser> {
+pub fn get_user_info(required_index: String, payload: i32) -> Vec<DbUser> {
     use crate::schema::user::dsl::*;
     let connection = &mut establish_connection();
     let results = user
         .limit(5)
         .load(connection)
         .expect("error loading userdata");
+
+    let result = user
+        .filter(id.eq(&payload))
+        .get_result::<DbUser>(connection)
+        .unwrap();
 
     results
 }

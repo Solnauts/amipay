@@ -39,6 +39,58 @@ pub struct NormalizedUser {
     pub email: Option<String>,
 }
 
+pub struct AccountBalanceInfo {
+    pub user_id: String,
+}
+
+pub struct RecipientInfo {
+    pub userid: String,
+    pub recipientid: String,
+}
+
+pub struct TransactionHistoryInfo {
+    pub userid: String,
+}
+
+pub enum UserAccountInfo {
+    RecipientInfo(RecipientInfo),
+    AccountBalanceInfo(AccountBalanceInfo),
+    TransactionHistoryInfo(TransactionHistoryInfo),
+}
+
+pub struct NormalizedUserInfo {
+    pub method: String,
+    pub user_id: String,
+    pub recipient_id: Option<String>,
+}
+
+impl UserAccountInfo {
+    // This is the magic function that unifies the data
+    pub fn normalize(self) -> NormalizedUserInfo {
+        match self {
+            UserAccountInfo::AccountBalanceInfo(data) => {
+                NormalizedUserInfo {
+                    // Handle Option<String> with a default or unwrap
+                    method: "account_info".to_string(),
+                    user_id: data.user_id,
+                    recipient_id: None,
+                }
+            }
+            UserAccountInfo::RecipientInfo(data) => NormalizedUserInfo {
+                method: "recipient_info".to_string(),
+                user_id: data.userid,
+                recipient_id: Some(data.recipientid),
+            },
+
+            UserAccountInfo::TransactionHistoryInfo(data) => NormalizedUserInfo {
+                method: "transaction_history".to_string(),
+                user_id: data.userid,
+                recipient_id: None,
+            },
+        }
+    }
+}
+
 impl CreateUserRequest {
     // This is the magic function that unifies the data
     pub fn normalize(self) -> NormalizedUser {
@@ -103,4 +155,18 @@ async fn create_user_handler(
         "status": "success",
         "message": "User account created successfully"
     })))
+}
+
+//function to get user account info
+//a multipurpose function for all the thing like what to use
+
+fn get_user_info(data: UserAccountInfo) {
+    //match the user acount info
+    let request = data.normalize();
+
+    //database request on the choosen method
+    if request.method == "account_info".to_string() {
+    } else if request.method == "recipient_info" {
+    } else {
+    }
 }
