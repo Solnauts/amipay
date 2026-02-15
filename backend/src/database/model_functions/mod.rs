@@ -14,3 +14,5 @@ pub use vault_model_function::get_vault;
 pub use vault_model_function::update_vault_after_airdrop;
 pub use vault_model_function::update_vault_fees;
 pub use vault_model_function::update_vault_sol;
+pub use user_model_function::create_user;
+pub use user_model_function::get_user_info;

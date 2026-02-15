@@ -1,5 +1,5 @@
 use crate::database::establish_connection;
-use crate::database::model_functions::create_user;
+use crate::database::model_functions::{create_user, get_user_info};
 use crate::utility::create_user_ata;
 use actix_web::{HttpResponse, Responder, post, web};
 use bcrypt::{DEFAULT_COST, hash};
@@ -37,6 +37,58 @@ pub struct NormalizedUser {
     pub user_pin: String,    // Holds either Phone Number or Pubkey
     pub method_type: String, // "phone" or "wallet"
     pub email: Option<String>,
+}
+
+pub struct AccountBalanceInfo {
+    pub user_id: String,
+}
+
+pub struct RecipientInfo {
+    pub userid: String,
+    pub recipientid: String,
+}
+
+pub struct TransactionHistoryInfo {
+    pub userid: String,
+}
+
+pub enum UserAccountInfo {
+    RecipientInfo(RecipientInfo),
+    AccountBalanceInfo(AccountBalanceInfo),
+    TransactionHistoryInfo(TransactionHistoryInfo),
+}
+
+pub struct NormalizedUserInfo {
+    pub method: String,
+    pub user_id: String,
+    pub recipient_id: Option<String>,
+}
+
+impl UserAccountInfo {
+    // This is the magic function that unifies the data
+    pub fn normalize(self) -> NormalizedUserInfo {
+        match self {
+            UserAccountInfo::AccountBalanceInfo(data) => {
+                NormalizedUserInfo {
+                    // Handle Option<String> with a default or unwrap
+                    method: "account_info".to_string(),
+                    user_id: data.user_id,
+                    recipient_id: None,
+                }
+            }
+            UserAccountInfo::RecipientInfo(data) => NormalizedUserInfo {
+                method: "recipient_info".to_string(),
+                user_id: data.userid,
+                recipient_id: Some(data.recipientid),
+            },
+
+            UserAccountInfo::TransactionHistoryInfo(data) => NormalizedUserInfo {
+                method: "transaction_history".to_string(),
+                user_id: data.userid,
+                recipient_id: None,
+            },
+        }
+    }
 }
 
 impl CreateUserRequest {
@@ -103,4 +155,19 @@ async fn create_user_handler(
         "status": "success",
         "message": "User account created successfully"
     })))
+}
+
+//function to get user account info
+//a multipurpose function for all the thing like what to use
+
+fn get_user_data(data: UserAccountInfo) {
+    //match the user acount info
+    let request = data.normalize();
+
+    //database request on the choosen method
+    if request.method == "account_info".to_string() {
+        get_user_info(request.method, 32 as i32);
+    } else if request.method == "recipient_info" {
+    } else {
+    }
 }
