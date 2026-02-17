@@ -171,3 +171,6 @@ fn get_user_data(data: UserAccountInfo) {
     } else {
     }
 }
+
+//function for profile sections
+//function for the profile section
