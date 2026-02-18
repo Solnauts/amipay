@@ -1,7 +1,7 @@
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpServer, middleware::Logger, web};
 use std::io::Result;
 
-use crate::controllers::{get_response, create_user_handler};
+use crate::controllers::{create_user_handler, get_response, main_caller};
 use crate::database::establish_connection;
 mod controllers;
 mod database;
@@ -21,6 +21,8 @@ async fn main() -> Result<()> {
     //create the server instance
     HttpServer::new(|| {
         App::new()
+            .route("/main_caller", web::get().to(main_caller))
+            .wrap(Logger::default())
             .service(get_response)
             .service(create_user_handler)
     })
