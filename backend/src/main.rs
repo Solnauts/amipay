@@ -1,30 +1,34 @@
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use std::io::Result;
 
-use crate::controllers::{create_user_handler, get_response, main_caller};
+use crate::controllers::{
+    create_user_handler, get_nonce, get_response, main_caller, update_profile, wallet_login,
+};
 use crate::database::establish_connection;
 mod controllers;
 mod database;
 mod schema;
 mod utility;
 
-//web server
-
-//calling the db connection function
-
-//have to find the way to club multiple conttroller at one one for clean code
 #[actix_web::main]
 async fn main() -> Result<()> {
-    //call the databse connection first
+    // Initialize database connection on startup
     establish_connection();
 
-    //create the server instance
+    // Create and run the HTTP server
     HttpServer::new(|| {
         App::new()
-            .route("/main_caller", web::get().to(main_caller))
             .wrap(Logger::default())
-            .service(get_response)
+            // WebSocket route
+            .route("/main_caller", web::get().to(main_caller))
+            // Contact number flow
             .service(create_user_handler)
+            // Wallet auth flow
+            .service(get_nonce)        // GET  /wallet/nonce
+            .service(wallet_login)     // POST /wallet/login
+            .service(update_profile)   // POST /wallet/update-profile
+            // AI
+            .service(get_response)
     })
     .bind(("127.0.0.1", 4000))?
     .run()

@@ -19,13 +19,14 @@ diesel::table! {
 diesel::table! {
     user (id) {
         id -> Int4,
-        name -> Text,
-        password -> Text,
+        name -> Nullable<Text>,
+        password -> Nullable<Text>,
         amount -> Nullable<Int8>,
         unique_id -> Text,
         method_type -> Text,
         email -> Nullable<Text>,
-        user_usdc_ata -> Text,
+        user_usdc_ata -> Nullable<Text>,
+        wallet_address -> Nullable<Text>,
     }
 }
 

@@ -5,6 +5,8 @@ use actix_web::{HttpResponse, Responder, post, web};
 use bcrypt::{DEFAULT_COST, hash};
 use serde::Deserialize;
 
+// ─── Contact Number Login Types ─────────────────────────────────────────────
+
 #[derive(Deserialize, Debug)]
 pub struct ContactPayload {
     pub username: Option<String>,
@@ -13,31 +15,35 @@ pub struct ContactPayload {
     pub email: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct WalletPayload {
-    pub pubkey: String,
-    pub username: String,
-    pub user_pin: i32,
-    pub pin: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(tag = "signup_method", content = "payload")]
-#[serde(rename_all = "snake_case")]
-pub enum CreateUserRequest {
-    //the signup method can be one from these two values of means enum
-    ContactNumber(ContactPayload),
-    WalletAddress(WalletPayload), //if user choose the phone number method
-}
-
-#[derive(Debug)] // Derive Clone/Serialize if needed
+#[derive(Debug)]
 pub struct NormalizedUser {
     pub username: String,
     pub unique_id: String,
-    pub user_pin: String,    // Holds either Phone Number or Pubkey
-    pub method_type: String, // "phone" or "wallet"
+    pub user_pin: String,
+    pub method_type: String,
     pub email: Option<String>,
 }
+
+impl ContactPayload {
+    /// Normalize the contact number payload into a NormalizedUser.
+    /// Hashes the pin and contact number before storing.
+    pub fn normalize(self) -> NormalizedUser {
+        let user_pin = hash(self.userpin.to_string(), DEFAULT_COST).unwrap();
+
+        let user_contact =
+            hash(self.contact_number.unwrap().to_string(), DEFAULT_COST).unwrap();
+
+        NormalizedUser {
+            username: self.username.unwrap_or_else(|| "Guest".to_string()),
+            unique_id: user_contact,
+            method_type: "phone".to_string(),
+            user_pin,
+            email: self.email,
+        }
+    }
+}
+
+// ─── Account Info Types (unchanged) ─────────────────────────────────────────
 
 pub struct AccountBalanceInfo {
     pub user_id: String,
@@ -65,12 +71,10 @@ pub struct NormalizedUserInfo {
 }
 
 impl UserAccountInfo {
-    // This is the magic function that unifies the data
     pub fn normalize(self) -> NormalizedUserInfo {
         match self {
             UserAccountInfo::AccountBalanceInfo(data) => {
                 NormalizedUserInfo {
-                    // Handle Option<String> with a default or unwrap
                     method: "account_info".to_string(),
                     user_id: data.user_id,
                     recipient_id: None,
@@ -91,51 +95,20 @@ impl UserAccountInfo {
     }
 }
 
-impl CreateUserRequest {
-    // This is the magic function that unifies the data
-    pub fn normalize(self) -> NormalizedUser {
-        match self {
-            CreateUserRequest::ContactNumber(data) => {
-                let user_pin = hash(data.userpin.to_string(), DEFAULT_COST).unwrap();
-
-                let user_contact =
-                    hash(data.contact_number.unwrap().to_string(), DEFAULT_COST).unwrap();
-
-                NormalizedUser {
-                    // Handle Option<String> with a default or unwrap
-                    username: data.username.unwrap_or_else(|| "Guest".to_string()),
-                    unique_id: user_contact,
-                    method_type: "phone".to_string(),
-                    user_pin,
-                    email: data.email,
-                }
-            }
-            CreateUserRequest::WalletAddress(data) => {
-                let user_pin = hash(data.user_pin.to_string(), DEFAULT_COST).unwrap();
-                NormalizedUser {
-                    username: data.username,
-                    unique_id: data.pubkey, // Pubkey maps to unique_id
-                    user_pin,
-                    method_type: "wallet".to_string(),
-                    email: None, // Wallet has no email, so set to None
-                }
-            }
-        }
-    }
-}
+// ─── Route Handler: Contact Number Create Account ───────────────────────────
 
 #[post("/createaccount")]
 async fn create_user_handler(
-    data: web::Json<CreateUserRequest>,
+    data: web::Json<ContactPayload>,
 ) -> actix_web::Result<impl Responder> {
-    //call the solana rpc with particular changes in the payload
+    // Normalize and hash the contact payload
     let user = data.into_inner().normalize();
-    let user_ata = create_user_ata(user.unique_id.clone())?;
 
-    // Get the USDC ATA address as a string to store in the database
+    // Create the Solana USDC ATA for this user
+    let user_ata = create_user_ata(user.unique_id.clone())?;
     let user_usdc_ata = user_ata.value.to_string();
 
-    // Insert the new user into the database with all NormalizedUser fields
+    // Insert the new user into the database
     let db_result = web::block(move || {
         let conn = &mut establish_connection();
         create_user(
@@ -150,27 +123,20 @@ async fn create_user_handler(
     })
     .await?;
 
-    //Send HTTP Response
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "message": "User account created successfully"
     })))
 }
 
-//function to get user account info
-//a multipurpose function for all the thing like what to use
+// ─── Helper: Get User Data ──────────────────────────────────────────────────
 
 fn get_user_data(data: UserAccountInfo) {
-    //match the user acount info
     let request = data.normalize();
 
-    //database request on the choosen method
     if request.method == "account_info".to_string() {
         get_user_info(request.method, 32 as i32);
     } else if request.method == "recipient_info" {
     } else {
     }
 }
-
-//function for profile sections
-//function for the profile section
