@@ -2,7 +2,7 @@ use actix_web::{App, HttpServer, middleware::Logger, web};
 use std::io::Result;
 
 use crate::controllers::{
-    create_user_handler, get_nonce, get_response, main_caller, update_profile, wallet_login,
+    create_user_handler, get_nonce, main_caller, update_profile, wallet_login,
 };
 use crate::database::establish_connection;
 mod controllers;
@@ -24,11 +24,10 @@ async fn main() -> Result<()> {
             // Contact number flow
             .service(create_user_handler)
             // Wallet auth flow
-            .service(get_nonce)        // GET  /wallet/nonce
-            .service(wallet_login)     // POST /wallet/login
-            .service(update_profile)   // POST /wallet/update-profile
-            // AI
-            .service(get_response)
+            .service(get_nonce) // GET  /wallet/nonce
+            .service(wallet_login) // POST /wallet/login
+            .service(update_profile) // POST /wallet/update-profile
+        // AI
     })
     .bind(("127.0.0.1", 4000))?
     .run()

@@ -1,6 +1,7 @@
 //make the handle user message function
 use crate::controllers::ai_controller::{RequestBody, get_ai_response};
 
+//this function should contain the stream of the websocket message for conversating with the client
 pub async fn handle_user_message(user_message: String) {
     let serealized_message = serde_json::from_str::<RequestBody>(&user_message).unwrap();
 
@@ -9,10 +10,40 @@ pub async fn handle_user_message(user_message: String) {
 
     //extract the intent from the upper response
     match intent_response {
-        s if s.intent == "send".to_string() => {
-            println!("user want to send the message");
+        // transfer logic
+        s if s.intent == "transfer".to_string() => {
+            println!("user want to send the money");
+
+            //call the check balance function
+
+            //if pass
+            //call the check the recipeint function
+
+            //if pass
+            //call the transfer function (transfer from user usdc ata to main vault and then update
+            //the data base)
+            //the logic of account balance updation always be the difference of ledger so work
+            //accordingly
+
+            //if pass
+            //send the transaction success/error to the user
         }
 
+        //for checking balance
+        s if s.intent == "check_balance".to_string() => {
+            println!("user want to check the balance");
+
+            //call the check balance function for this can query both the user
+        }
+
+        //for transaction history
+        s if s.intent == "transaction_history".to_string() => {
+            println!("user want to see the transaction history");
+
+            //call the get transaction history function for this can query both the user
+        }
+
+        //if intent doesn't match
         _ => {
             println!("invalid request");
         }
@@ -21,4 +52,3 @@ pub async fn handle_user_message(user_message: String) {
 
 //handle user message function
 pub fn handle_action_response() {}
-
