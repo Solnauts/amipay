@@ -23,8 +23,8 @@ pub struct DbUser {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Dbrecipient {
     pub name: String,
-    pub id: i32,
     pub userid: i32,
+    pub id: i32,
 }
 
 // Insertable struct for creating a user via contact number (full data upfront)

@@ -16,6 +16,7 @@ diesel::table! {
     }
 }
 
+//instead of method type it can be login type
 diesel::table! {
     user (id) {
         id -> Int4,

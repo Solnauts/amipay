@@ -5,6 +5,7 @@ use crate::{
     },
     schema::user,
 };
+use diesel::PgConnection;
 use diesel::prelude::*;
 
 pub struct DBResponse {
@@ -38,6 +39,7 @@ pub fn get_user_info(required_intent: String, payload: i32) -> UserInfoResponse 
         }
         s if s == "recipient".to_string() => {
             //check the recipient that particular recipient exist in the user place
+            //check for this recipeient by making query to the database
             UserInfoResponse::NUmber(result.amount.unwrap() as i32)
         }
         _ => {
