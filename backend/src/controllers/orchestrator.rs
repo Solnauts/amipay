@@ -4,6 +4,8 @@ use actix_ws::Message;
 use futures_util::StreamExt as _;
 use std::io;
 
+use crate::utility::ClientMessage;
+
 //web socket function
 pub async fn main_caller(
     req: HttpRequest,
@@ -23,15 +25,19 @@ pub async fn main_caller(
 
     actix_web::rt::spawn(async move {
         while let Some(Ok(msg)) = msg_stream.next().await {
-            match msg {
-                Message::Ping(bytes) => {
-                    if session.pong(&bytes).await.is_err() {
-                        return;
-                    }
+            let client_message = serde_json::from_str::<ClientMessage>(&msg);
+
+            match client_message {
+                ClientMessage::UserMessage() => {
+                    println!("this the best course of action");
+                }
+                ClientMessage::ActionResponse() => {
+                    println!("this is the action response");
                 }
 
-                Message::Text(msg) => println!("Got text: {msg}"),
-                _ => break,
+                _ => {
+                    println!("error while getting message")
+                }
             }
         }
 

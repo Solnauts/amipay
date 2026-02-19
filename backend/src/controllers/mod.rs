@@ -6,4 +6,4 @@ pub mod wallet_controller;
 pub use ai_controller::get_response;
 pub use orchestrator::*;
 pub use user_controller::create_user_handler;
-pub use wallet_controller::{get_nonce, wallet_login, update_profile};
+pub use wallet_controller::{get_nonce, update_profile, wallet_login};
