@@ -12,21 +12,41 @@ pub struct DBResponse {
     pub data: DbUser,
 }
 
-pub fn get_user_info(required_intent: String, payload: i32) -> Vec<DbUser> {
+enum UserInfoResponse {
+    Text(String),
+    NUmber(i32),
+    Error(String),
+}
+
+//has to change the return type
+pub fn get_user_info(required_intent: String, payload: i32) -> UserInfoResponse {
     //check if the user has enough
     use crate::schema::user::dsl::*;
-    let connection = &mut establish_connection();
-    let results = user
-        .limit(5)
-        .load(connection)
-        .expect("error loading userdata");
 
+    let connection = &mut establish_connection();
     let result = user
         .filter(id.eq(&payload))
         .get_result::<DbUser>(connection)
         .unwrap();
 
-    results
+    //make decision on the basis of required_intent;
+    match required_intent {
+        //if the user want to check balance
+        s if s == "amount".to_string() => {
+            //return the amount the user have
+            UserInfoResponse::NUmber(result.amount.unwrap() as i32)
+        }
+        s if s == "recipient".to_string() => {
+            //check the recipient that particular recipient exist in the user place
+            UserInfoResponse::NUmber(result.amount.unwrap() as i32)
+        }
+        _ => {
+            println!("error query request");
+
+            //return the error message
+            UserInfoResponse::Error("invalid query request".to_string())
+        }
+    }
 }
 
 // Create a user via contact number flow (full data upfront)
