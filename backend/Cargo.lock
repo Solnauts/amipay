@@ -1651,6 +1651,7 @@ checksum = "d9b6c2fc184a6fb6ebcf5f9a5e3bbfa84d8fd268cdfcce4ed508979a6259494d"
 dependencies = [
  "bitflags",
  "byteorder",
+ "chrono",
  "diesel_derives",
  "downcast-rs",
  "itoa",

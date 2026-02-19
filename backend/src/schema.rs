@@ -5,6 +5,12 @@ diesel::table! {
         id -> Int4,
         senderId -> Int4,
         receiverId -> Int4,
+        amount -> Int8,
+        currency -> Text,
+        tx_signature -> Nullable<Text>,
+        status -> Text,
+        created_at -> Timestamptz,
+        confirmed_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -16,7 +22,6 @@ diesel::table! {
     }
 }
 
-//instead of method type it can be login type
 diesel::table! {
     user (id) {
         id -> Int4,

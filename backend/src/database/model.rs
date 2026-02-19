@@ -1,4 +1,5 @@
-use crate::schema::user;
+use crate::schema::{user, ledger};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -56,4 +57,38 @@ pub struct NewWalletUser {
 pub struct UpdateWalletProfile {
     pub name: Option<String>,
     pub password: Option<String>,
+}
+
+// ── Ledger Models ───────────────────────────────────────────────────────────
+
+// Queryable struct — field order must match schema.rs column order
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[diesel(table_name = crate::schema::ledger)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbLedger {
+    pub id: i32,
+    #[diesel(column_name = senderId)]
+    pub sender_id: i32,
+    #[diesel(column_name = receiverId)]
+    pub receiver_id: i32,
+    pub amount: i64,
+    pub currency: String,
+    pub tx_signature: Option<String>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub confirmed_at: Option<DateTime<Utc>>,
+}
+
+// Insertable struct for recording a new transaction
+#[derive(Insertable)]
+#[diesel(table_name = ledger)]
+pub struct NewLedger {
+    #[diesel(column_name = senderId)]
+    pub sender_id: i32,
+    #[diesel(column_name = receiverId)]
+    pub receiver_id: i32,
+    pub amount: i64,
+    pub currency: String,
+    pub tx_signature: Option<String>,
+    pub status: String,
 }
