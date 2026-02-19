@@ -11,8 +11,15 @@ pub async fn main_caller(
 ) -> actix_web::Result<impl Responder> {
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
-    //what is the course of action 
+    //creating namespaces
 
+    //room creation
+
+    //can reuse the chat room or have to make new chat room at every take
+
+    //how to verify the jwt token in this web socket thing
+
+    // how to secure the chats.
 
     actix_web::rt::spawn(async move {
         while let Some(Ok(msg)) = msg_stream.next().await {
