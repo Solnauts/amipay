@@ -7,7 +7,7 @@ use std::time::Duration;
 //the request struct
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestBody {
-    value: String,
+    pub value: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -25,15 +25,17 @@ pub struct AiResponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MainResponse {
-    intent: String,
-    amount: Option<u64>,
-    currency: Option<String>,
-    recipient: Option<String>,
-    history_limit: Option<u64>,
+    pub intent: String,
+    pub amount: Option<u64>,
+    pub currency: Option<String>,
+    pub recipient: Option<String>,
+    pub history_limit: Option<u64>,
 }
 
-#[post("/query")]
-async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
+//change to this function that handle the Deserialized logic
+//if remove the web::json then use one shoud serealize the response into the main RequestBody first
+//then use it into the ai message
+pub async fn get_ai_response(data: RequestBody) -> MainResponse {
     println!("the response is received");
 
     //call the ollama instance
@@ -67,5 +69,6 @@ async fn get_response(data: web::Json<RequestBody>) -> impl Responder {
     let outer_response: AiResponse = serde_json::from_str(&response).unwrap();
     let main_response: MainResponse = serde_json::from_str(&outer_response.response).unwrap();
 
-    HttpResponse::Ok().json(main_response)
+    //return the main response
+    main_response
 }
