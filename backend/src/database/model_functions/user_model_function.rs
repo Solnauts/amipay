@@ -14,8 +14,9 @@ pub struct DBResponse {
     pub data: DbUser,
 }
 
-enum UserInfoResponse {
+pub enum UserInfoResponse {
     Text(String),
+    UniqueId(String),
     NUmber(i32),
     Recipient(Dbrecipient),
     Error(String),
@@ -70,7 +71,7 @@ pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
         }
 
         //for unique ids
-        s if s == "unique_id".to_string() => UserInfoResponse::Text(user_result.unique_id),
+        s if s == "unique_id".to_string() => UserInfoResponse::UniqueId(user_result.unique_id),
         _ => {
             println!("error query request");
 
