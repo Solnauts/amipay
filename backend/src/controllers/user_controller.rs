@@ -30,8 +30,7 @@ impl ContactPayload {
     pub fn normalize(self) -> NormalizedUser {
         let user_pin = hash(self.userpin.to_string(), DEFAULT_COST).unwrap();
 
-        let user_contact =
-            hash(self.contact_number.unwrap().to_string(), DEFAULT_COST).unwrap();
+        let user_contact = hash(self.contact_number.unwrap().to_string(), DEFAULT_COST).unwrap();
 
         NormalizedUser {
             username: self.username.unwrap_or_else(|| "Guest".to_string()),
@@ -73,13 +72,11 @@ pub struct NormalizedUserInfo {
 impl UserAccountInfo {
     pub fn normalize(self) -> NormalizedUserInfo {
         match self {
-            UserAccountInfo::AccountBalanceInfo(data) => {
-                NormalizedUserInfo {
-                    method: "account_info".to_string(),
-                    user_id: data.user_id,
-                    recipient_id: None,
-                }
-            }
+            UserAccountInfo::AccountBalanceInfo(data) => NormalizedUserInfo {
+                method: "account_info".to_string(),
+                user_id: data.user_id,
+                recipient_id: None,
+            },
             UserAccountInfo::RecipientInfo(data) => NormalizedUserInfo {
                 method: "recipient_info".to_string(),
                 user_id: data.userid,
@@ -98,9 +95,7 @@ impl UserAccountInfo {
 // ─── Route Handler: Contact Number Create Account ───────────────────────────
 
 #[post("/createaccount")]
-async fn create_user_handler(
-    data: web::Json<ContactPayload>,
-) -> actix_web::Result<impl Responder> {
+async fn create_user_handler(data: web::Json<ContactPayload>) -> actix_web::Result<impl Responder> {
     // Normalize and hash the contact payload
     let user = data.into_inner().normalize();
 
@@ -127,16 +122,4 @@ async fn create_user_handler(
         "status": "success",
         "message": "User account created successfully"
     })))
-}
-
-// ─── Helper: Get User Data ──────────────────────────────────────────────────
-
-fn get_user_data(data: UserAccountInfo) {
-    let request = data.normalize();
-
-    if request.method == "account_info".to_string() {
-        get_user_info(request.method, 32 as i32);
-    } else if request.method == "recipient_info" {
-    } else {
-    }
 }

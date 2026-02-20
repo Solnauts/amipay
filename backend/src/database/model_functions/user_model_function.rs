@@ -3,7 +3,7 @@ use crate::{
         establish_connection,
         model::{DbUser, Dbrecipient, NewUser, NewWalletUser, UpdateWalletProfile},
     },
-    schema::user,
+    schema::{recipient, user},
 };
 
 use diesel::PgConnection;
@@ -21,7 +21,7 @@ enum UserInfoResponse {
 }
 
 //has to change the return type
-pub fn get_user_info(required_intent: String, user_id: i32) -> UserInfoResponse {
+pub fn get_user_info(required_intent: String, user_id: i32, recipient_name ) -> UserInfoResponse {
     use crate::schema::user::dsl::*;
     //check if the user has enough
 
@@ -46,7 +46,7 @@ pub fn get_user_info(required_intent: String, user_id: i32) -> UserInfoResponse 
             use crate::schema::recipient::dsl::*;
 
             let recpient_result = recipient
-                .filter(userid.eq(&user_id))
+                .filter(userid.eq(&user_id) && name.eq(&anem))
                 .get_result::<Dbrecipient>(connection)
                 .unwrap();
 
