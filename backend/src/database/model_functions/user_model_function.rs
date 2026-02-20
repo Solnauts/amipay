@@ -1,13 +1,16 @@
 use crate::{
     database::{
         establish_connection,
-        model::{DbUser, Dbrecipient, NewUser, NewWalletUser, UpdateWalletProfile},
+        model::{
+            DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateWalletProfile,
+        },
     },
     schema::{recipient, user},
 };
 
 use diesel::PgConnection;
 use diesel::prelude::*;
+use ed25519_dalek::ed25519::signature::digest::typenum::Le;
 
 pub struct DBResponse {
     pub success: bool,
@@ -26,6 +29,20 @@ pub struct UserInfoRequest {
     pub intent: String,
     pub user_id: i32,
     pub recipient_name: Option<String>,
+}
+
+pub struct UpdateUserLedgerRequest {
+    pub user_id: i32,
+    pub sender_id: i32,
+    pub receiver_id: i32,
+    pub amount: i64,
+    pub currency: String,
+    pub tx_signature: Option<String>,
+    pub status: String,
+}
+
+pub struct LedgerResponse {
+    success: bool,
 }
 
 //has to change the return type
@@ -80,6 +97,8 @@ pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
         }
     }
 }
+
+//create the user out of the system
 
 // Create a user via contact number flow (full data upfront)
 pub fn create_user(
@@ -160,4 +179,36 @@ pub fn update_wallet_user_profile(
         .set(&changeset)
         .get_result(conn)
         .expect("Error updating wallet user profile")
+}
+
+//udpate the ledger of the user
+pub fn add_user_ledger(request: UpdateUserLedgerRequest) -> LedgerResponse {
+    use crate::schema::ledger::dsl::*;
+
+    //connection
+    let connection = &mut establish_connection();
+
+    let changeset = NewLedger {
+        sender_id: request.sender_id,
+        receiver_id: request.sender_id,
+        amount: request.amount,
+        currency: request.currency,
+        tx_signature: Some(request.tx_signature.unwrap()),
+        status: request.status,
+    };
+
+    let db_response = diesel::insert_into(ledger)
+        .values(&changeset)
+        .get_result::<DbLedger>(connection);
+
+    match db_response {
+        Ok(_value) => {
+            let response = LedgerResponse { success: true };
+            response
+        }
+        Err(_err) => {
+            let response = LedgerResponse { success: false };
+            response
+        }
+    }
 }
