@@ -17,22 +17,29 @@ pub struct DBResponse {
 enum UserInfoResponse {
     Text(String),
     NUmber(i32),
+    Recipient(Dbrecipient),
     Error(String),
 }
 
+pub struct UserInfoRequest {
+    pub intent: String,
+    pub user_id: i32,
+    pub recipient_name: Option<String>,
+}
+
 //has to change the return type
-pub fn get_user_info(required_intent: String, user_id: i32, recipient_name ) -> UserInfoResponse {
+pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
     use crate::schema::user::dsl::*;
     //check if the user has enough
 
     let connection = &mut establish_connection();
     let user_result = user
-        .filter(id.eq(&user_id))
+        .filter(id.eq(&request.user_id))
         .get_result::<DbUser>(connection)
         .unwrap();
 
     //make decision on the basis of required_intent;
-    match required_intent {
+    match request.intent {
         //if the user want to check balance
         s if s == "amount".to_string() => {
             //return the amount the user have
@@ -44,21 +51,26 @@ pub fn get_user_info(required_intent: String, user_id: i32, recipient_name ) -> 
             //check for this recipeient by making query to the recipient table
             //bring the recipient into scope
             use crate::schema::recipient::dsl::*;
-
+            let recipient_name = request.recipient_name.unwrap();
             let recpient_result = recipient
-                .filter(userid.eq(&user_id) && name.eq(&anem))
-                .get_result::<Dbrecipient>(connection)
-                .unwrap();
+                .filter(userid.eq(&request.user_id))
+                .filter(name.eq(&recipient_name))
+                .get_result::<Dbrecipient>(connection);
 
-            UserInfoResponse::NUmber(recpient_result.userid as i32)
+            match recpient_result {
+                Ok(value) => {
+                    //send the response
+                    UserInfoResponse::Recipient(value)
+                }
+                Err(error) => {
+                    //send the error response
+                    UserInfoResponse::Error(error.to_string())
+                }
+            }
         }
 
         //for unique ids
-        s if s == "uniqueid".to_string() => {
-            //check the recipient that particular recipient exist in the user place
-            //check for this recipient by making query to the database
-            UserInfoResponse::Text(result.unique_id)
-        }
+        s if s == "unique_id".to_string() => UserInfoResponse::Text(user_result.unique_id),
         _ => {
             println!("error query request");
 
