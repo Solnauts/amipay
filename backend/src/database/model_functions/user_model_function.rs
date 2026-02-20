@@ -1,10 +1,11 @@
 use crate::{
     database::{
         establish_connection,
-        model::{DbUser, NewUser, NewWalletUser, UpdateWalletProfile},
+        model::{DbUser, Dbrecipient, NewUser, NewWalletUser, UpdateWalletProfile},
     },
     schema::user,
 };
+
 use diesel::PgConnection;
 use diesel::prelude::*;
 
@@ -21,11 +22,11 @@ enum UserInfoResponse {
 
 //has to change the return type
 pub fn get_user_info(required_intent: String, user_id: i32) -> UserInfoResponse {
-    //check if the user has enough
     use crate::schema::user::dsl::*;
+    //check if the user has enough
 
     let connection = &mut establish_connection();
-    let result = user
+    let user_result = user
         .filter(id.eq(&user_id))
         .get_result::<DbUser>(connection)
         .unwrap();
@@ -35,17 +36,28 @@ pub fn get_user_info(required_intent: String, user_id: i32) -> UserInfoResponse 
         //if the user want to check balance
         s if s == "amount".to_string() => {
             //return the amount the user have
-            UserInfoResponse::NUmber(result.amount.unwrap() as i32)
+            UserInfoResponse::NUmber(user_result.amount.unwrap() as i32)
         }
+
+        //for getting recipeient
         s if s == "recipient".to_string() => {
-            //check the recipient that particular recipient exist in the user place
-            //check for this recipeient by making query to the database
-            UserInfoResponse::NUmber(result.amount.unwrap() as i32)
+            //check for this recipeient by making query to the recipient table
+            //bring the recipient into scope
+            use crate::schema::recipient::dsl::*;
+
+            let recpient_result = recipient
+                .filter(userid.eq(&user_id))
+                .get_result::<Dbrecipient>(connection)
+                .unwrap();
+
+            UserInfoResponse::NUmber(recpient_result.userid as i32)
         }
-        s if s == "userid".to_string() => {
+
+        //for unique ids
+        s if s == "uniqueid".to_string() => {
             //check the recipient that particular recipient exist in the user place
-            //check for this recipeient by making query to the database
-            UserInfoResponse::NUmber(result.amount.unwrap() as i32)
+            //check for this recipient by making query to the database
+            UserInfoResponse::Text(result.unique_id)
         }
         _ => {
             println!("error query request");
