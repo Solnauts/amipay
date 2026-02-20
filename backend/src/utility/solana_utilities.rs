@@ -21,6 +21,12 @@ pub struct RpcResponse {
     pub value: pubkey::Pubkey,
 }
 
+pub struct AmountResponse {
+    pub success: bool,
+    pub amount: u64,
+    pub issue: Option<String>,
+}
+
 #[tokio::main]
 pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, Box<dyn Error>> {
     // Load environment variables
@@ -163,6 +169,60 @@ async fn get_user_ata(
         Ok(value) => {
             println!("Success! the value is : {:?}", value);
             Ok((value, user_ata_pda_address.0))
+        }
+        Err(error) => {
+            println!("error while fetching account {:?} ", error);
+            Err(error.into())
+        }
+    }
+}
+
+pub async fn get_user_ata_balance(
+    unqiue_id: String,
+    amount_claim: u64,
+) -> std::result::Result<AmountResponse, Box<dyn Error>> {
+    //make the client
+    let rpc_url = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL must be set");
+    let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
+
+    //get the userid and make the seed
+    let program_id_str = env::var("SOLANA_PROGRAM_ID").expect("SOLANA_PROGRAM_ID must be set");
+    let usdc_mint_str = env::var("SOLANA_USDC_MINT").expect("SOLANA_USDC_MINT must be set");
+    let user_ata_seed_str =
+        env::var("SOLANA_SEED_USER_USDC_ATA").expect("SOLANA_SEED_USER_USDC_ATA must be set");
+    let usdc_mint = Pubkey::from_str(&usdc_mint_str).unwrap();
+    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+
+    let user_ata_seed = [
+        user_ata_seed_str.as_bytes(),
+        unqiue_id.as_bytes(),
+        usdc_mint.as_ref(),
+    ];
+
+    //user ata pda address
+    let user_ata_pda_address = Pubkey::find_program_address(&user_ata_seed, &program_id);
+
+    let user_usdc_ata_account = client.get_balance(&user_ata_pda_address.0);
+
+    //user usdc ata
+    match user_usdc_ata_account {
+        Ok(value) => {
+            println!("Success! the value is : {:?}", value);
+            if value >= amount_claim {
+                let response = AmountResponse {
+                    success: true,
+                    amount: value,
+                    issue: None,
+                };
+                Ok(response)
+            } else {
+                let response = AmountResponse {
+                    success: false,
+                    amount: value,
+                    issue: Some("Insufficient Balance".to_string()),
+                };
+                Ok(response)
+            }
         }
         Err(error) => {
             println!("error while fetching account {:?} ", error);

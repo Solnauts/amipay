@@ -20,13 +20,13 @@ enum UserInfoResponse {
 }
 
 //has to change the return type
-pub fn get_user_info(required_intent: String, payload: i32) -> UserInfoResponse {
+pub fn get_user_info(required_intent: String, user_id: i32) -> UserInfoResponse {
     //check if the user has enough
     use crate::schema::user::dsl::*;
 
     let connection = &mut establish_connection();
     let result = user
-        .filter(id.eq(&payload))
+        .filter(id.eq(&user_id))
         .get_result::<DbUser>(connection)
         .unwrap();
 
@@ -38,6 +38,11 @@ pub fn get_user_info(required_intent: String, payload: i32) -> UserInfoResponse 
             UserInfoResponse::NUmber(result.amount.unwrap() as i32)
         }
         s if s == "recipient".to_string() => {
+            //check the recipient that particular recipient exist in the user place
+            //check for this recipeient by making query to the database
+            UserInfoResponse::NUmber(result.amount.unwrap() as i32)
+        }
+        s if s == "userid".to_string() => {
             //check the recipient that particular recipient exist in the user place
             //check for this recipeient by making query to the database
             UserInfoResponse::NUmber(result.amount.unwrap() as i32)
