@@ -1,13 +1,10 @@
-use crate::{
-    database::{
-        establish_connection,
-        model::{
-            DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateWalletProfile,
-        },
+use crate::database::{
+    establish_connection,
+    model::{
+        DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateWalletProfile,
     },
-    schema::{recipient, user},
 };
-
+use crate::schema::user;
 use diesel::PgConnection;
 use diesel::prelude::*;
 
@@ -228,6 +225,26 @@ pub fn add_user_ledger(request: UpdateUserLedgerRequest) -> LedgerResponse {
         Err(_err) => {
             let response = LedgerResponse { success: false };
             response
+        }
+    }
+}
+
+pub fn update_user_amount(user_id: i32) {
+    use crate::schema::ledger::dsl::*;
+
+    let connection = &mut establish_connection();
+
+    //update the amount on the basis of the ledger
+    let ledger_response = ledger
+        .filter(id.eq(user_id))
+        .get_result::<DbLedger>(connection);
+
+    match ledger_response {
+        Ok(_value) => {
+            //check if there is the main function
+        }
+        Err(error) => {
+            println!("the error value is : {}", error)
         }
     }
 }
