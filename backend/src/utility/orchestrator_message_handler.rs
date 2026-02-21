@@ -7,6 +7,7 @@ use crate::database::model_functions::{
         UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse, add_user_ledger,
     },
 };
+use crate::schema::recipient;
 use crate::utility::{get_user_ata_balance, transfer_to_vault};
 
 //this function should contain the stream of the websocket message for conversating with the client
@@ -30,11 +31,12 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
     let intent_response = get_ai_response(serealized_message).await;
 
     //get the value out of it
+    let intent_result = Box::leak(Box::new(intent_response));
 
     let user_info_ref: &'static DbUser = Box::leak(Box::new(user_info));
 
     //extract the intent from the upper response
-    match intent_response {
+    match intent_result {
         // transfer logic
         response if response.intent == "transfer".to_string() => {
             println!("user want to send the money");
@@ -71,20 +73,36 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
             match transfer_response {
                 Ok(transfer_response) => {
                     if transfer_response.success == true {
-                        //update the ledger
-                        let request = UpdateUserLedgerRequest {
+                        //update the ledger of the sender
+                        let sender_ledger_request = UpdateUserLedgerRequest {
                             user_id: user_info_ref.id,
                             sender_id: user_info_ref.id,
                             receiver_id: recipient.userid,
                             amount: response.amount.unwrap() as i64,
-                            currency: response.currency.unwrap(),
+                            currency: response.currency.clone().unwrap(),
                             tx_signature: None,
                             status: "confirmed".to_string(),
                         };
 
-                        let ledger_updation_result = add_user_ledger(request);
+                        //sender
+                        let sender_ledger_updation_result = add_user_ledger(sender_ledger_request);
 
-                        //send the response back to the user of success
+                        //recipient ledger request
+                        let recipient_ledger_request = UpdateUserLedgerRequest {
+                            user_id: recipient.userid,
+                            sender_id: user_info_ref.id,
+                            receiver_id: recipient.userid,
+                            amount: response.amount.unwrap() as i64,
+                            currency: response.currency.clone().unwrap(),
+                            tx_signature: None,
+                            status: "confirmed".to_string(),
+                        };
+
+                        //sender ledger request
+                        let recipient_send_request
+
+                        
+
                     }
                 }
                 Err(err) => {
