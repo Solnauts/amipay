@@ -10,7 +10,6 @@ use crate::{
 
 use diesel::PgConnection;
 use diesel::prelude::*;
-use ed25519_dalek::ed25519::signature::digest::typenum::Le;
 
 pub struct DBResponse {
     pub success: bool,
@@ -19,6 +18,7 @@ pub struct DBResponse {
 
 pub enum UserInfoResponse {
     Text(String),
+    FullInfo(DbUser),
     UniqueId(String),
     NUmber(i32),
     Recipient(Dbrecipient),
@@ -89,6 +89,26 @@ pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
 
         //for unique ids
         s if s == "unique_id".to_string() => UserInfoResponse::UniqueId(user_result.unique_id),
+
+        //get the full user
+        s if s == "full_user".to_string() => {
+            let full_user = user
+                .filter(id.eq(request.user_id))
+                .get_result::<DbUser>(connection);
+
+            match full_user {
+                Ok(value) => {
+                    //figure the issues
+                    UserInfoResponse::FullInfo(value)
+                }
+                Err(_) => {
+                    //error the issues
+                    UserInfoResponse::Error("error finding db user".to_string())
+                }
+            }
+        }
+
+        //error query request
         _ => {
             println!("error query request");
 
@@ -97,7 +117,6 @@ pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
         }
     }
 }
-
 //create the user out of the system
 
 // Create a user via contact number flow (full data upfront)

@@ -2,7 +2,9 @@
 use crate::controllers::ai_controller::{RequestBody, get_ai_response};
 use crate::database::model_functions::{
     get_user_info,
-    user_model_function::{UserInfoRequest, UserInfoResponse},
+    user_model_function::{
+        UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse, add_user_ledger,
+    },
 };
 use crate::utility::{get_user_ata_balance, transfer_to_vault};
 
@@ -12,10 +14,11 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
 
     //call the database for user_info
     let request_payload = UserInfoRequest {
-        intent: "unique_id".to_string(),
+        intent: "user_info".to_string(),
         user_id: user_id,
         recipient_name: None,
     };
+
     let user_info = get_user_info(request_payload);
 
     let UserInfoResponse::UniqueId(unique_id) = user_info else {
@@ -28,8 +31,10 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
     //get the value out of it
 
     let unique_id_ref: &'static String = Box::leak(Box::new(unique_id));
+
     //extract the intent from the upper response
     match intent_response {
+
         // transfer logic
         response if response.intent == "transfer".to_string() => {
             println!("user want to send the money");
@@ -62,7 +67,17 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
                 Ok(response) => {
                     if response.success == true {
                         //update the ledger
+                        let request UpdateUserLedgerRequest{
+                             user_id: 
+     sender_id: i32,
+     receiver_id: i32,
+    amount: i64,
+    currency: String,
+    tx_signature: Option<String>,
+    status: String,
 
+                        }
+                        let ledger_updation_result = add_user_ledger(request);
                         //send the response back to the user of success
                     }
                 }
