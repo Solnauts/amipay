@@ -197,19 +197,19 @@ pub fn update_wallet_user_profile(
         .expect("Error updating wallet user profile")
 }
 
-//udpate the ledger of the user
+// Record a ledger entry (kept for backward compat — prefer
+// `ledger_model_function::record_transfer_and_update_amounts` for the full flow)
 pub fn add_user_ledger(request: UpdateUserLedgerRequest) -> LedgerResponse {
     use crate::schema::ledger::dsl::*;
 
-    //connection
     let connection = &mut establish_connection();
 
     let changeset = NewLedger {
         sender_id: request.sender_id,
-        receiver_id: request.sender_id,
+        receiver_id: request.receiver_id, // ← FIX: was incorrectly using sender_id
         amount: request.amount,
         currency: request.currency,
-        tx_signature: Some(request.tx_signature.unwrap()),
+        tx_signature: request.tx_signature,
         status: request.status,
     };
 
@@ -218,33 +218,30 @@ pub fn add_user_ledger(request: UpdateUserLedgerRequest) -> LedgerResponse {
         .get_result::<DbLedger>(connection);
 
     match db_response {
-        Ok(_value) => {
-            let response = LedgerResponse { success: true };
-            response
-        }
-        Err(_err) => {
-            let response = LedgerResponse { success: false };
-            response
-        }
+        Ok(_value) => LedgerResponse { success: true },
+        Err(_err) => LedgerResponse { success: false },
     }
 }
 
+/// Recalculate and persist user.amount from their ledger history.
+/// Delegates to `ledger_model_function::update_user_amount_from_ledger`.
 pub fn update_user_amount(user_id: i32) {
-    use crate::schema::ledger::dsl::*;
+    use super::ledger_model_function::update_user_amount_from_ledger;
 
     let connection = &mut establish_connection();
 
-    //update the amount on the basis of the ledger
-    let ledger_response = ledger
-        .filter(id.eq(user_id))
-        .get_result::<DbLedger>(connection);
-
-    match ledger_response {
-        Ok(_value) => {
-            //check if there is the main function
+    match update_user_amount_from_ledger(connection, user_id) {
+        Ok(new_balance) => {
+            println!(
+                "[update_user_amount] user {} new balance = {}",
+                user_id, new_balance
+            );
         }
         Err(error) => {
-            println!("the error value is : {}", error)
+            println!(
+                "[update_user_amount] error for user {}: {}",
+                user_id, error
+            );
         }
     }
 }

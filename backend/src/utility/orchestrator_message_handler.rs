@@ -1,11 +1,12 @@
-//make the handle user message function
 use crate::controllers::ai_controller::{RequestBody, get_ai_response};
 use crate::database::model::DbUser;
+use crate::database::establish_connection;
 use crate::database::model_functions::{
     get_user_info,
     user_model_function::{
-        UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse, add_user_ledger,
+        UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse,
     },
+    ledger_model_function::record_transfer_and_update_amounts,
 };
 use crate::schema::recipient;
 use crate::utility::{get_user_ata_balance, transfer_to_vault};
