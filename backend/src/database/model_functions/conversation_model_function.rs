@@ -1,16 +1,17 @@
+use crate::database::db::establish_connection;
 use crate::database::model::{DbConversation, NewConversation};
 use crate::schema::conversation;
-use diesel::prelude::*;
 use diesel::PgConnection;
-
-pub fn create_conversation(conn: &mut PgConnection, target_user_id: i32) -> DbConversation {
+use diesel::prelude::*;
+pub fn create_conversation(target_user_id: i32) -> DbConversation {
+    let connection = &mut PgConnection::from(establish_connection());
     let new_conv = NewConversation {
         user_id: target_user_id,
     };
 
     diesel::insert_into(conversation::table)
         .values(&new_conv)
-        .get_result(conn)
+        .get_result(connection)
         .expect("Error creating conversation")
 }
 

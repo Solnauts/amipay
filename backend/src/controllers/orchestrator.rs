@@ -1,5 +1,6 @@
-use crate::controllers::wallet_controller::validate_session_token;
+use crate::database::model_functions::conversation_model_function::create_conversation;
 use crate::utility::ClientMessage;
+use crate::{controllers::wallet_controller::validate_session_token, schema::conversation};
 use actix_web::{HttpRequest, HttpResponse, HttpServer, Responder, middleware::Logger, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
@@ -26,7 +27,7 @@ pub async fn main_caller(
     };
 
     // Getting user id
-    let _user_id = match claims.sub.parse::<i32>() {
+    let user_id = match claims.sub.parse::<i32>() {
         Ok(id) => id,
         Err(_) => {
             return Err(actix_web::error::ErrorInternalServerError(
@@ -56,7 +57,13 @@ pub async fn main_caller(
 
                             let conversation_id = value.conversation_id.unwrap();
                             if conversation_id.is_empty() {
-                                //create the room for the chat to exploit
+                                //call the create create conversation function
+                                let conversation_id_creation_result = create_conversation(user_id);
+
+                                //call the functions as it is
+                            } else {
+                                //take the conversation_id and call the functions
+                                //
                             }
                         }
                         ClientMessage::ActionResponse(value) => {
