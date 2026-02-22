@@ -3,6 +3,7 @@ use crate::database::model_functions::{
     create_wallet_user, find_user_by_wallet, update_wallet_user_profile,
 };
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
+use actix_web::cookie::{Cookie, SameSite};
 use bcrypt::{DEFAULT_COST, hash};
 use chrono::Utc;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -32,7 +33,6 @@ pub struct WalletLoginPayload {
 #[derive(Serialize)]
 pub struct WalletLoginResponse {
     pub status: String,
-    pub session_token: String,
     pub is_new_user: bool,
     pub user: UserPublicInfo,
 }
@@ -188,13 +188,15 @@ pub async fn get_nonce() -> actix_web::Result<impl Responder> {
 ///
 /// Receives `{ address, signature, nonce }` from the frontend, verifies the
 /// Ed25519 signature, then either finds the existing user or auto-creates one.
+/// The JWT session token is set as an HttpOnly cookie — the frontend never
+/// touches it directly. The browser sends it automatically on every request.
 ///
 /// Flow:
 ///   1. Verify signature against the nonce message
 ///   2. Look up user by wallet address in DB
-///   3. If found → return session token + user profile
+///   3. If found → set session cookie + return user profile
 ///   4. If not found → create a new user row with just wallet_address,
-///      return session token + `is_new_user: true`
+///      set session cookie + return `is_new_user: true`
 #[post("/wallet/login")]
 pub async fn wallet_login(
     data: web::Json<WalletLoginPayload>,
@@ -232,11 +234,25 @@ pub async fn wallet_login(
 
     let (user, is_new_user) = db_result;
 
-    // Step 4: Create session token
+    // Step 4: Create JWT session token
     let session_token = create_session_token(
         user.id,
         user.wallet_address.as_deref().unwrap_or(&payload.address),
     );
+
+    // Step 5: Build an HttpOnly cookie with the JWT
+    //   - http_only(true)  → JavaScript cannot access it (prevents XSS token theft)
+    //   - same_site(Lax)   → cookie sent on same-site requests + top-level navigations
+    //   - secure(false)    → allow over HTTP in dev; set to true in production (HTTPS)
+    //   - path("/")        → sent on every route, including the WebSocket upgrade
+    //   - max_age(24h)     → matches the JWT expiry
+    let cookie = Cookie::build("session_token", session_token)
+        .http_only(true)
+        .secure(false)
+        .same_site(SameSite::Lax)
+        .path("/")
+        .max_age(actix_web::cookie::time::Duration::hours(24))
+        .finish();
 
     let user_info = UserPublicInfo {
         id: user.id,
@@ -246,46 +262,44 @@ pub async fn wallet_login(
         has_pin: user.password.is_some(),
     };
 
-    Ok(HttpResponse::Ok().json(WalletLoginResponse {
-        status: "success".to_string(),
-        session_token,
-        is_new_user,
-        user: user_info,
-    }))
+    Ok(HttpResponse::Ok()
+        .cookie(cookie)
+        .json(WalletLoginResponse {
+            status: "success".to_string(),
+            is_new_user,
+            user: user_info,
+        }))
 }
 
 /// **Call 3: The Profile Update**
 ///
 /// `POST /wallet/update-profile`
 ///
-/// Receives `{ username, pin }` along with the session token (in the
-/// Authorization header). Updates the user row that was auto-created during login.
+/// Receives `{ username, pin }` in the body. The session token is read from
+/// the `session_token` HttpOnly cookie (set during login). The frontend does
+/// NOT need to manually attach any auth headers — the browser sends the
+/// cookie automatically.
 ///
 /// Flow:
 ///   1. Frontend sees `is_new_user: true` from login response
 ///   2. Shows a "Welcome! Choose a Username and set a PIN" modal
 ///   3. User fills in and hits "Save"
-///   4. Frontend sends POST /wallet/update-profile with Bearer token
-///   5. Server validates token, hashes pin, updates user row
+///   4. Frontend sends POST /wallet/update-profile (cookie sent automatically)
+///   5. Server reads cookie, validates JWT, hashes pin, updates user row
 #[post("/wallet/update-profile")]
 pub async fn update_profile(
     req: HttpRequest,
     data: web::Json<UpdateProfilePayload>,
 ) -> actix_web::Result<impl Responder> {
-    // Step 1: Extract and validate the session token from the Authorization header
-    let auth_header = req
-        .headers()
-        .get("Authorization")
-        .and_then(|h| h.to_str().ok())
-        .ok_or_else(|| actix_web::error::ErrorUnauthorized("Missing Authorization header"))?;
-
-    // Expect "Bearer <token>"
-    let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
-        actix_web::error::ErrorUnauthorized("Invalid Authorization format. Use: Bearer <token>")
-    })?;
+    // Step 1: Extract the session token from the HttpOnly cookie
+    let token = req
+        .cookie("session_token")
+        .ok_or_else(|| actix_web::error::ErrorUnauthorized("Missing session cookie. Please log in first."))?
+        .value()
+        .to_string();
 
     let claims =
-        validate_session_token(token).map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
+        validate_session_token(&token).map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
 
     let user_id: i32 = claims
         .sub
