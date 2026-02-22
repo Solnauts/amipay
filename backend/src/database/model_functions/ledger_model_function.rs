@@ -1,10 +1,9 @@
 use crate::database::establish_connection;
-use crate::database::model::{DbLedger, DbUser, NewLedger};
+use crate::database::model::{DbLedger, NewLedger};
 use crate::schema::{ledger, user};
-use chrono::Utc;
-use diesel::dsl::sum;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
+use diesel::sql_types::BigInt;
 use diesel::PgConnection;
 
 // ── Response Types ──────────────────────────────────────────────────────────
@@ -42,28 +41,45 @@ pub struct ClaimResult {
 // This is the **single source of truth** for a user's balance.
 // The `user.amount` column is just a cached snapshot of this value.
 
+/// Helper: run a SUM query with an explicit BIGINT cast to avoid
+/// Diesel's Numeric return type on sum(Int8).
+fn sum_amount_for(
+    conn: &mut PgConnection,
+    filter_column: &str,
+    target_user_id: i32,
+    status_filter: &str,
+) -> Result<i64, DieselError> {
+    // Using raw SQL because diesel::dsl::sum(Int8) → Numeric,
+    // but we want i64 directly.
+    let query = format!(
+        "SELECT COALESCE(SUM(amount)::BIGINT, 0) FROM ledger WHERE \"{}\" = $1 AND status = $2",
+        filter_column
+    );
+
+    #[derive(QueryableByName)]
+    struct SumRow {
+        #[diesel(sql_type = BigInt)]
+        coalesce: i64,
+    }
+
+    let row = diesel::sql_query(query)
+        .bind::<diesel::sql_types::Int4, _>(target_user_id)
+        .bind::<diesel::sql_types::Text, _>(status_filter)
+        .get_result::<SumRow>(conn)?;
+
+    Ok(row.coalesce)
+}
+
 /// Calculate the net balance for `target_user_id` by scanning the ledger.
 pub fn calculate_balance_from_ledger(
     conn: &mut PgConnection,
     target_user_id: i32,
 ) -> Result<BalanceCalcResult, DieselError> {
-    use crate::schema::ledger::dsl::*;
-
     // Total money received (user is the receiver in confirmed txs)
-    let total_in: i64 = ledger
-        .filter(receiverId.eq(target_user_id))
-        .filter(status.eq("confirmed"))
-        .select(sum(amount))
-        .first::<Option<i64>>(conn)?
-        .unwrap_or(0);
+    let total_in = sum_amount_for(conn, "receiverId", target_user_id, "confirmed")?;
 
     // Total money sent (user is the sender in confirmed txs)
-    let total_out: i64 = ledger
-        .filter(senderId.eq(target_user_id))
-        .filter(status.eq("confirmed"))
-        .select(sum(amount))
-        .first::<Option<i64>>(conn)?
-        .unwrap_or(0);
+    let total_out = sum_amount_for(conn, "senderId", target_user_id, "confirmed")?;
 
     let net = total_in - total_out;
 
@@ -178,23 +194,11 @@ pub fn get_claimable_amount(
     conn: &mut PgConnection,
     target_user_id: i32,
 ) -> Result<i64, DieselError> {
-    use crate::schema::ledger::dsl::*;
-
     // Total confirmed incoming
-    let total_confirmed_in: i64 = ledger
-        .filter(receiverId.eq(target_user_id))
-        .filter(status.eq("confirmed"))
-        .select(sum(amount))
-        .first::<Option<i64>>(conn)?
-        .unwrap_or(0);
+    let total_confirmed_in = sum_amount_for(conn, "receiverId", target_user_id, "confirmed")?;
 
     // Total already claimed (withdrawn on-chain)
-    let total_claimed: i64 = ledger
-        .filter(senderId.eq(target_user_id))
-        .filter(status.eq("claimed"))
-        .select(sum(amount))
-        .first::<Option<i64>>(conn)?
-        .unwrap_or(0);
+    let total_claimed = sum_amount_for(conn, "senderId", target_user_id, "claimed")?;
 
     Ok(total_confirmed_in - total_claimed)
 }

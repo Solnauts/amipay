@@ -74,36 +74,33 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
             match transfer_response {
                 Ok(transfer_response) => {
                     if transfer_response.success == true {
-                        //update the ledger of the sender
-                        let sender_ledger_request = UpdateUserLedgerRequest {
-                            user_id: user_info_ref.id,
-                            sender_id: user_info_ref.id,
-                            receiver_id: recipient.userid,
-                            amount: response.amount.unwrap() as i64,
-                            currency: response.currency.clone().unwrap(),
-                            tx_signature: None,
-                            status: "confirmed".to_string(),
-                        };
+                        // Use the new atomic function: insert ledger + recalculate
+                        // amounts for BOTH sender & receiver in one DB transaction
+                        let conn = &mut establish_connection();
+                        let result = record_transfer_and_update_amounts(
+                            conn,
+                            user_info_ref.id,
+                            recipient.userid,
+                            response.amount.unwrap() as i64,
+                            response.currency.clone().unwrap_or("USDC".to_string()),
+                            None, // tx_signature — add the on-chain sig here when available
+                        );
 
-                        //sender
-                        let sender_ledger_updation_result = add_user_ledger(sender_ledger_request);
-
-                        //recipient ledger request
-                        let recipient_ledger_request = UpdateUserLedgerRequest {
-                            user_id: recipient.userid,
-                            sender_id: user_info_ref.id,
-                            receiver_id: recipient.userid,
-                            amount: response.amount.unwrap() as i64,
-                            currency: response.currency.clone().unwrap(),
-                            tx_signature: None,
-                            status: "confirmed".to_string(),
-                        };
-
-                        //sender ledger request
-                        let recipient_send_request
-
-                        
-
+                        match result {
+                            Ok(transfer_result) => {
+                                println!(
+                                    "[transfer] success — ledger #{}, sender bal={}, receiver bal={}",
+                                    transfer_result.ledger_entry_id,
+                                    transfer_result.sender_new_balance,
+                                    transfer_result.receiver_new_balance
+                                );
+                                // TODO: send success message back to user via WebSocket
+                            }
+                            Err(db_err) => {
+                                println!("[transfer] DB error: {}", db_err);
+                                // TODO: send error message back to user via WebSocket
+                            }
+                        }
                     }
                 }
                 Err(err) => {
