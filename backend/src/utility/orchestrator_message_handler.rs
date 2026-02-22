@@ -1,14 +1,13 @@
 use crate::controllers::ai_controller::{RequestBody, get_ai_response};
-use crate::database::model::DbUser;
 use crate::database::establish_connection;
+use crate::database::model::DbUser;
 use crate::database::model_functions::{
     get_user_info,
-    user_model_function::{
-        UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse,
-    },
     ledger_model_function::record_transfer_and_update_amounts,
+    user_model_function::{
+        UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse, get_transaction_history,
+    },
 };
-use crate::schema::recipient;
 use crate::utility::{get_user_ata_balance, transfer_to_vault};
 
 //this function should contain the stream of the websocket message for conversating with the client
@@ -128,12 +127,26 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
         s if s.intent == "transaction_history".to_string() => {
             println!("user want to see the transaction history");
 
+            let number_of_transaction_limit = 10;
+
             //call the get transaction history function for this can query both the user
+            let transaction_history_result =
+                get_transaction_history(user_id, number_of_transaction_limit);
+
+            match transaction_history_result {
+                Ok(value) => {
+                    //send the value through the websocket to the frontend
+                }
+                Err(error) => {
+                    //send the value through the websocket to frontend
+                }
+            }
         }
 
         //if intent doesn't match
         _ => {
             println!("invalid request");
+            //send the value through the websocket to frontend
         }
     }
 }

@@ -238,10 +238,28 @@ pub fn update_user_amount(user_id: i32) {
             );
         }
         Err(error) => {
-            println!(
-                "[update_user_amount] error for user {}: {}",
-                user_id, error
-            );
+            println!("[update_user_amount] error for user {}: {}", user_id, error);
+        }
+    }
+}
+
+pub fn get_transaction_history(
+    user_id: i32,
+    limit: i32,
+) -> Result<DbLedger, diesel::result::Error> {
+    use crate::schema::ledger::dsl::*;
+
+    let connection = &mut establish_connection();
+    let ledger_result = ledger
+        .filter(id.eq(&user_id))
+        .limit(limit as i64)
+        .get_result::<DbLedger>(connection);
+
+    match ledger_result {
+        Ok(new_balance) => Ok(new_balance),
+        Err(error) => {
+            println!("[update_user_amount] error for user {}: {}", user_id, error);
+            Err(error)
         }
     }
 }
