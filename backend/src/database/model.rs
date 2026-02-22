@@ -1,4 +1,4 @@
-use crate::schema::{user, ledger};
+use crate::schema::{user, ledger, conversation};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
@@ -91,4 +91,19 @@ pub struct NewLedger {
     pub currency: String,
     pub tx_signature: Option<String>,
     pub status: String,
+}
+
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[diesel(table_name = crate::schema::conversation)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbConversation {
+    pub id: i32,
+    pub user_id: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = conversation)]
+pub struct NewConversation {
+    pub user_id: i32,
 }

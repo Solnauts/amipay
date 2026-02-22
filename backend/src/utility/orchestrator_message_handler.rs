@@ -45,7 +45,9 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
             get_user_ata_balance(
                 user_info_ref.unique_id.to_string(),
                 response.amount.unwrap(),
-            );
+            )
+            .await
+            .unwrap();
 
             //call the check the recipient function
             let request_payload = UserInfoRequest {

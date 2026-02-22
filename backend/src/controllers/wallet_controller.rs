@@ -2,8 +2,8 @@ use crate::database::establish_connection;
 use crate::database::model_functions::{
     create_wallet_user, find_user_by_wallet, update_wallet_user_profile,
 };
-use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web::cookie::{Cookie, SameSite};
+use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use bcrypt::{DEFAULT_COST, hash};
 use chrono::Utc;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -101,7 +101,7 @@ fn create_session_token(user_id: i32, wallet_address: &str) -> String {
 }
 
 /// Decode and validate a JWT session token. Returns the Claims if valid.
-fn validate_session_token(token: &str) -> Result<Claims, String> {
+pub fn validate_session_token(token: &str) -> Result<Claims, String> {
     let secret = get_jwt_secret();
     let token_data = decode::<Claims>(
         token,
@@ -262,13 +262,11 @@ pub async fn wallet_login(
         has_pin: user.password.is_some(),
     };
 
-    Ok(HttpResponse::Ok()
-        .cookie(cookie)
-        .json(WalletLoginResponse {
-            status: "success".to_string(),
-            is_new_user,
-            user: user_info,
-        }))
+    Ok(HttpResponse::Ok().cookie(cookie).json(WalletLoginResponse {
+        status: "success".to_string(),
+        is_new_user,
+        user: user_info,
+    }))
 }
 
 /// **Call 3: The Profile Update**
@@ -294,7 +292,9 @@ pub async fn update_profile(
     // Step 1: Extract the session token from the HttpOnly cookie
     let token = req
         .cookie("session_token")
-        .ok_or_else(|| actix_web::error::ErrorUnauthorized("Missing session cookie. Please log in first."))?
+        .ok_or_else(|| {
+            actix_web::error::ErrorUnauthorized("Missing session cookie. Please log in first.")
+        })?
         .value()
         .to_string();
 

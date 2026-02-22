@@ -1,6 +1,14 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    conversation (id) {
+        id -> Int4,
+        user_id -> Int4,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     ledger (id) {
         id -> Int4,
         senderId -> Int4,
@@ -36,6 +44,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(conversation -> user (user_id));
 diesel::joinable!(recipient -> user (userid));
 
-diesel::allow_tables_to_appear_in_same_query!(ledger, recipient, user,);
+diesel::allow_tables_to_appear_in_same_query!(conversation, ledger, recipient, user,);
