@@ -64,20 +64,32 @@ pub async fn main_caller(
                     match client_message {
                         ClientMessage::UserMessage(value) => {
                             // conversation_id is Option<String> — handle None gracefully
-                            let conversation_id =
+                            let conversation_id_str =
                                 value.conversation_id.clone().unwrap_or_default();
 
-                            if conversation_id.is_empty() {
-                                // Create a new conversation
-                                let _conversation_id_creation_result =
-                                    create_conversation(user_id);
-
-                                // Delegate to the handler (all errors sent over stream inside)
-                                handle_user_message(value.content, user_id, &session).await;
+                            let conversation_id: i32 = if conversation_id_str.is_empty() {
+                                // Create a new conversation and use its ID
+                                let new_conv = create_conversation(user_id);
+                                new_conv.id
                             } else {
-                                // Existing conversation — delegate with the known id
-                                handle_user_message(value.content, user_id, &session).await;
-                            }
+                                // Parse the existing conversation ID
+                                match conversation_id_str.parse::<i32>() {
+                                    Ok(id) => id,
+                                    Err(_) => {
+                                        let err_payload = ServerMessage::Error(ErrorPayload {
+                                            error_message: "Invalid conversation_id".to_string(),
+                                        });
+                                        if let Ok(json) = serde_json::to_string(&err_payload) {
+                                            let _ = session.clone().text(json).await;
+                                        }
+                                        continue;
+                                    }
+                                }
+                            };
+
+                            // Delegate to the handler (all errors sent over stream inside)
+                            handle_user_message(value.content, user_id, &session, conversation_id)
+                                .await;
                         }
                         ClientMessage::ActionResponse(value) => {
                             println!("action response received: {}", value.pending_action_id);

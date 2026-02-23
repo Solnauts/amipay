@@ -1,10 +1,89 @@
 use crate::database::db::establish_connection;
-use crate::database::model::{DbPendingAction, NewPendingAction, PendingActionPayload, UpdatePendingActionStatus};
+use crate::database::model::{
+    DbPendingAction, Dbrecipient, NewPendingAction, PendingActionPayload, RecipientCandidate,
+    UpdatePendingActionStatus,
+};
 use crate::schema::pending_action;
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::PgConnection;
+
+// ── Payload Builders ────────────────────────────────────────────────────────
+// These functions create the typed `PendingActionPayload` that gets stored
+// as JSONB in the `pending_action.payload` column. Call one of these, then
+// pass the result into `create_pending_action`.
+
+/// Build a `TransferConfirm` payload.
+///
+/// Use when **exactly 1 recipient** matched and you're asking the user:
+///   "Send $100 USDC to Mom (Sarah Johnson)? [Confirm] [Cancel]"
+pub fn build_transfer_confirm_payload(
+    amount: f64,
+    currency: &str,
+    recipient_id: i32,
+    recipient_name: &str,
+    sender_unique_id: &str,
+) -> PendingActionPayload {
+    PendingActionPayload::TransferConfirm {
+        amount,
+        currency: currency.to_string(),
+        recipient_id,
+        recipient_name: recipient_name.to_string(),
+        sender_unique_id: sender_unique_id.to_string(),
+    }
+}
+
+/// Build a `RecipientSelect` payload.
+///
+/// Use when **multiple recipients** matched the name and you're asking
+/// the user to pick one:
+///   "Multiple recipients found: 1. Mom (Sarah) 2. Mom (Maria). Choose one."
+///
+/// Takes a `Vec<Dbrecipient>` directly from the DB query result — it maps
+/// each into a `RecipientCandidate` internally so you don't have to.
+pub fn build_recipient_select_payload(
+    amount: f64,
+    currency: &str,
+    recipients: Vec<Dbrecipient>,
+    sender_unique_id: &str,
+) -> PendingActionPayload {
+    let candidates = recipients
+        .into_iter()
+        .map(|r| RecipientCandidate {
+            id: r.id,
+            name: r.name,
+        })
+        .collect();
+
+    PendingActionPayload::RecipientSelect {
+        amount,
+        currency: currency.to_string(),
+        candidates,
+        sender_unique_id: sender_unique_id.to_string(),
+    }
+}
+
+/// Build a `PinVerify` payload.
+///
+/// Use when the recipient is resolved and the transfer is ready, but you
+/// need the user's PIN before executing:
+///   "Please enter your PIN to authorize sending $100 to Mom."
+pub fn build_pin_verify_payload(
+    amount: f64,
+    currency: &str,
+    recipient_id: i32,
+    recipient_name: &str,
+    sender_unique_id: &str,
+) -> PendingActionPayload {
+    PendingActionPayload::PinVerify {
+        amount,
+        currency: currency.to_string(),
+        recipient_id,
+        recipient_name: recipient_name.to_string(),
+        sender_unique_id: sender_unique_id.to_string(),
+    }
+}
 
 // ── Create a new pending action ─────────────────────────────────────────────
 /// Creates a pending_action row in the database.

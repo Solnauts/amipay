@@ -3,13 +3,13 @@ use crate::database::establish_connection;
 use crate::database::model::DbUser;
 use crate::database::model_functions::{
     get_user_info,
-    ledger_model_function::record_transfer_and_update_amounts,
+    pending_action_model_function::{build_pin_verify_payload, build_transfer_confirm_payload, create_pending_action},
     user_model_function::{
-        UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse, get_transaction_history,
+        UserInfoRequest, UserInfoResponse, get_transaction_history,
     },
 };
 use crate::utility::{
-    AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance, transfer_to_vault,
+    AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance,
 };
 use actix_ws::{CloseCode, CloseReason, Session};
 
@@ -45,7 +45,10 @@ async fn close_with_reason(session: &Session, code: CloseCode, description: &str
 // Main handler – every error branch sends a message over the stream
 // instead of silently returning or panicking.
 // ──────────────────────────────────────────────────────────────────────────
-pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Session) {
+pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Session, conversation_id: i32) {
+    // Open a mutable DB connection for this request
+    let mut db_connection = establish_connection();
+
     // 1. Deserialize incoming message — tell the client if it's bad JSON
     let serialized_message = match serde_json::from_str::<RequestBody>(&user_message) {
         Ok(msg) => msg,
@@ -134,57 +137,48 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
                 }
             };
 
-            //check for the pin in the database
-            send_message(stream, "provide the user_pin ");
+            // 4c. Build payload and create pending_action — then STOP.
+            //     The actual transfer happens in handle_action_response
+            //     after the user confirms + provides PIN.
+            let currency = response.currency.clone().unwrap_or("USDC".to_string());
 
-            //fixer to the main response
+            let payload = build_pin_verify_payload(
+                amount as f64,
+                &currency,
+                recipient.id,
+                &recipient.name,
+                &user_info_ref.unique_id,
+            );
 
-            // 4c. Execute on-chain transfer
-            let transfer_response = transfer_to_vault(user_info_ref.unique_id.to_string(), amount);
-
-            match transfer_response {
-                Ok(transfer_response) => {
-                    if transfer_response.success {
-                        // 4d. Record in DB atomically
-                        let conn = &mut establish_connection();
-                        let result = record_transfer_and_update_amounts(
-                            conn,
-                            user_info_ref.id,
-                            recipient.userid,
-                            amount as i64,
-                            response.currency.clone().unwrap_or("USDC".to_string()),
-                            None, // tx_signature — add on-chain sig here when available
-                        );
-
-                        match result {
-                            Ok(transfer_result) => {
-                                let msg = format!(
-                                    "Transfer successful! Sent {} {} — your new balance is {}",
-                                    amount,
-                                    response.currency.clone().unwrap_or("USDC".to_string()),
-                                    transfer_result.sender_new_balance
-                                );
-                                send_message(stream, &msg).await;
-                            }
-                            Err(db_err) => {
-                                println!("[transfer] DB error: {}", db_err);
-                                send_error(
-                                    stream,
-                                    &format!(
-                                        "Transfer was sent on-chain but failed to record in database: {}",
-                                        db_err
-                                    ),
-                                )
-                                .await;
-                            }
-                        }
-                    } else {
-                        send_error(stream, "On-chain transfer did not succeed").await;
-                    }
+            match create_pending_action(
+                &mut db_connection,
+                user_info_ref.id,
+                conversation_id,
+                "pin_verify",
+                payload,
+            ) {
+                Ok(pending_action) => {
+                    let msg = format!(
+                        "Send {} {} to {}? Please enter your PIN to confirm.",
+                        amount, currency, recipient.name
+                    );
+                    send_message(stream, &msg).await;
+                    println!(
+                        "[transfer] pending_action created: id={} for user={}",
+                        pending_action.id, user_info_ref.id
+                    );
+                    // ── STOP HERE ──
+                    // The flow continues in handle_action_response
+                    // when the client sends ActionResponse with this pending_action.id
+                    return;
                 }
-                Err(err) => {
-                    println!("error sending transaction: {}", err);
-                    send_error(stream, &format!("Transaction failed: {}", err)).await;
+                Err(e) => {
+                    send_error(
+                        stream,
+                        &format!("Failed to create confirmation: {}", e),
+                    )
+                    .await;
+                    return;
                 }
             }
         }
