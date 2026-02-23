@@ -1,8 +1,8 @@
 use crate::database::model_functions::conversation_model_function::create_conversation;
-use crate::utility::ClientMessage;
+use crate::utility::{ClientMessage, ErrorPayload, ServerMessage};
 use crate::utility::orchestrator_message_handler::handle_user_message;
-use crate::{controllers::wallet_controller::validate_session_token, schema::conversation};
-use actix_web::{HttpRequest, HttpResponse, HttpServer, Responder, middleware::Logger, web};
+use crate::controllers::wallet_controller::validate_session_token;
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
 
@@ -12,7 +12,6 @@ pub async fn main_caller(
     body: web::Payload,
 ) -> actix_web::Result<impl Responder> {
     // Check the user is logged in or not FIRST, before handling WebSocket upgrade.
-    // If we throw an authorization error *before* the upgrade, it sends the HTTP error instead of attempting the handshake.
     let token = match req.cookie("session_token") {
         Some(cookie) => cookie.value().to_string(),
         None => {
@@ -38,52 +37,76 @@ pub async fn main_caller(
     };
 
     // Now that auth is verified, upgrade to WebSocket connection
-    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    let (response, session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
     // Spawn async task for websocket communication
     actix_web::rt::spawn(async move {
-        // user_id is available and valid here
         while let Some(Ok(msg)) = msg_stream.next().await {
-            let main_msg_text: String;
             match msg {
-                //if the message is a text message
                 Message::Text(text) => {
-                    main_msg_text = text.to_string();
-                    let client_message =
-                        serde_json::from_str::<ClientMessage>(&main_msg_text).unwrap();
+                    let main_msg_text = text.to_string();
+
+                    // Safely deserialize — send error frame instead of panicking
+                    let client_message = match serde_json::from_str::<ClientMessage>(&main_msg_text)
+                    {
+                        Ok(parsed) => parsed,
+                        Err(e) => {
+                            let err_payload = ServerMessage::Error(ErrorPayload {
+                                error_message: format!("Malformed message: {}", e),
+                            });
+                            if let Ok(json) = serde_json::to_string(&err_payload) {
+                                let _ = session.clone().text(json).await;
+                            }
+                            continue; // keep listening for the next message
+                        }
+                    };
 
                     match client_message {
                         ClientMessage::UserMessage(value) => {
-                            println!("this the best course of action");
+                            // conversation_id is Option<String> — handle None gracefully
+                            let conversation_id =
+                                value.conversation_id.clone().unwrap_or_default();
 
-                            let conversation_id = value.conversation_id.unwrap();
                             if conversation_id.is_empty() {
-                                //call the create create conversation function
-                                let conversation_id_creation_result = create_conversation(user_id);
+                                // Create a new conversation
+                                let _conversation_id_creation_result =
+                                    create_conversation(user_id);
 
-                                //call the functions as it is;
+                                // Delegate to the handler (all errors sent over stream inside)
                                 handle_user_message(value.content, user_id, &session).await;
-
-                                //client message to
                             } else {
-                                //take the conversation_id and call the functions
-                                //
+                                // Existing conversation — delegate with the known id
+                                handle_user_message(value.content, user_id, &session).await;
                             }
                         }
                         ClientMessage::ActionResponse(value) => {
-                            println!("this is the action response");
-                        }
-                        _ => {
-                            println!("error while getting message")
+                            println!("action response received: {}", value.pending_action_id);
+                            // TODO: handle action response
                         }
                     }
                 }
 
-                Message::Binary(value) => {}
+                Message::Binary(_) => {
+                    // Binary frames not supported — notify client
+                    let err_payload = ServerMessage::Error(ErrorPayload {
+                        error_message: "Binary messages are not supported".to_string(),
+                    });
+                    if let Ok(json) = serde_json::to_string(&err_payload) {
+                        let _ = session.clone().text(json).await;
+                    }
+                }
+
+                Message::Close(reason) => {
+                    println!("Client sent close frame: {:?}", reason);
+                    break; // exit the loop and close below
+                }
+
+                // Ping/Pong/Continuation — actix-ws handles pings automatically
                 _ => {}
             }
         }
 
+        // Gracefully close the session
         let _ = session.close(None).await;
     });
 

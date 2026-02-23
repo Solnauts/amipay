@@ -8,159 +8,266 @@ use crate::database::model_functions::{
         UpdateUserLedgerRequest, UserInfoRequest, UserInfoResponse, get_transaction_history,
     },
 };
-use crate::utility::{get_user_ata_balance, transfer_to_vault};
+use crate::utility::{
+    ServerMessage, AssistantMessagePayload, ErrorPayload,
+    get_user_ata_balance, transfer_to_vault,
+};
 use actix_ws::{CloseCode, CloseReason, Session};
 
-pub struct CloseReasonSession {
-    reason: String,
+// ── Helper: send a JSON text frame to client ────────────────────────────
+async fn send_error(session: &Session, message: &str) {
+    let payload = ServerMessage::Error(ErrorPayload {
+        error_message: message.to_string(),
+    });
+    if let Ok(json) = serde_json::to_string(&payload) {
+        let _ = session.clone().text(json).await;
+    }
 }
 
-//this function should contain the stream of the websocket message for conversating with the client
-pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Session) {
-    let serealized_message = serde_json::from_str::<RequestBody>(&user_message).unwrap();
+async fn send_message(session: &Session, text: &str) {
+    let payload = ServerMessage::AssistantMessage(AssistantMessagePayload {
+        reply_text: text.to_string(),
+        action_buttons: None,
+    });
+    if let Ok(json) = serde_json::to_string(&payload) {
+        let _ = session.clone().text(json).await;
+    }
+}
 
-    //call the database for user_info
+async fn close_with_reason(session: &Session, code: CloseCode, description: &str) {
+    let reason = CloseReason {
+        code,
+        description: Some(description.to_string()),
+    };
+    let _ = session.clone().close(Some(reason)).await;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Main handler – every error branch sends a message over the stream
+// instead of silently returning or panicking.
+// ──────────────────────────────────────────────────────────────────────────
+pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Session) {
+    // 1. Deserialize incoming message — tell the client if it's bad JSON
+    let serialized_message = match serde_json::from_str::<RequestBody>(&user_message) {
+        Ok(msg) => msg,
+        Err(e) => {
+            send_error(stream, &format!("Invalid message format: {}", e)).await;
+            return;
+        }
+    };
+
+    // 2. Fetch user info from DB
     let request_payload = UserInfoRequest {
         intent: "user_info".to_string(),
-        user_id: user_id,
+        user_id,
         recipient_name: None,
     };
 
     let user_info = get_user_info(request_payload);
 
-    let UserInfoResponse::FullInfo(user_info) = user_info else {
-        return;
+    let user_info = match user_info {
+        UserInfoResponse::FullInfo(info) => info,
+        UserInfoResponse::Error(err) => {
+            send_error(stream, &format!("Failed to load user info: {}", err)).await;
+            return;
+        }
+        _ => {
+            send_error(stream, "Unexpected response while loading user info").await;
+            return;
+        }
     };
 
-    // call the existing ai controller
-    let intent_response = get_ai_response(serealized_message).await;
+    // 3. Get AI intent
+    let intent_response = get_ai_response(serialized_message).await;
 
-    //get the value out of it
+    // NOTE: Box::leak creates a 'static reference – this leaks memory per request.
+    // Consider refactoring later to use owned values or Arc, but keeping it for now
+    // to match the existing pattern in the codebase.
     let intent_result = Box::leak(Box::new(intent_response));
-
     let user_info_ref: &'static DbUser = Box::leak(Box::new(user_info));
 
-    //extract the intent from the upper response
+    // 4. Route by intent
     match intent_result {
-        // transfer logic
-        response if response.intent == "transfer".to_string() => {
-            println!("user want to send the money");
+        // ── Transfer ─────────────────────────────────────────────────
+        response if response.intent == "transfer" => {
+            println!("user wants to send money");
 
-            //call the check balance function
-            get_user_ata_balance(
-                user_info_ref.unique_id.to_string(),
-                response.amount.unwrap(),
-            )
-            .await
-            .unwrap();
+            // 4a. Check balance
+            let amount = match response.amount {
+                Some(amt) => amt,
+                None => {
+                    send_error(stream, "Transfer amount is missing from AI response").await;
+                    return;
+                }
+            };
 
-            //call the check the recipient function
+            match get_user_ata_balance(user_info_ref.unique_id.to_string(), amount).await {
+                Ok(balance_response) => {
+                    if !balance_response.success {
+                        let issue = balance_response
+                            .issue
+                            .unwrap_or("Insufficient balance".to_string());
+                        send_error(stream, &issue).await;
+                        return;
+                    }
+                }
+                Err(e) => {
+                    send_error(
+                        stream,
+                        &format!("Failed to check your balance: {}", e),
+                    )
+                    .await;
+                    return;
+                }
+            }
+
+            // 4b. Look up recipient
             let request_payload = UserInfoRequest {
                 intent: "recipient".to_string(),
-                user_id: user_id,
-                recipient_name: None,
+                user_id,
+                recipient_name: response.recipient.clone(),
             };
 
-            let recipient = get_user_info(request_payload);
+            let recipient_info = get_user_info(request_payload);
 
-            let UserInfoResponse::Recipient(recipient) = recipient else {
-                return;
+            let recipient = match recipient_info {
+                UserInfoResponse::Recipient(r) => r,
+                UserInfoResponse::Error(err) => {
+                    send_error(
+                        stream,
+                        &format!("Recipient not found: {}", err),
+                    )
+                    .await;
+                    return;
+                }
+                _ => {
+                    send_error(stream, "Unexpected response while looking up recipient").await;
+                    return;
+                }
             };
 
-            //if pass
-            //call the transfer function (transfer from user usdc ata to main vault and then update
-            //the data base)
+            // 4c. Execute on-chain transfer
             let transfer_response = transfer_to_vault(
                 user_info_ref.unique_id.to_string(),
-                response.amount.unwrap(),
+                amount,
             );
 
-            //the logic of account balance updation always be the difference of ledger so work
-            //accordingly
             match transfer_response {
                 Ok(transfer_response) => {
-                    if transfer_response.success == true {
-                        // Use the new atomic function: insert ledger + recalculate
-                        // amounts for BOTH sender & receiver in one DB transaction
+                    if transfer_response.success {
+                        // 4d. Record in DB atomically
                         let conn = &mut establish_connection();
                         let result = record_transfer_and_update_amounts(
                             conn,
                             user_info_ref.id,
                             recipient.userid,
-                            response.amount.unwrap() as i64,
+                            amount as i64,
                             response.currency.clone().unwrap_or("USDC".to_string()),
-                            None, // tx_signature — add the on-chain sig here when available
+                            None, // tx_signature — add on-chain sig here when available
                         );
 
                         match result {
                             Ok(transfer_result) => {
-                                println!(
-                                    "[transfer] success — ledger #{}, sender bal={}, receiver bal={}",
-                                    transfer_result.ledger_entry_id,
-                                    transfer_result.sender_new_balance,
-                                    transfer_result.receiver_new_balance
+                                let msg = format!(
+                                    "Transfer successful! Sent {} {} — your new balance is {}",
+                                    amount,
+                                    response.currency.clone().unwrap_or("USDC".to_string()),
+                                    transfer_result.sender_new_balance
                                 );
-                                // TODO: send success message back to user via WebSocket
+                                send_message(stream, &msg).await;
                             }
                             Err(db_err) => {
                                 println!("[transfer] DB error: {}", db_err);
-                                // TODO: send error message back to user via WebSocket
+                                send_error(
+                                    stream,
+                                    &format!(
+                                        "Transfer was sent on-chain but failed to record in database: {}",
+                                        db_err
+                                    ),
+                                )
+                                .await;
                             }
                         }
+                    } else {
+                        send_error(stream, "On-chain transfer did not succeed").await;
                     }
                 }
                 Err(err) => {
-                    println!("error sending transaction : {}", err);
-                    //send the error to the user
+                    println!("error sending transaction: {}", err);
+                    send_error(
+                        stream,
+                        &format!("Transaction failed: {}", err),
+                    )
+                    .await;
                 }
             }
         }
 
-        //for checking balance
-        s if s.intent == "check_balance".to_string() => {
-            println!("user want to check the balance");
+        // ── Check Balance ────────────────────────────────────────────
+        s if s.intent == "check_balance" => {
+            println!("user wants to check the balance");
 
-            //call the check balance function for this can query both the user
-            //call the database for user_info
             let request_payload = UserInfoRequest {
                 intent: "amount".to_string(),
-                user_id: user_id,
+                user_id,
                 recipient_name: None,
             };
-            let user_info = get_user_info(request_payload);
+            let balance_info = get_user_info(request_payload);
+
+            match balance_info {
+                UserInfoResponse::NUmber(amount) => {
+                    let msg = format!("Your current balance is: {}", amount);
+                    send_message(stream, &msg).await;
+                }
+                UserInfoResponse::Error(err) => {
+                    send_error(stream, &format!("Could not fetch balance: {}", err)).await;
+                }
+                _ => {
+                    send_error(stream, "Unexpected response while checking balance").await;
+                }
+            }
         }
 
-        //for transaction history
-        s if s.intent == "transaction_history".to_string() => {
-            println!("user want to see the transaction history");
+        // ── Transaction History ──────────────────────────────────────
+        s if s.intent == "transaction_history" => {
+            println!("user wants to see the transaction history");
 
             let number_of_transaction_limit = 10;
 
-            //call the get transaction history function for this can query both the user
             let transaction_history_result =
                 get_transaction_history(user_id, number_of_transaction_limit);
 
             match transaction_history_result {
                 Ok(value) => {
-                    //send the value through the websocket to the frontend
+                    // Serialize the ledger entry and send it to the client
+                    match serde_json::to_string(&value) {
+                        Ok(json) => {
+                            send_message(stream, &json).await;
+                        }
+                        Err(e) => {
+                            send_error(
+                                stream,
+                                &format!("Failed to serialize transaction history: {}", e),
+                            )
+                            .await;
+                        }
+                    }
                 }
                 Err(error) => {
-                    //send the value through the websocket to frontend
+                    send_error(
+                        stream,
+                        &format!("Failed to fetch transaction history: {}", error),
+                    )
+                    .await;
                 }
             }
         }
 
-        //if intent doesn't match
+        // ── Unknown intent → close the stream ───────────────────────
         _ => {
             println!("invalid request");
-            //send the value through the websocket to frontend
-            let reason_closing = CloseReason {
-                code: CloseCode::Policy,
-                description: Some(String::from("invalid request detect")),
-            };
-
-            // 2. Send the close frame to the client
-            let _ = stream.clone().close(Some(reason_closing)).await.unwrap();
+            send_error(stream, "Unrecognized intent — closing connection").await;
+            close_with_reason(stream, CloseCode::Policy, "invalid request detected").await;
         }
     }
 }
