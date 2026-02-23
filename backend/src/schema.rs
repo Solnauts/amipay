@@ -23,6 +23,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    pending_action (id) {
+        id -> Int4,
+        user_id -> Int4,
+        conversation_id -> Int4,
+        action_type -> Text,
+        payload -> Jsonb,
+        status -> Text,
+        expires_at -> Timestamptz,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     recipient (id) {
         name -> Text,
         userid -> Int4,
@@ -45,6 +58,14 @@ diesel::table! {
 }
 
 diesel::joinable!(conversation -> user (user_id));
+diesel::joinable!(pending_action -> conversation (conversation_id));
+diesel::joinable!(pending_action -> user (user_id));
 diesel::joinable!(recipient -> user (userid));
 
-diesel::allow_tables_to_appear_in_same_query!(conversation, ledger, recipient, user,);
+diesel::allow_tables_to_appear_in_same_query!(
+    conversation,
+    ledger,
+    pending_action,
+    recipient,
+    user,
+);

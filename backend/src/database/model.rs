@@ -1,7 +1,7 @@
-use crate::schema::{user, ledger, conversation};
+use crate::schema::{user, ledger, conversation, pending_action};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Queryable)]
 #[diesel(table_name = crate::schema::user)]
@@ -107,4 +107,82 @@ pub struct DbConversation {
 #[diesel(table_name = conversation)]
 pub struct NewConversation {
     pub user_id: i32,
+}
+
+// ── Pending Action Models ───────────────────────────────────────────────────
+
+/// Queryable struct — field order must match schema.rs column order
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[diesel(table_name = crate::schema::pending_action)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbPendingAction {
+    pub id: i32,
+    pub user_id: i32,
+    pub conversation_id: i32,
+    pub action_type: String,
+    pub payload: serde_json::Value,
+    pub status: String,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Insertable struct for creating a new pending action
+#[derive(Insertable)]
+#[diesel(table_name = pending_action)]
+pub struct NewPendingAction {
+    pub user_id: i32,
+    pub conversation_id: i32,
+    pub action_type: String,
+    pub payload: serde_json::Value,
+    pub status: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+/// Changeset struct for updating a pending action's status
+#[derive(AsChangeset)]
+#[diesel(table_name = pending_action)]
+pub struct UpdatePendingActionStatus {
+    pub status: String,
+}
+
+// ── Pending Action Payload Types ────────────────────────────────────────────
+// These are the typed payloads that get serialized into the JSONB `payload`
+// column. Using serde's tagged enum ("type" field) so each variant is self-
+// describing when read back from the database.
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
+pub enum PendingActionPayload {
+    /// User confirmed a specific recipient, now awaiting final confirm + pin
+    TransferConfirm {
+        amount: f64,
+        currency: String,
+        recipient_id: i32,
+        recipient_name: String,
+        sender_unique_id: String,
+    },
+
+    /// Multiple recipients matched — user needs to pick one
+    RecipientSelect {
+        amount: f64,
+        currency: String,
+        candidates: Vec<RecipientCandidate>,
+        sender_unique_id: String,
+    },
+
+    /// User needs to provide their PIN to authorize the transfer
+    PinVerify {
+        amount: f64,
+        currency: String,
+        recipient_id: i32,
+        recipient_name: String,
+        sender_unique_id: String,
+    },
+}
+
+/// A single recipient candidate shown in the selection prompt
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RecipientCandidate {
+    pub id: i32,
+    pub name: String,
 }
