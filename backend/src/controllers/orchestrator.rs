@@ -1,7 +1,7 @@
-use crate::database::model_functions::conversation_model_function::create_conversation;
-use crate::utility::{ClientMessage, ErrorPayload, ServerMessage};
-use crate::utility::orchestrator_message_handler::handle_user_message;
 use crate::controllers::wallet_controller::validate_session_token;
+use crate::database::model_functions::conversation_model_function::create_conversation;
+use crate::utility::orchestrator_message_handler::handle_user_message;
+use crate::utility::{ClientMessage, ErrorPayload, ServerMessage};
 use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
@@ -94,6 +94,7 @@ pub async fn main_caller(
                         ClientMessage::ActionResponse(value) => {
                             println!("action response received: {}", value.pending_action_id);
                             // TODO: handle action response
+                            // query the database using payload id
                         }
                     }
                 }

@@ -3,14 +3,12 @@ use crate::database::establish_connection;
 use crate::database::model::DbUser;
 use crate::database::model_functions::{
     get_user_info,
-    pending_action_model_function::{build_pin_verify_payload, build_transfer_confirm_payload, create_pending_action},
-    user_model_function::{
-        UserInfoRequest, UserInfoResponse, get_transaction_history,
+    pending_action_model_function::{
+        build_pin_verify_payload, build_transfer_confirm_payload, create_pending_action,
     },
+    user_model_function::{UserInfoRequest, UserInfoResponse, get_transaction_history},
 };
-use crate::utility::{
-    AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance,
-};
+use crate::utility::{AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance};
 use actix_ws::{CloseCode, CloseReason, Session};
 
 // ── Helper: send a JSON text frame to client ────────────────────────────
@@ -45,7 +43,12 @@ async fn close_with_reason(session: &Session, code: CloseCode, description: &str
 // Main handler – every error branch sends a message over the stream
 // instead of silently returning or panicking.
 // ──────────────────────────────────────────────────────────────────────────
-pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Session, conversation_id: i32) {
+pub async fn handle_user_message(
+    user_message: String,
+    user_id: i32,
+    stream: &Session,
+    conversation_id: i32,
+) {
     // Open a mutable DB connection for this request
     let mut db_connection = establish_connection();
 
@@ -173,11 +176,7 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
                     return;
                 }
                 Err(e) => {
-                    send_error(
-                        stream,
-                        &format!("Failed to create confirmation: {}", e),
-                    )
-                    .await;
+                    send_error(stream, &format!("Failed to create confirmation: {}", e)).await;
                     return;
                 }
             }
@@ -252,5 +251,7 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
     }
 }
 
-//handle user message function
-pub fn handle_action_response() {}
+//handle user action response function
+pub fn handle_action_response(conversation_id: i32, stream: Session) {
+    //handle the things on the basis of the message we got
+}
