@@ -265,7 +265,12 @@ pub fn get_transaction_history(
     }
 }
 
-pub fn match_user_pin(user_id: i32, user_pin: String) -> Result<DbLedger, diesel::result::Error> {
+pub struct UserPinResponse {
+    success: bool,
+    description: Option<String>,
+}
+
+pub fn match_user_pin(user_id: i32, input_user_pin: String) -> UserPinResponse {
     use crate::schema::user::dsl::*;
 
     let connection = &mut establish_connection();
@@ -274,13 +279,20 @@ pub fn match_user_pin(user_id: i32, user_pin: String) -> Result<DbLedger, diesel
         .get_result::<DbUser>(connection)
         .unwrap();
 
-    let is_same_pin = bcrypt::verify(user_pin, &user_result.user_pin).unwrap();
+    let is_same_pin = bcrypt::verify(input_user_pin, &user_result.user_pin).unwrap();
+    if is_same_pin == true {
+        //error in the pin
+        let success_response = UserPinResponse {
+            success: true,
+            description: None,
+        };
+        success_response
+    } else {
+        let error_response = UserPinResponse {
+            success: false,
+            description: Some("invalid user pin".to_string()),
+        };
 
-    match is_same_pin {
-        Ok(new_balance) => Ok(new_balance),
-        Err(error) => {
-            println!("[update_user_amount] error for user {}: {}", user_id, error);
-            Err(error)
-        }
+        error_response
     }
 }

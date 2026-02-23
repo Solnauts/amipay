@@ -135,6 +135,9 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
             };
 
             //check for the pin in the database
+            send_message(stream, "provide the user_pin ");
+
+            //fixer to the main response
 
             // 4c. Execute on-chain transfer
             let transfer_response = transfer_to_vault(user_info_ref.unique_id.to_string(), amount);
