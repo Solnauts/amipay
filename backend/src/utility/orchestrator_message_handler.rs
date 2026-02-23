@@ -9,9 +9,14 @@ use crate::database::model_functions::{
     },
 };
 use crate::utility::{get_user_ata_balance, transfer_to_vault};
+use actix_ws::{CloseCode, CloseReason, Session};
+
+pub struct CloseReasonSession {
+    reason: String,
+}
 
 //this function should contain the stream of the websocket message for conversating with the client
-pub async fn handle_user_message(user_message: String, user_id: i32) {
+pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Session) {
     let serealized_message = serde_json::from_str::<RequestBody>(&user_message).unwrap();
 
     //call the database for user_info
@@ -149,6 +154,13 @@ pub async fn handle_user_message(user_message: String, user_id: i32) {
         _ => {
             println!("invalid request");
             //send the value through the websocket to frontend
+            let reason_closing = CloseReason {
+                code: CloseCode::Policy,
+                description: Some(String::from("invalid request detect")),
+            };
+
+            // 2. Send the close frame to the client
+            let _ = stream.clone().close(Some(reason_closing)).await.unwrap();
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::database::model_functions::conversation_model_function::create_conversation;
 use crate::utility::ClientMessage;
+use crate::utility::orchestrator_message_handler::handle_user_message;
 use crate::{controllers::wallet_controller::validate_session_token, schema::conversation};
 use actix_web::{HttpRequest, HttpResponse, HttpServer, Responder, middleware::Logger, web};
 use actix_ws::Message;
@@ -60,7 +61,10 @@ pub async fn main_caller(
                                 //call the create create conversation function
                                 let conversation_id_creation_result = create_conversation(user_id);
 
-                                //call the functions as it is
+                                //call the functions as it is;
+                                handle_user_message(value.content, user_id, &session).await;
+
+                                //client message to
                             } else {
                                 //take the conversation_id and call the functions
                                 //
