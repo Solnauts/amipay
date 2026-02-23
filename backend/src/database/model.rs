@@ -10,7 +10,7 @@ use serde::Serialize;
 pub struct DbUser {
     pub id: i32,
     pub name: Option<String>,
-    pub password: Option<String>,
+    pub user_pin: String,
     pub amount: Option<i64>,
     pub unique_id: String,
     pub method_type: String,
@@ -33,7 +33,7 @@ pub struct Dbrecipient {
 #[diesel(table_name = user)]
 pub struct NewUser {
     pub name: Option<String>,
-    pub password: Option<String>,
+    pub user_pin: String,
     pub amount: Option<i64>,
     pub unique_id: String,
     pub method_type: String,
@@ -49,6 +49,7 @@ pub struct NewWalletUser {
     pub wallet_address: Option<String>,
     pub unique_id: String,
     pub method_type: String,
+    pub user_pin: String,
 }
 
 // Changeset struct for updating a wallet user's profile (username + pin)
@@ -56,7 +57,7 @@ pub struct NewWalletUser {
 #[diesel(table_name = user)]
 pub struct UpdateWalletProfile {
     pub name: Option<String>,
-    pub password: Option<String>,
+    pub user_pin: String,
 }
 
 // ── Ledger Models ───────────────────────────────────────────────────────────

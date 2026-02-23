@@ -9,8 +9,7 @@ use crate::database::model_functions::{
     },
 };
 use crate::utility::{
-    ServerMessage, AssistantMessagePayload, ErrorPayload,
-    get_user_ata_balance, transfer_to_vault,
+    AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance, transfer_to_vault,
 };
 use actix_ws::{CloseCode, CloseReason, Session};
 
@@ -80,12 +79,9 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
     // 3. Get AI intent
     let intent_response = get_ai_response(serialized_message).await;
 
-    // NOTE: Box::leak creates a 'static reference – this leaks memory per request.
-    // Consider refactoring later to use owned values or Arc, but keeping it for now
-    // to match the existing pattern in the codebase.
+    // NOTE: Box::leak creates a 'static reference – this leaks memory per request. to match the existing pattern in the codebase.
     let intent_result = Box::leak(Box::new(intent_response));
     let user_info_ref: &'static DbUser = Box::leak(Box::new(user_info));
-
     // 4. Route by intent
     match intent_result {
         // ── Transfer ─────────────────────────────────────────────────
@@ -112,11 +108,7 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
                     }
                 }
                 Err(e) => {
-                    send_error(
-                        stream,
-                        &format!("Failed to check your balance: {}", e),
-                    )
-                    .await;
+                    send_error(stream, &format!("Failed to check your balance: {}", e)).await;
                     return;
                 }
             }
@@ -133,11 +125,7 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
             let recipient = match recipient_info {
                 UserInfoResponse::Recipient(r) => r,
                 UserInfoResponse::Error(err) => {
-                    send_error(
-                        stream,
-                        &format!("Recipient not found: {}", err),
-                    )
-                    .await;
+                    send_error(stream, &format!("Recipient not found: {}", err)).await;
                     return;
                 }
                 _ => {
@@ -146,11 +134,10 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
                 }
             };
 
+            //check for the pin in the database
+
             // 4c. Execute on-chain transfer
-            let transfer_response = transfer_to_vault(
-                user_info_ref.unique_id.to_string(),
-                amount,
-            );
+            let transfer_response = transfer_to_vault(user_info_ref.unique_id.to_string(), amount);
 
             match transfer_response {
                 Ok(transfer_response) => {
@@ -194,11 +181,7 @@ pub async fn handle_user_message(user_message: String, user_id: i32, stream: &Se
                 }
                 Err(err) => {
                     println!("error sending transaction: {}", err);
-                    send_error(
-                        stream,
-                        &format!("Transaction failed: {}", err),
-                    )
-                    .await;
+                    send_error(stream, &format!("Transaction failed: {}", err)).await;
                 }
             }
         }

@@ -34,7 +34,7 @@ diesel::table! {
     user (id) {
         id -> Int4,
         name -> Nullable<Text>,
-        password -> Nullable<Text>,
+        user_pin -> Text,
         amount -> Nullable<Int8>,
         unique_id -> Text,
         method_type -> Text,

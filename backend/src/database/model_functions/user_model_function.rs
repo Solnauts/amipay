@@ -120,7 +120,7 @@ pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
 pub fn create_user(
     conn: &mut PgConnection,
     name: String,
-    password: String,
+    user_pin: String,
     unique_id: String,
     method_type: String,
     email: Option<String>,
@@ -128,7 +128,7 @@ pub fn create_user(
 ) -> DBResponse {
     let new_user = NewUser {
         name: Some(name),
-        password: Some(password),
+        user_pin,
         amount: None,
         unique_id,
         method_type,
@@ -168,6 +168,7 @@ pub fn create_wallet_user(conn: &mut PgConnection, addr: &str) -> DbUser {
         wallet_address: Some(addr.to_string()),
         unique_id: addr.to_string(), // Use wallet address as unique_id
         method_type: "wallet".to_string(),
+        user_pin: String::new(), // Empty until user sets it via profile update
     };
 
     diesel::insert_into(user::table)
@@ -188,7 +189,7 @@ pub fn update_wallet_user_profile(
 
     let changeset = UpdateWalletProfile {
         name: Some(new_name),
-        password: Some(hashed_pin),
+        user_pin: hashed_pin,
     };
 
     diesel::update(user.filter(id.eq(user_id)))
@@ -256,6 +257,26 @@ pub fn get_transaction_history(
         .get_result::<DbLedger>(connection);
 
     match ledger_result {
+        Ok(new_balance) => Ok(new_balance),
+        Err(error) => {
+            println!("[update_user_amount] error for user {}: {}", user_id, error);
+            Err(error)
+        }
+    }
+}
+
+pub fn match_user_pin(user_id: i32, user_pin: String) -> Result<DbLedger, diesel::result::Error> {
+    use crate::schema::user::dsl::*;
+
+    let connection = &mut establish_connection();
+    let user_result = user
+        .filter(id.eq(&user_id))
+        .get_result::<DbUser>(connection)
+        .unwrap();
+
+    let is_same_pin = bcrypt::verify(user_pin, &user_result.user_pin).unwrap();
+
+    match is_same_pin {
         Ok(new_balance) => Ok(new_balance),
         Err(error) => {
             println!("[update_user_amount] error for user {}: {}", user_id, error);

@@ -259,7 +259,7 @@ pub async fn wallet_login(
         name: user.name.clone(),
         wallet_address: user.wallet_address.clone(),
         method_type: user.method_type.clone(),
-        has_pin: user.password.is_some(),
+        has_pin: !user.user_pin.is_empty(),
     };
 
     Ok(HttpResponse::Ok().cookie(cookie).json(WalletLoginResponse {
@@ -326,7 +326,7 @@ pub async fn update_profile(
         name: updated_user.name.clone(),
         wallet_address: updated_user.wallet_address.clone(),
         method_type: updated_user.method_type.clone(),
-        has_pin: updated_user.password.is_some(),
+        has_pin: !updated_user.user_pin.is_empty(),
     };
 
     Ok(HttpResponse::Ok().json(UpdateProfileResponse {
