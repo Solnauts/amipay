@@ -52,6 +52,8 @@ pub async fn main_caller(
                         Ok(parsed) => parsed,
                         Err(e) => {
                             let err_payload = ServerMessage::Error(ErrorPayload {
+                                conversation_id: 0,
+                                pending_action_id: None,
                                 error_message: format!("Malformed message: {}", e),
                             });
                             if let Ok(json) = serde_json::to_string(&err_payload) {
@@ -77,6 +79,8 @@ pub async fn main_caller(
                                     Ok(id) => id,
                                     Err(_) => {
                                         let err_payload = ServerMessage::Error(ErrorPayload {
+                                            conversation_id: 0,
+                                            pending_action_id: None,
                                             error_message: "Invalid conversation_id".to_string(),
                                         });
                                         if let Ok(json) = serde_json::to_string(&err_payload) {
@@ -102,6 +106,8 @@ pub async fn main_caller(
                 Message::Binary(_) => {
                     // Binary frames not supported — notify client
                     let err_payload = ServerMessage::Error(ErrorPayload {
+                        conversation_id: 0,
+                        pending_action_id: None,
                         error_message: "Binary messages are not supported".to_string(),
                     });
                     if let Ok(json) = serde_json::to_string(&err_payload) {

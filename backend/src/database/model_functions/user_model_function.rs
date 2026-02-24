@@ -266,8 +266,8 @@ pub fn get_transaction_history(
 }
 
 pub struct UserPinResponse {
-    success: bool,
-    description: Option<String>,
+    pub success: bool,
+    pub description: Option<String>,
 }
 
 pub fn match_user_pin(user_id: i32, input_user_pin: String) -> UserPinResponse {

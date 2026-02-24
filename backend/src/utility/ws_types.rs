@@ -16,8 +16,8 @@ pub struct UserMessagePayload {
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionResponsePayload {
-    pub conversation_id: String,
-    pub pending_action_id: String,
+    pub conversation_id: i32,
+    pub pending_action_id: i32,
     pub response: String,
 }
 

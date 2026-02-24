@@ -1,16 +1,24 @@
 use crate::controllers::ai_controller::{RequestBody, get_ai_response};
 use crate::database::establish_connection;
-use crate::database::model::DbUser;
+use crate::database::model::{DbUser, PendingActionPayload};
+use crate::database::model_functions::get_pending_action_by_id;
 use crate::database::model_functions::{
     get_user_info,
+    ledger_model_function::record_transfer_and_update_amounts,
     pending_action_model_function::{
         build_pin_verify_payload, build_transfer_confirm_payload, create_pending_action,
+        update_pending_action_status,
     },
-    user_model_function::{UserInfoRequest, UserInfoResponse, get_transaction_history},
+    user_model_function::{
+        UserInfoRequest, UserInfoResponse, get_transaction_history, match_user_pin,
+    },
 };
-use crate::schema::pending_action;
-use crate::utility::{AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance};
+use crate::utility::{
+    ActionResponsePayload, AssistantMessagePayload, ErrorPayload, ServerMessage,
+    get_user_ata_balance, transfer_to_vault,
+};
 use actix_ws::{CloseCode, CloseReason, Session};
+use diesel::PgConnection;
 // ── Helper: send a JSON text frame to client ────────────────────────────
 async fn send_error(
     session: &Session,
@@ -324,6 +332,196 @@ pub async fn handle_user_message(
 }
 
 //handle user action response function
-pub fn handle_action_response(action_response: AssistantMessagePayload, stream: Session) {
+pub async fn handle_action_response(action_response: ActionResponsePayload, stream: Session) {
     //handle the things on the basis of the message we got
+    let ActionResponsePayload {
+        conversation_id,
+        pending_action_id,
+        response,
+    } = action_response;
+
+    //create the db conection
+    let mut db_connection = PgConnection::from(establish_connection());
+
+    //get the current pending action on the basis of pending action id
+    let pending_action_db_result = get_pending_action_by_id(&mut db_connection, pending_action_id);
+
+    match pending_action_db_result {
+        Ok(result) => {
+            let main_result = result.unwrap();
+
+            //read the task and take steps on the basis of that
+            let task = main_result.action_type;
+
+            match task {
+                task if task == "pin_verify" => {
+                    //take the response from the user
+                    let userpin_check_result = match_user_pin(main_result.user_id, response);
+
+                    if userpin_check_result.success == true {
+                        //call the user pin
+                        let request_payload = UserInfoRequest {
+                            user_id: main_result.user_id,
+                            intent: "unique_id".to_string(),
+                            recipient_name: None,
+                        };
+                        let user_info = get_user_info(request_payload);
+                        let unique_id = match user_info {
+                            UserInfoResponse::UniqueId(info) => info,
+                            UserInfoResponse::Error(err) => {
+                                send_error(
+                                    &stream,
+                                    &format!("Failed to load user info: {}", err),
+                                    conversation_id,
+                                    None,
+                                )
+                                .await;
+                                return;
+                            }
+                            _ => {
+                                send_error(
+                                    &stream,
+                                    "Unexpected response while loading user",
+                                    conversation_id,
+                                    None,
+                                )
+                                .await;
+                                return;
+                            }
+                        };
+
+                        //how to exract the amount and other data from the payload
+                        //already made the db and get main result
+                        let parsed_payload: PendingActionPayload =
+                            serde_json::from_value(main_result.payload).unwrap();
+                        match parsed_payload {
+                            PendingActionPayload::PinVerify {
+                                amount,
+                                currency,
+                                recipient_id,
+                                recipient_name,
+                                sender_unique_id,
+                            } => {
+                                let transfer_result = transfer_to_vault(unique_id, amount as u64);
+
+                                match transfer_result {
+                                    Ok(value) => {
+                                        if value.success {
+                                            // 1. Record in ledger + update balances
+                                            let ledger_result =
+                                                record_transfer_and_update_amounts(
+                                                    &mut db_connection,
+                                                    main_result.user_id,
+                                                    recipient_id,
+                                                    amount as i64,
+                                                    currency.clone(),
+                                                    None,
+                                                );
+
+                                            match ledger_result {
+                                                Ok(transfer_record) => {
+                                                    // 2. Mark pending_action as confirmed
+                                                    let _ = update_pending_action_status(
+                                                        &mut db_connection,
+                                                        pending_action_id,
+                                                        "confirmed",
+                                                    );
+
+                                                    // 3. Send success message AFTER everything is done
+                                                    let msg = format!(
+                                                        "✅ Transfer of {} {} to {} successful! Your new balance: {}",
+                                                        amount,
+                                                        currency,
+                                                        recipient_name,
+                                                        transfer_record.sender_new_balance
+                                                    );
+                                                    send_message(
+                                                        &stream,
+                                                        &msg,
+                                                        conversation_id,
+                                                        Some(pending_action_id),
+                                                    )
+                                                    .await;
+                                                }
+                                                Err(db_err) => {
+                                                    println!(
+                                                        "[transfer] DB error: {}",
+                                                        db_err
+                                                    );
+                                                    send_error(
+                                                        &stream,
+                                                        "Transfer sent on-chain but failed to record in database",
+                                                        conversation_id,
+                                                        Some(pending_action_id),
+                                                    )
+                                                    .await;
+                                                }
+                                            }
+                                        } else {
+                                            send_error(
+                                                &stream,
+                                                "On-chain transfer did not succeed",
+                                                conversation_id,
+                                                Some(pending_action_id),
+                                            )
+                                            .await;
+                                        }
+                                    }
+                                    Err(err) => {
+                                        println!("[transfer] on-chain error: {}", err);
+                                        send_error(
+                                            &stream,
+                                            "Transaction failed on-chain",
+                                            conversation_id,
+                                            Some(pending_action_id),
+                                        )
+                                        .await;
+                                    }
+                                }
+                            }
+                            _ => {
+                                //send the server error
+                                send_error(
+                                    &stream,
+                                    "not getting the value",
+                                    conversation_id,
+                                    Some(pending_action_id),
+                                )
+                                .await;
+                            }
+                        }
+                    } else {
+                        //send the error
+                        send_error(
+                            &stream,
+                            "invalid user_pin",
+                            conversation_id,
+                            Some(pending_action_id),
+                        )
+                        .await;
+                    }
+                }
+
+                _ => {
+                    send_error(
+                        &stream,
+                        "Server Error",
+                        conversation_id,
+                        Some(pending_action_id),
+                    )
+                    .await;
+                }
+            }
+        }
+
+        Err(error) => {
+            send_error(
+                &stream,
+                "pending action id is incorrect",
+                conversation_id,
+                Some(pending_action_id),
+            )
+            .await;
+        }
+    }
 }

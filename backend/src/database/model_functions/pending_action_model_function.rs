@@ -5,9 +5,9 @@ use crate::database::model::{
 };
 use crate::schema::pending_action;
 use chrono::{Duration, Utc};
+use diesel::PgConnection;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
-use diesel::PgConnection;
 
 // ── Payload Builders ────────────────────────────────────────────────────────
 // These functions create the typed `PendingActionPayload` that gets stored
@@ -99,8 +99,8 @@ pub fn create_pending_action(
     target_action_type: &str,
     target_payload: PendingActionPayload,
 ) -> Result<DbPendingAction, DieselError> {
-    let payload_json = serde_json::to_value(&target_payload)
-        .map_err(|_| DieselError::RollbackTransaction)?;
+    let payload_json =
+        serde_json::to_value(&target_payload).map_err(|_| DieselError::RollbackTransaction)?;
 
     let new_action = NewPendingAction {
         user_id: target_user_id,
