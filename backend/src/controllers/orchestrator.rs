@@ -118,11 +118,22 @@ pub async fn main_caller(
 
                 Message::Close(reason) => {
                     println!("Client sent close frame: {:?}", reason);
-                    break; // exit the loop and close below
+                    break;
+                    // exit the loop and close below
                 }
 
                 // Ping/Pong/Continuation — actix-ws handles pings automatically
-                _ => {}
+                _ => {
+                    //failed to load the server to make thing
+                    let err_payload = ServerMessage::Error(ErrorPayload {
+                        conversation_id: 0,
+                        pending_action_id: None,
+                        error_message: "Binary messages are not supported".to_string(),
+                    });
+                    if let Ok(json) = serde_json::to_string(&err_payload) {
+                        let _ = session.clone().text(json).await;
+                    }
+                }
             }
         }
 
