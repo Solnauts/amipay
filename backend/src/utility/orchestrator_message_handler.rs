@@ -8,12 +8,19 @@ use crate::database::model_functions::{
     },
     user_model_function::{UserInfoRequest, UserInfoResponse, get_transaction_history},
 };
+use crate::schema::pending_action;
 use crate::utility::{AssistantMessagePayload, ErrorPayload, ServerMessage, get_user_ata_balance};
 use actix_ws::{CloseCode, CloseReason, Session};
-
 // ── Helper: send a JSON text frame to client ────────────────────────────
-async fn send_error(session: &Session, message: &str) {
+async fn send_error(
+    session: &Session,
+    message: &str,
+    conversation_id: i32,
+    pending_action_id: Option<i32>,
+) {
     let payload = ServerMessage::Error(ErrorPayload {
+        conversation_id: conversation_id,
+        pending_action_id: Some(pending_action_id.unwrap()),
         error_message: message.to_string(),
     });
     if let Ok(json) = serde_json::to_string(&payload) {
@@ -21,9 +28,16 @@ async fn send_error(session: &Session, message: &str) {
     }
 }
 
-async fn send_message(session: &Session, text: &str) {
-    let payload = ServerMessage::AssistantMessage(AssistantMessagePayload {
-        reply_text: text.to_string(),
+async fn send_message(
+    session: &Session,
+    text: &str,
+    conversation_id: i32,
+    pending_action_id: Option<i32>,
+) {
+    let payload = ServerMessage::AssistanceMessage(AssistantMessagePayload {
+        conversation_id: conversation_id,
+        pending_action_id: Some(pending_action_id.unwrap()),
+        task: text.to_string(),
         action_buttons: None,
     });
     if let Ok(json) = serde_json::to_string(&payload) {
@@ -56,7 +70,13 @@ pub async fn handle_user_message(
     let serialized_message = match serde_json::from_str::<RequestBody>(&user_message) {
         Ok(msg) => msg,
         Err(e) => {
-            send_error(stream, &format!("Invalid message format: {}", e)).await;
+            send_error(
+                stream,
+                &format!("failed to receive instruction {}", e),
+                conversation_id,
+                None,
+            )
+            .await;
             return;
         }
     };
@@ -70,14 +90,27 @@ pub async fn handle_user_message(
 
     let user_info = get_user_info(request_payload);
 
+    //userinfo
     let user_info = match user_info {
         UserInfoResponse::FullInfo(info) => info,
         UserInfoResponse::Error(err) => {
-            send_error(stream, &format!("Failed to load user info: {}", err)).await;
+            send_error(
+                stream,
+                &format!("Failed to load user info: {}", err),
+                conversation_id,
+                None,
+            )
+            .await;
             return;
         }
         _ => {
-            send_error(stream, "Unexpected response while loading user info").await;
+            send_error(
+                stream,
+                "Unexpected response while loading user",
+                conversation_id,
+                None,
+            )
+            .await;
             return;
         }
     };
@@ -88,6 +121,7 @@ pub async fn handle_user_message(
     // NOTE: Box::leak creates a 'static reference – this leaks memory per request. to match the existing pattern in the codebase.
     let intent_result = Box::leak(Box::new(intent_response));
     let user_info_ref: &'static DbUser = Box::leak(Box::new(user_info));
+
     // 4. Route by intent
     match intent_result {
         // ── Transfer ─────────────────────────────────────────────────
@@ -98,7 +132,7 @@ pub async fn handle_user_message(
             let amount = match response.amount {
                 Some(amt) => amt,
                 None => {
-                    send_error(stream, "Transfer amount is missing from AI response").await;
+                    send_error(stream, "Invalid amount instruction", conversation_id, None).await;
                     return;
                 }
             };
@@ -109,12 +143,18 @@ pub async fn handle_user_message(
                         let issue = balance_response
                             .issue
                             .unwrap_or("Insufficient balance".to_string());
-                        send_error(stream, &issue).await;
+                        send_error(stream, &issue, conversation_id, None).await;
                         return;
                     }
                 }
                 Err(e) => {
-                    send_error(stream, &format!("Failed to check your balance: {}", e)).await;
+                    send_error(
+                        stream,
+                        &format!("Failed to check your balance: {}", e),
+                        conversation_id,
+                        None,
+                    )
+                    .await;
                     return;
                 }
             }
@@ -131,11 +171,23 @@ pub async fn handle_user_message(
             let recipient = match recipient_info {
                 UserInfoResponse::Recipient(r) => r,
                 UserInfoResponse::Error(err) => {
-                    send_error(stream, &format!("Recipient not found: {}", err)).await;
+                    send_error(
+                        stream,
+                        &format!("Recipient not found: {}", err),
+                        conversation_id,
+                        None,
+                    )
+                    .await;
                     return;
                 }
                 _ => {
-                    send_error(stream, "Unexpected response while looking up recipient").await;
+                    send_error(
+                        stream,
+                        "Unexpected response while looking up recipient",
+                        conversation_id,
+                        None,
+                    )
+                    .await;
                     return;
                 }
             };
@@ -161,11 +213,9 @@ pub async fn handle_user_message(
                 payload,
             ) {
                 Ok(pending_action) => {
-                    let msg = format!(
-                        "Send {} {} to {}? Please enter your PIN to confirm.",
-                        amount, currency, recipient.name
-                    );
-                    send_message(stream, &msg).await;
+                    let msg = "Please enter your PIN to confirm";
+
+                    send_message(stream, &msg, conversation_id, Some(pending_action.id)).await;
                     println!(
                         "[transfer] pending_action created: id={} for user={}",
                         pending_action.id, user_info_ref.id
@@ -176,7 +226,7 @@ pub async fn handle_user_message(
                     return;
                 }
                 Err(e) => {
-                    send_error(stream, &format!("Failed to create confirmation: {}", e)).await;
+                    send_error(stream, "Server Error", conversation_id, None).await;
                     return;
                 }
             }
@@ -196,13 +246,25 @@ pub async fn handle_user_message(
             match balance_info {
                 UserInfoResponse::NUmber(amount) => {
                     let msg = format!("Your current balance is: {}", amount);
-                    send_message(stream, &msg).await;
+                    send_message(stream, &msg, conversation_id, None).await;
                 }
                 UserInfoResponse::Error(err) => {
-                    send_error(stream, &format!("Could not fetch balance: {}", err)).await;
+                    send_error(
+                        stream,
+                        &format!("Could not fetch balance: {}", err),
+                        conversation_id,
+                        None,
+                    )
+                    .await;
                 }
                 _ => {
-                    send_error(stream, "Unexpected response while checking balance").await;
+                    send_error(
+                        stream,
+                        "Unexpected response while checking balance",
+                        conversation_id,
+                        None,
+                    )
+                    .await;
                 }
             }
         }
@@ -221,12 +283,14 @@ pub async fn handle_user_message(
                     // Serialize the ledger entry and send it to the client
                     match serde_json::to_string(&value) {
                         Ok(json) => {
-                            send_message(stream, &json).await;
+                            send_message(stream, &json, conversation_id, None).await;
                         }
                         Err(e) => {
                             send_error(
                                 stream,
                                 &format!("Failed to serialize transaction history: {}", e),
+                                conversation_id,
+                                None,
                             )
                             .await;
                         }
@@ -236,6 +300,8 @@ pub async fn handle_user_message(
                     send_error(
                         stream,
                         &format!("Failed to fetch transaction history: {}", error),
+                        conversation_id,
+                        None,
                     )
                     .await;
                 }
@@ -245,13 +311,19 @@ pub async fn handle_user_message(
         // ── Unknown intent → close the stream ───────────────────────
         _ => {
             println!("invalid request");
-            send_error(stream, "Unrecognized intent — closing connection").await;
+            send_error(
+                stream,
+                "Unrecognized intent — closing connection",
+                conversation_id,
+                None,
+            )
+            .await;
             close_with_reason(stream, CloseCode::Policy, "invalid request detected").await;
         }
     }
 }
 
 //handle user action response function
-pub fn handle_action_response(conversation_id: i32, stream: Session) {
+pub fn handle_action_response(action_response: AssistantMessagePayload, stream: Session) {
     //handle the things on the basis of the message we got
 }

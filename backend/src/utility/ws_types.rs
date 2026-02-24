@@ -18,18 +18,20 @@ pub struct UserMessagePayload {
 pub struct ActionResponsePayload {
     pub conversation_id: String,
     pub pending_action_id: String,
+    pub response: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub enum ServerMessage {
-    AssistantMessage(AssistantMessagePayload),
-    TxStatus(TransactionPayload),
+    AssistanceMessage(AssistantMessagePayload),
     Error(ErrorPayload),
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct AssistantMessagePayload {
-    pub reply_text: String,
+    pub conversation_id: i32,
+    pub pending_action_id: Option<i32>,
+    pub task: String,
     pub action_buttons: Option<String>,
 }
 
@@ -41,5 +43,7 @@ pub struct TransactionPayload {
 
 #[derive(Deserialize, Serialize)]
 pub struct ErrorPayload {
+    pub conversation_id: i32,
+    pub pending_action_id: Option<i32>,
     pub error_message: String,
 }
