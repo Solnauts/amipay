@@ -1,5 +1,5 @@
 use crate::database::establish_connection;
-use crate::database::model_functions::{create_user, get_user_info};
+use crate::database::model_functions::create_user;
 use crate::utility::create_user_ata;
 use actix_web::{HttpResponse, Responder, post, web};
 use bcrypt::{DEFAULT_COST, hash};

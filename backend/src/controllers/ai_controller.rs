@@ -1,5 +1,4 @@
-use actix_web::{HttpResponse, Responder, post, web};
-use reqwest::{self, Client};
+use reqwest::{self};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;

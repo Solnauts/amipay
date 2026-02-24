@@ -1,6 +1,5 @@
 use crate::controllers::wallet_controller::validate_session_token;
 use crate::database::model_functions::conversation_model_function::create_conversation;
-use crate::schema::conversation;
 use crate::utility::orchestrator_message_handler::handle_user_message;
 use crate::utility::{ClientMessage, ErrorPayload, ServerMessage, handle_action_response};
 use actix_web::{HttpRequest, Responder, web};
