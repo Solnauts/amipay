@@ -408,15 +408,14 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                                     Ok(value) => {
                                         if value.success {
                                             // 1. Record in ledger + update balances
-                                            let ledger_result =
-                                                record_transfer_and_update_amounts(
-                                                    &mut db_connection,
-                                                    main_result.user_id,
-                                                    recipient_id,
-                                                    amount as i64,
-                                                    currency.clone(),
-                                                    None,
-                                                );
+                                            let ledger_result = record_transfer_and_update_amounts(
+                                                &mut db_connection,
+                                                main_result.user_id,
+                                                recipient_id,
+                                                amount as i64,
+                                                currency.clone(),
+                                                None,
+                                            );
 
                                             match ledger_result {
                                                 Ok(transfer_record) => {
@@ -444,10 +443,7 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                                                     .await;
                                                 }
                                                 Err(db_err) => {
-                                                    println!(
-                                                        "[transfer] DB error: {}",
-                                                        db_err
-                                                    );
+                                                    println!("[transfer] DB error: {}", db_err);
                                                     send_error(
                                                         &stream,
                                                         "Transfer sent on-chain but failed to record in database",
