@@ -296,3 +296,53 @@ pub fn match_user_pin(user_id: i32, input_user_pin: String) -> UserPinResponse {
         error_response
     }
 }
+
+pub struct AmountValidResponse {
+    pub success: bool,
+    pub amount: i64,
+    pub error_reason: Option<String>,
+}
+
+pub fn is_amount_valid(
+    main_amount: i64,
+    user_id: i32,
+    conn: &mut PgConnection,
+) -> AmountValidResponse {
+    use crate::schema::user::dsl::*;
+
+    //take the amount and user id and return the response like if it's true or false
+    let user_info = user.filter(id.eq(&user_id)).get_result::<DbUser>(conn);
+
+    match user_info {
+        Ok(db_response) => {
+            let user_amount = db_response.amount.unwrap().clone();
+            if user_amount.lt(&main_amount) {
+                //send the success false response
+                let response = AmountValidResponse {
+                    success: false,
+                    amount: main_amount,
+                    error_reason: None,
+                };
+                response
+            } else {
+                //send the success true value
+                let response = AmountValidResponse {
+                    success: true,
+                    amount: main_amount,
+                    error_reason: None,
+                };
+                response
+            }
+        }
+        Err(error) => {
+            //send the error
+            println!("error while getting data from the database");
+            let response = AmountValidResponse {
+                success: false,
+                amount: main_amount,
+                error_reason: Some("DatabaseError".to_string()),
+            };
+            response
+        }
+    }
+}

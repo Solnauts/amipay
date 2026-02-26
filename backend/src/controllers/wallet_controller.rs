@@ -1,6 +1,9 @@
 use crate::database::establish_connection;
 use crate::database::model_functions::{
-    create_wallet_user, find_user_by_wallet, update_wallet_user_profile,
+    create_wallet_user, find_user_by_wallet, get_user_info, update_wallet_user_profile,
+};
+use crate::database::model_functions::user_model_function::{
+    UserInfoRequest, UserInfoResponse, is_amount_valid,
 };
 use actix_web::cookie::{Cookie, SameSite};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
@@ -11,7 +14,6 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
-
 // ─── Request / Response Types ───────────────────────────────────────────────
 
 /// Response from GET /wallet/nonce
@@ -334,4 +336,306 @@ pub async fn update_profile(
         message: "Profile updated successfully".to_string(),
         user: user_info,
     }))
+}
+
+/// Body of POST /claimamount
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ClaimAmountRequest {
+    pub amount: u64,
+    pub method: String,             // "Auto-Claim" or "Manual-Claim"
+    pub recipient_pubkey: Option<String>, // required for Manual-Claim
+    pub recipient_id: i32,
+}
+
+/// Response from POST /claimamount
+#[derive(Debug, Serialize)]
+pub struct ClaimAmountResponse {
+    pub status: String,
+    pub message: String,
+    pub claimed_amount: Option<i64>,
+    pub new_balance: Option<i64>,
+    pub tx_signature: Option<String>,
+}
+
+/// Sentinel user ID representing the vault/system in ledger entries.
+/// This should match the ID used across the system for vault operations.
+const VAULT_USER_ID: i32 = 0;
+
+/// **Claim Amount Controller**
+///
+/// `POST /claimamount`
+///
+/// Allows a recipient to claim (withdraw) funds from the vault to their
+/// on-chain USDC ATA.
+///
+/// Flow:
+///   1. Validate the request payload (amount > 0, valid method)
+///   2. Look up the recipient user in DB to get their `unique_id`
+///   3. Verify claimable balance from the ledger (in − out)
+///   4. For Manual-Claim: ensure `recipient_pubkey` is provided
+///   5. Call the Solana `claim_amount` on-chain instruction
+///   6. Record the claim in the ledger and update cached balances
+///   7. Return success with new balance
+#[post("/claimamount")]
+pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder {
+    use crate::database::model_functions::ledger_model_function::{
+        get_claimable_amount, record_claim,
+    };
+    use crate::utility::solana_utilities;
+
+    let payload = data.into_inner();
+
+    // ── 1. Validate amount ──────────────────────────────────────────────
+    if payload.amount == 0 {
+        return HttpResponse::BadRequest().json(ClaimAmountResponse {
+            status: "error".to_string(),
+            message: "Claim amount must be greater than zero.".to_string(),
+            claimed_amount: None,
+            new_balance: None,
+            tx_signature: None,
+        });
+    }
+
+    // ── 2. Validate method ──────────────────────────────────────────────
+    if payload.method != "Auto-Claim" && payload.method != "Manual-Claim" {
+        return HttpResponse::BadRequest().json(ClaimAmountResponse {
+            status: "error".to_string(),
+            message: format!(
+                "Invalid claim method '{}'. Must be 'Auto-Claim' or 'Manual-Claim'.",
+                payload.method
+            ),
+            claimed_amount: None,
+            new_balance: None,
+            tx_signature: None,
+        });
+    }
+
+    // ── 3. For Manual-Claim, recipient_pubkey is required ───────────────
+    if payload.method == "Manual-Claim" && payload.recipient_pubkey.is_none() {
+        return HttpResponse::BadRequest().json(ClaimAmountResponse {
+            status: "error".to_string(),
+            message: "recipient_pubkey is required for Manual-Claim.".to_string(),
+            claimed_amount: None,
+            new_balance: None,
+            tx_signature: None,
+        });
+    }
+
+    let recipient_id = payload.recipient_id;
+    let claim_amount_val = payload.amount as i64;
+
+    // ── 4. Validate balance using existing is_amount_valid ──────────────
+    let amount_check = web::block(move || {
+        let conn = &mut establish_connection();
+        is_amount_valid(claim_amount_val, recipient_id, conn)
+    })
+    .await;
+
+    let balance_response = match amount_check {
+        Ok(response) => response,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: format!("Database error: {}", e),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+    };
+
+    if !balance_response.success {
+        return HttpResponse::BadRequest().json(ClaimAmountResponse {
+            status: "error".to_string(),
+            message: balance_response
+                .error_reason
+                .unwrap_or_else(|| "Insufficient balance.".to_string()),
+            claimed_amount: None,
+            new_balance: None,
+            tx_signature: None,
+        });
+    }
+
+    // ── 5. Check claimable amount from ledger ───────────────────────────
+    let rid = recipient_id;
+    let claimable_check = web::block(move || {
+        let conn = &mut establish_connection();
+        get_claimable_amount(conn, rid)
+            .map_err(|e| format!("Failed to calculate claimable amount: {}", e))
+    })
+    .await;
+
+    let claimable = match claimable_check {
+        Ok(Ok(val)) => val,
+        Ok(Err(err_msg)) => {
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: err_msg,
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: format!("Database error: {}", e),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+    };
+
+    if claim_amount_val > claimable {
+        return HttpResponse::BadRequest().json(ClaimAmountResponse {
+            status: "error".to_string(),
+            message: format!(
+                "Insufficient claimable balance. Requested: {}, Available: {}",
+                claim_amount_val, claimable
+            ),
+            claimed_amount: None,
+            new_balance: None,
+            tx_signature: None,
+        });
+    }
+
+    // ── 6. Get recipient's unique_id using existing get_user_info ────────
+    let rid2 = recipient_id;
+    let user_info_result = web::block(move || {
+        get_user_info(UserInfoRequest {
+            intent: "unique_id".to_string(),
+            user_id: rid2,
+            recipient_name: None,
+        })
+    })
+    .await;
+
+    let unique_id = match user_info_result {
+        Ok(UserInfoResponse::UniqueId(uid)) => uid,
+        Ok(UserInfoResponse::Error(e)) => {
+            return HttpResponse::BadRequest().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: format!("Recipient user not found: {}", e),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+        Ok(_) => {
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: "Unexpected response while fetching user info.".to_string(),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: format!("Database error: {}", e),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+    };
+
+    // ── 7. Call the Solana claim_amount on-chain ─────────────────────────
+    let solana_amount = payload.amount;
+    let uid_clone = unique_id.clone();
+
+    let solana_result = web::block(move || {
+        solana_utilities::claim_amount(uid_clone, solana_amount)
+            .map_err(|e| e.to_string())
+    })
+    .await;
+
+    match solana_result {
+        Ok(Ok(rpc_response)) => {
+            if !rpc_response.success {
+                return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                    status: "error".to_string(),
+                    message: "On-chain claim transaction failed.".to_string(),
+                    claimed_amount: None,
+                    new_balance: None,
+                    tx_signature: None,
+                });
+            }
+
+            // ── 8. Record the claim in the ledger & update balances ─────
+            let rid = recipient_id;
+            let cav = claim_amount_val;
+
+            let ledger_result = web::block(move || {
+                let conn = &mut establish_connection();
+                record_claim(
+                    conn,
+                    rid,
+                    cav,
+                    "USDC".to_string(),
+                    Some(rpc_response.value.to_string()),
+                    VAULT_USER_ID,
+                )
+            })
+            .await;
+
+            match ledger_result {
+                Ok(Ok(claim_result)) => {
+                    HttpResponse::Ok().json(ClaimAmountResponse {
+                        status: "success".to_string(),
+                        message: claim_result.message,
+                        claimed_amount: Some(claim_result.claimed_amount),
+                        new_balance: Some(claim_result.new_balance),
+                        tx_signature: None,
+                    })
+                }
+                Ok(Err(diesel_err)) => {
+                    eprintln!(
+                        "[CRITICAL] On-chain claim succeeded for user {} but ledger update failed: {}",
+                        recipient_id, diesel_err
+                    );
+                    HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                        status: "error".to_string(),
+                        message: "Claim was processed on-chain but balance update failed. Please contact support.".to_string(),
+                        claimed_amount: Some(claim_amount_val),
+                        new_balance: None,
+                        tx_signature: None,
+                    })
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[CRITICAL] On-chain claim succeeded for user {} but ledger blocking error: {}",
+                        recipient_id, e
+                    );
+                    HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                        status: "error".to_string(),
+                        message: "Claim was processed on-chain but balance update failed. Please contact support.".to_string(),
+                        claimed_amount: Some(claim_amount_val),
+                        new_balance: None,
+                        tx_signature: None,
+                    })
+                }
+            }
+        }
+        Ok(Err(solana_err)) => {
+            HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: format!("Solana claim transaction failed: {}", solana_err),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            })
+        }
+        Err(e) => {
+            HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                message: format!("Failed to execute claim transaction: {}", e),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            })
+        }
+    }
 }
