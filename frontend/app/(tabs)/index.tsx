@@ -1,98 +1,71 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { SafeAreaView, View, TouchableOpacity } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
-import { Link } from 'expo-router';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ButtonComponent } from '@/components/ui/ButtonComponent';
 
 export default function HomeScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer} className="p-4 rounded-2xl mb-4">
-        <ThemedText variant="default" className="text-primary font-extrabold italic">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText variant="default" type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText variant="default">
-          Edit <ThemedText variant="default" type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText variant="default" type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText variant="default" type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView className="flex-1 bg-background">
+      <ThemedView className="flex-1 px-6 pt-12 pb-8">
+        {/* Header Section */}
+        <ThemedView className="items-center mb-12">
+          <View className="w-16 h-16 rounded-full bg-yellow-400 items-center justify-center mb-6">
+            <IconSymbol name="wallet.pass" size={32} color="#ffffff" />
+          </View>
+          <ThemedText variant="default" className="font-bold text-3xl text-center mb-3">
+            Welcome to CryptoPay
+          </ThemedText>
+          <ThemedText variant="secondary" className="text-center text-base px-4">
+            Send crypto easily to anyone, anywhere. Connect your wallet to get started.
+          </ThemedText>
+        </ThemedView>
 
-        <ThemedText variant="default">
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
+        {/* Features List */}
+        <ThemedView className="flex-1 flex-col gap-8 mb-8">
+          <FeatureItem
+            icon="sparkles"
+            title="AI-Powered Payments"
+            description="Use AI to send payments with simple voice or text commands"
+          />
+          <FeatureItem
+            icon="person.2.fill"
+            title="Group Payments"
+            description="Send to multiple family members or friends at once"
+          />
+          <FeatureItem
+            icon="lock.fill"
+            title="Secure & Simple"
+            description="No complex crypto jargon, just simple and secure transactions"
+          />
+        </ThemedView>
+
+        {/* Connect Button Section */}
+         <ThemedView className="mt-auto">
+          <ButtonComponent label="Connect Wallet" onPress={() => {}} disabled={false} />
+                 <ThemedText variant="secondary" className="text-center text-sm px-4">
+            We support Phantom, Solflare, and other popular Solana wallets
+          </ThemedText>
+         </ThemedView>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText variant="default" type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText variant="default">
-          {`When you're ready, run `}
-          <ThemedText variant="default" type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText variant="default" type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText variant="default" type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText variant="default" type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+function FeatureItem({ icon, title, description }: { icon: any, title: string, description: string }) {
+  return (
+    <ThemedView className="flex-row items-start gap-4">
+      <ThemedView className="w-12 h-12 rounded-full bg-blue-50 items-center justify-center mt-1">
+        <IconSymbol name={icon} size={22} color="#60a5fa" />
+      </ThemedView>
+      <ThemedView className="flex-1">
+        <ThemedText variant="default" className="font-semibold text-lg mb-1">
+          {title}
+        </ThemedText>
+        <ThemedText variant="secondary" className="text-sm leading-5">
+          {description}
+        </ThemedText>
+      </ThemedView>
+    </ThemedView>
+  );
+}
