@@ -3,8 +3,8 @@ import { Platform, StyleSheet } from 'react-native';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { ThemedText } from '@/components/ui/ThemedText';
+import { ThemedView } from '@/components/ui/ThemedView';
 import { Link } from 'expo-router';
 
 export default function HomeScreen() {
@@ -17,16 +17,16 @@ export default function HomeScreen() {
           style={styles.reactLogo}
         />
       }>
-      <ThemedView style={styles.titleContainer} className="bg-blue-100 p-4 rounded-2xl mb-4">
-        <ThemedText type="title" className="text-blue-600 font-extrabold italic">Welcome!</ThemedText>
+      <ThemedView style={styles.titleContainer} className="p-4 rounded-2xl mb-4">
+        <ThemedText variant="default" className="text-primary font-extrabold italic">Welcome!</ThemedText>
         <HelloWave />
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
+        <ThemedText variant="default" type="subtitle">Step 1: Try it</ThemedText>
+        <ThemedText variant="default">
+          Edit <ThemedText variant="default" type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
           Press{' '}
-          <ThemedText type="defaultSemiBold">
+          <ThemedText variant="default" type="defaultSemiBold">
             {Platform.select({
               ios: 'cmd + d',
               android: 'cmd + m',
@@ -39,7 +39,7 @@ export default function HomeScreen() {
       <ThemedView style={styles.stepContainer}>
         <Link href="/modal">
           <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
+            <ThemedText variant="default" type="subtitle">Step 2: Explore</ThemedText>
           </Link.Trigger>
           <Link.Preview />
           <Link.Menu>
@@ -60,18 +60,18 @@ export default function HomeScreen() {
           </Link.Menu>
         </Link>
 
-        <ThemedText>
+        <ThemedText variant="default">
           {`Tap the Explore tab to learn more about what's included in this starter app.`}
         </ThemedText>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle" className='bg-white'>Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
+        <ThemedText variant="default" type="subtitle">Step 3: Get a fresh start</ThemedText>
+        <ThemedText variant="default">
           {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
+          <ThemedText variant="default" type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
+          <ThemedText variant="default" type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
+          <ThemedText variant="default" type="defaultSemiBold">app</ThemedText> to{' '}
+          <ThemedText variant="default" type="defaultSemiBold">app-example</ThemedText>.
         </ThemedText>
       </ThemedView>
     </ParallaxScrollView>
