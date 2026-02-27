@@ -104,7 +104,18 @@ pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
                 }
             }
         }
-
+ 
+        //for wallet address 
+        s if s == "wallet_address".to_string() => {
+            let wallet_address = user_result.wallet_address;
+            match wallet_address {
+                Some(value) => {
+             UserInfoResponse::Text(value)       
+            }
+            None => {
+                UserInfoResponse::Error("wallet address not found".to_string())
+            }
+        }
         //error query request
         _ => {
             println!("error query request");

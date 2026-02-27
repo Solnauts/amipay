@@ -639,3 +639,32 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
         }
     }
 }
+
+
+
+
+
+//get the user wallet address from the db
+#[post("/wallet/address")]
+pub async fn get_wallet_address(req : HttpRequest, data:  web::Json<GetWalletAddressRequest>) -> actix_web::Result<impl Responder> {
+   //get the user info from the jwt 
+   let token = req.cookie("session_token").unwrap().value().to_string();
+   let claims = validate_session_token(&token).unwrap();
+   let user_id = claims.sub.parse::<i32>();
+
+   
+   match user_id {
+    Ok(user_id) => {
+        let wallet_address = get_user_info(UserInfoRequest {
+            intent: "wallet_address".to_string(),
+            user_id: user_id,
+            recipient_name: None,
+        });
+        HttpResponse::Ok().json(wallet_address)
+    }
+    Err(e) => {
+        HttpResponse::InternalServerError().body("invalid user id")
+    }
+   }
+}
+
