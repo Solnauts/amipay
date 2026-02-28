@@ -1,3 +1,4 @@
+use crate::errors::AiError;
 use reqwest::{self};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -14,7 +15,7 @@ pub struct AiResponse {
     model: String,
     created_at: String,
     response: String,
-    //critical this must bea string
+    //critical this must be a string
     thinking: String,
     done: bool,
     done_reason: String,
@@ -31,23 +32,22 @@ pub struct MainResponse {
     pub history_limit: Option<u64>,
 }
 
-//change to this function that handle the Deserialized logic
-//if remove the web::json then use one shoud serealize the response into the main RequestBody first
-//then use it into the ai message
-pub async fn get_ai_response(data: RequestBody) -> MainResponse {
+/// Call the local Ollama instance and parse the AI response.
+/// Returns a typed `AiError` instead of panicking.
+pub async fn get_ai_response(data: RequestBody) -> Result<MainResponse, AiError> {
     println!("the response is received");
 
-    //call the ollama instance
     let url = "http://localhost:11434/api/generate";
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_mins(2))
         .build()
-        .unwrap();
+        .map_err(|e| AiError::ClientBuildFailed {
+            reason: e.to_string(),
+        })?;
 
     let message_val = &data.value;
 
-    //create the json payload
     let payload = json!({
         "model" : "bank_agent",
         "prompt" : message_val,
@@ -60,14 +60,27 @@ pub async fn get_ai_response(data: RequestBody) -> MainResponse {
         .body(payload.to_string())
         .send()
         .await
-        .unwrap()
+        .map_err(|e| AiError::RequestFailed {
+            reason: e.to_string(),
+        })?
         .text()
         .await
-        .unwrap();
+        .map_err(|e| AiError::RequestFailed {
+            reason: format!("failed to read response body: {}", e),
+        })?;
 
-    let outer_response: AiResponse = serde_json::from_str(&response).unwrap();
-    let main_response: MainResponse = serde_json::from_str(&outer_response.response).unwrap();
+    let outer_response: AiResponse =
+        serde_json::from_str(&response).map_err(|e| AiError::ResponseParseFailed {
+            reason: format!("outer: {}", e),
+        })?;
 
-    //return the main response
-    main_response
+    let main_response: MainResponse =
+        serde_json::from_str(&outer_response.response).map_err(|e| {
+            AiError::IntentParseFailed {
+                raw_response: outer_response.response.clone(),
+                reason: e.to_string(),
+            }
+        })?;
+
+    Ok(main_response)
 }

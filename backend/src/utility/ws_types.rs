@@ -1,4 +1,5 @@
 //create enums for the orchestrator
+use crate::errors::AppError;
 use serde::{Deserialize, Serialize};
 use solana_sdk::signature::Signature;
 
@@ -45,5 +46,22 @@ pub struct TransactionPayload {
 pub struct ErrorPayload {
     pub conversation_id: i32,
     pub pending_action_id: Option<i32>,
+    pub error_code: u32,
     pub error_message: String,
+}
+
+impl ErrorPayload {
+    /// Build an ErrorPayload from an AppError — automatically sanitizes the message.
+    pub fn from_app_error(
+        err: &AppError,
+        conversation_id: i32,
+        pending_action_id: Option<i32>,
+    ) -> Self {
+        ErrorPayload {
+            conversation_id,
+            pending_action_id,
+            error_code: err.error_code(),
+            error_message: err.client_message(),
+        }
+    }
 }

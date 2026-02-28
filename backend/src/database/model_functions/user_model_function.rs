@@ -4,14 +4,10 @@ use crate::database::{
         DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateWalletProfile,
     },
 };
+use crate::errors::{AppError, DbError, ValidationError};
 use crate::schema::user;
-use diesel::PgConnection;
 use diesel::prelude::*;
-
-pub struct DBResponse {
-    pub success: bool,
-    pub data: DbUser,
-}
+use diesel::PgConnection;
 
 pub enum UserInfoResponse {
     Text(String),
@@ -19,7 +15,6 @@ pub enum UserInfoResponse {
     UniqueId(String),
     NUmber(i32),
     Recipient(Dbrecipient),
-    Error(String),
 }
 
 pub struct UserInfoRequest {
@@ -38,96 +33,76 @@ pub struct UpdateUserLedgerRequest {
     pub status: String,
 }
 
-pub struct LedgerResponse {
-    success: bool,
-}
-
-//has to change the return type
-pub fn get_user_info(request: UserInfoRequest) -> UserInfoResponse {
+/// Get user info based on intent — returns typed AppError on failure.
+pub fn get_user_info(request: UserInfoRequest) -> Result<UserInfoResponse, AppError> {
     use crate::schema::user::dsl::*;
-    //check if the user has enough
 
-    let connection = &mut establish_connection();
+    let connection = &mut establish_connection()?;
+
     let user_result = user
         .filter(id.eq(&request.user_id))
         .get_result::<DbUser>(connection)
-        .unwrap();
+        .map_err(|e| DbError::UserLookupFailed {
+            user_id: request.user_id,
+            reason: e.to_string(),
+        })?;
 
-    //make decision on the basis of required_intent;
-    match request.intent {
-        //if the user want to check balance
-        s if s == "amount".to_string() => {
-            //return the amount the user have
-            UserInfoResponse::NUmber(user_result.amount.unwrap() as i32)
+    match request.intent.as_str() {
+        "amount" => {
+            let amount_val = user_result.amount.unwrap_or(0) as i32;
+            Ok(UserInfoResponse::NUmber(amount_val))
         }
 
-        //for getting recipeient
-        s if s == "recipient".to_string() => {
-            //check for this recipeient by making query to the recipient table
-            //bring the recipient into scope
+        "recipient" => {
             use crate::schema::recipient::dsl::*;
-            let recipient_name = request.recipient_name.unwrap();
+            let recipient_name = request.recipient_name.clone().unwrap_or_default();
             let recpient_result = recipient
                 .filter(userid.eq(&request.user_id))
                 .filter(name.eq(&recipient_name))
                 .get_result::<Dbrecipient>(connection);
 
             match recpient_result {
-                Ok(value) => {
-                    //send the response
-                    UserInfoResponse::Recipient(value)
+                Ok(value) => Ok(UserInfoResponse::Recipient(value)),
+                Err(_) => Err(ValidationError::RecipientNotFound {
+                    name: recipient_name,
                 }
-                Err(error) => {
-                    //send the error response
-                    UserInfoResponse::Error(error.to_string())
-                }
+                .into()),
             }
         }
 
-        //for unique ids
-        s if s == "unique_id".to_string() => UserInfoResponse::UniqueId(user_result.unique_id),
+        "unique_id" => Ok(UserInfoResponse::UniqueId(user_result.unique_id)),
 
-        //get the full user
-        s if s == "full_user".to_string() => {
+        "full_user" | "user_info" => {
             let full_user = user
                 .filter(id.eq(request.user_id))
                 .get_result::<DbUser>(connection);
 
             match full_user {
-                Ok(value) => {
-                    //figure the issues
-                    UserInfoResponse::FullInfo(value)
+                Ok(value) => Ok(UserInfoResponse::FullInfo(value)),
+                Err(e) => Err(DbError::UserLookupFailed {
+                    user_id: request.user_id,
+                    reason: e.to_string(),
                 }
-                Err(_) => {
-                    //error the issues
-                    UserInfoResponse::Error("error finding db user".to_string())
-                }
+                .into()),
             }
         }
- 
-        //for wallet address 
-        s if s == "wallet_address".to_string() => {
-            let wallet_address = user_result.wallet_address;
-            match wallet_address {
-                Some(value) => {
-             UserInfoResponse::Text(value)       
-            }
-            None => {
-                UserInfoResponse::Error("wallet address not found".to_string())
-            }
-        }
-        //error query request
-        _ => {
-            println!("error query request");
 
-            //return the error message
-            UserInfoResponse::Error("invalid query request".to_string())
+        "wallet_address" => match user_result.wallet_address {
+            Some(value) => Ok(UserInfoResponse::Text(value)),
+            None => Err(ValidationError::UserNotFound {
+                identifier: format!("wallet for user_id={}", request.user_id),
+            }
+            .into()),
+        },
+
+        other => Err(DbError::UnexpectedResult {
+            context: format!("unknown intent: {}", other),
         }
+        .into()),
     }
 }
-//create the user out of the system
 
-// Create a user via contact number flow (full data upfront)
+/// Create a user via contact number flow (full data upfront).
 pub fn create_user(
     conn: &mut PgConnection,
     name: String,
@@ -136,7 +111,7 @@ pub fn create_user(
     method_type: String,
     email: Option<String>,
     user_usdc_ata: String,
-) -> DBResponse {
+) -> Result<DbUser, DbError> {
     let new_user = NewUser {
         name: Some(name),
         user_pin,
@@ -148,54 +123,54 @@ pub fn create_user(
         wallet_address: None,
     };
 
-    let response = diesel::insert_into(user::table)
+    diesel::insert_into(user::table)
         .values(&new_user)
         .get_result(conn)
-        .expect("Error saving the user");
-
-    DBResponse {
-        success: true,
-        data: response,
-    }
+        .map_err(|e| DbError::UserCreationFailed {
+            reason: e.to_string(),
+        })
 }
 
 // ── Wallet Login Flow DB Functions ──────────────────────────────────────
 
 /// Find an existing user by their wallet address.
 /// Returns None if no user exists with this wallet address.
-pub fn find_user_by_wallet(conn: &mut PgConnection, addr: &str) -> Option<DbUser> {
+pub fn find_user_by_wallet(conn: &mut PgConnection, addr: &str) -> Result<Option<DbUser>, DbError> {
     use crate::schema::user::dsl::*;
 
     user.filter(wallet_address.eq(addr))
         .first::<DbUser>(conn)
         .optional()
-        .expect("Error querying user by wallet address")
+        .map_err(|e| DbError::WalletLookupFailed {
+            address: addr.to_string(),
+            reason: e.to_string(),
+        })
 }
 
 /// Auto-register a new wallet user with just the wallet address.
-/// Used in the login flow when the address doesn't exist yet.
-pub fn create_wallet_user(conn: &mut PgConnection, addr: &str) -> DbUser {
+pub fn create_wallet_user(conn: &mut PgConnection, addr: &str) -> Result<DbUser, DbError> {
     let new_wallet_user = NewWalletUser {
         wallet_address: Some(addr.to_string()),
-        unique_id: addr.to_string(), // Use wallet address as unique_id
+        unique_id: addr.to_string(),
         method_type: "wallet".to_string(),
-        user_pin: String::new(), // Empty until user sets it via profile update
+        user_pin: String::new(),
     };
 
     diesel::insert_into(user::table)
         .values(&new_wallet_user)
         .get_result(conn)
-        .expect("Error creating wallet user")
+        .map_err(|e| DbError::UserCreationFailed {
+            reason: e.to_string(),
+        })
 }
 
 /// Update profile for a wallet user (set username and pin).
-/// Called after the user completes the "Welcome" screen.
 pub fn update_wallet_user_profile(
     conn: &mut PgConnection,
-    user_id: i32,
+    target_user_id: i32,
     new_name: String,
     hashed_pin: String,
-) -> DbUser {
+) -> Result<DbUser, DbError> {
     use crate::schema::user::dsl::*;
 
     let changeset = UpdateWalletProfile {
@@ -203,77 +178,71 @@ pub fn update_wallet_user_profile(
         user_pin: hashed_pin,
     };
 
-    diesel::update(user.filter(id.eq(user_id)))
+    diesel::update(user.filter(id.eq(target_user_id)))
         .set(&changeset)
         .get_result(conn)
-        .expect("Error updating wallet user profile")
+        .map_err(|e| DbError::ProfileUpdateFailed {
+            user_id: target_user_id,
+            reason: e.to_string(),
+        })
 }
 
-// Record a ledger entry (kept for backward compat — prefer
-// `ledger_model_function::record_transfer_and_update_amounts` for the full flow)
-pub fn add_user_ledger(request: UpdateUserLedgerRequest) -> LedgerResponse {
+/// Record a ledger entry (kept for backward compat — prefer
+/// `ledger_model_function::record_transfer_and_update_amounts` for the full flow)
+pub fn add_user_ledger(request: UpdateUserLedgerRequest) -> Result<(), DbError> {
     use crate::schema::ledger::dsl::*;
 
-    let connection = &mut establish_connection();
+    let connection = &mut establish_connection()?;
 
     let changeset = NewLedger {
         sender_id: request.sender_id,
-        receiver_id: request.receiver_id, // ← FIX: was incorrectly using sender_id
+        receiver_id: request.receiver_id,
         amount: request.amount,
         currency: request.currency,
         tx_signature: request.tx_signature,
         status: request.status,
     };
 
-    let db_response = diesel::insert_into(ledger)
+    diesel::insert_into(ledger)
         .values(&changeset)
-        .get_result::<DbLedger>(connection);
+        .get_result::<DbLedger>(connection)
+        .map_err(|e| DbError::LedgerInsertFailed {
+            reason: e.to_string(),
+        })?;
 
-    match db_response {
-        Ok(_value) => LedgerResponse { success: true },
-        Err(_err) => LedgerResponse { success: false },
-    }
+    Ok(())
 }
 
 /// Recalculate and persist user.amount from their ledger history.
-/// Delegates to `ledger_model_function::update_user_amount_from_ledger`.
-pub fn update_user_amount(user_id: i32) {
+pub fn update_user_amount(user_id: i32) -> Result<i64, AppError> {
     use super::ledger_model_function::update_user_amount_from_ledger;
 
-    let connection = &mut establish_connection();
+    let connection = &mut establish_connection()?;
 
-    match update_user_amount_from_ledger(connection, user_id) {
-        Ok(new_balance) => {
-            println!(
-                "[update_user_amount] user {} new balance = {}",
-                user_id, new_balance
-            );
+    update_user_amount_from_ledger(connection, user_id).map_err(|e| {
+        DbError::BalanceCalcFailed {
+            user_id,
+            reason: e.to_string(),
         }
-        Err(error) => {
-            println!("[update_user_amount] error for user {}: {}", user_id, error);
-        }
-    }
+        .into()
+    })
 }
 
-pub fn get_transaction_history(
-    user_id: i32,
-    limit: i32,
-) -> Result<DbLedger, diesel::result::Error> {
+pub fn get_transaction_history(user_id: i32, limit: i32) -> Result<DbLedger, AppError> {
     use crate::schema::ledger::dsl::*;
 
-    let connection = &mut establish_connection();
-    let ledger_result = ledger
+    let connection = &mut establish_connection()?;
+    ledger
         .filter(id.eq(&user_id))
         .limit(limit as i64)
-        .get_result::<DbLedger>(connection);
-
-    match ledger_result {
-        Ok(new_balance) => Ok(new_balance),
-        Err(error) => {
-            println!("[update_user_amount] error for user {}: {}", user_id, error);
-            Err(error)
-        }
-    }
+        .get_result::<DbLedger>(connection)
+        .map_err(|e| {
+            DbError::QueryFailed {
+                context: format!("transaction_history for user {}", user_id),
+                reason: e.to_string(),
+            }
+            .into()
+        })
 }
 
 pub struct UserPinResponse {
@@ -281,79 +250,62 @@ pub struct UserPinResponse {
     pub description: Option<String>,
 }
 
-pub fn match_user_pin(user_id: i32, input_user_pin: String) -> UserPinResponse {
+pub fn match_user_pin(user_id: i32, input_user_pin: String) -> Result<bool, AppError> {
     use crate::schema::user::dsl::*;
 
-    let connection = &mut establish_connection();
+    let connection = &mut establish_connection()?;
     let user_result = user
         .filter(id.eq(&user_id))
         .get_result::<DbUser>(connection)
-        .unwrap();
+        .map_err(|e| DbError::UserLookupFailed {
+            user_id,
+            reason: e.to_string(),
+        })?;
 
-    let is_same_pin = bcrypt::verify(input_user_pin, &user_result.user_pin).unwrap();
-    if is_same_pin == true {
-        //error in the pin
-        let success_response = UserPinResponse {
-            success: true,
-            description: None,
-        };
-        success_response
-    } else {
-        let error_response = UserPinResponse {
-            success: false,
-            description: Some("invalid user pin".to_string()),
-        };
+    let is_same_pin = bcrypt::verify(input_user_pin, &user_result.user_pin).map_err(|e| {
+        DbError::QueryFailed {
+            context: format!("pin verify for user {}", user_id),
+            reason: e.to_string(),
+        }
+    })?;
 
-        error_response
-    }
+    Ok(is_same_pin)
 }
 
 pub struct AmountValidResponse {
     pub success: bool,
     pub amount: i64,
-    pub error_reason: Option<String>,
+    pub available: i64,
 }
 
 pub fn is_amount_valid(
     main_amount: i64,
     user_id: i32,
     conn: &mut PgConnection,
-) -> AmountValidResponse {
+) -> Result<AmountValidResponse, AppError> {
     use crate::schema::user::dsl::*;
 
-    //take the amount and user id and return the response like if it's true or false
-    let user_info = user.filter(id.eq(&user_id)).get_result::<DbUser>(conn);
+    let db_response = user
+        .filter(id.eq(&user_id))
+        .get_result::<DbUser>(conn)
+        .map_err(|e| DbError::UserLookupFailed {
+            user_id,
+            reason: e.to_string(),
+        })?;
 
-    match user_info {
-        Ok(db_response) => {
-            let user_amount = db_response.amount.unwrap().clone();
-            if user_amount.lt(&main_amount) {
-                //send the success false response
-                let response = AmountValidResponse {
-                    success: false,
-                    amount: main_amount,
-                    error_reason: None,
-                };
-                response
-            } else {
-                //send the success true value
-                let response = AmountValidResponse {
-                    success: true,
-                    amount: main_amount,
-                    error_reason: None,
-                };
-                response
-            }
+    let user_amount = db_response.amount.unwrap_or(0);
+
+    if user_amount < main_amount {
+        Err(ValidationError::InsufficientBalance {
+            requested: main_amount,
+            available: user_amount,
         }
-        Err(error) => {
-            //send the error
-            println!("error while getting data from the database");
-            let response = AmountValidResponse {
-                success: false,
-                amount: main_amount,
-                error_reason: Some("DatabaseError".to_string()),
-            };
-            response
-        }
+        .into())
+    } else {
+        Ok(AmountValidResponse {
+            success: true,
+            amount: main_amount,
+            available: user_amount,
+        })
     }
 }
