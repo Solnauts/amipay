@@ -681,3 +681,54 @@ pub async fn get_wallet_address(
         }
     })))
 }
+
+//--- Add Recipient ---
+
+#[derive(Debug, Deserialize)]
+pub struct AddRecipientRequest {
+    pub user_id: Option<i32>,
+    pub recipient_name: String,
+    pub recipient_wallet: String,
+}
+
+#[post("/wallet/add-recipient")]
+pub async fn add_recipient(
+    req: HttpRequest,
+    data: web::Json<AddRecipientRequest>,
+) -> actix_web::Result<impl Responder> {
+    let token = req
+        .cookie("session_token")
+        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
+        .value()
+        .to_string();
+
+    let claims = validate_session_token(&token)?;
+
+    let user_id: i32 = claims.sub.parse().map_err(|_| {
+        AppError::Auth(AuthError::InvalidUserId {
+            raw: claims.sub.clone(),
+        })
+    })
+
+    match user_id {
+        Ok(id) => id,
+        Err(e) => {
+            //throw error of user not login 
+            HttpResponse::Unauthorized().json(serde_json::json!({
+               Err(AppError::Auth(AuthError::MissingSessionCookie)); 
+            }));
+    }
+
+    //add recipient
+    let recipient_id = add_recipient(AddRecipientRequest {
+        user_id,
+        recipient_name: data.recipient_name.clone(),
+        recipient_wallet: data.recipient_wallet.clone(),
+    })
+    .map_err(|e| -> AppError { e })?;
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status": "success",
+        "data": recipient_id
+    })))
+}

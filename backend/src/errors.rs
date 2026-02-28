@@ -611,8 +611,9 @@ impl From<AiError> for AppError {
     }
 }
 
-// ── actix_web::ResponseError — maps AppError to HTTP responses ──────────
 
+
+// ── actix_web::ResponseError — maps AppError to HTTP responses ──────────
 impl actix_web::ResponseError for AppError {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use actix_web::http::StatusCode;
