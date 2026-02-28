@@ -1,4 +1,4 @@
-use crate::schema::{conversation, ledger, pending_action, user};
+use crate::schema::{alias, conversation, ledger, pending_action, user};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -185,4 +185,27 @@ pub enum PendingActionPayload {
 pub struct RecipientCandidate {
     pub id: i32,
     pub name: String,
+}
+
+// ── Alias Models (UPI-style handles) ────────────────────────────────────────
+
+/// Queryable struct — field order must match schema.rs column order
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[diesel(table_name = crate::schema::alias)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbAlias {
+    pub id: i32,
+    pub user_id: i32,
+    pub alias: String,
+    pub is_primary: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Insertable struct for creating a new alias
+#[derive(Insertable)]
+#[diesel(table_name = alias)]
+pub struct NewAlias {
+    pub user_id: i32,
+    pub alias: String,
+    pub is_primary: bool,
 }

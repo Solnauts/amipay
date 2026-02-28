@@ -89,6 +89,10 @@ pub enum ValidationError {
     MalformedMessage { reason: String },
     /// 2011 — user not found (by wallet, by id, etc.)
     UserNotFound { identifier: String },
+    /// 2012 — alias not found
+    AliasNotFound { alias: String },
+    /// 2013 — alias already taken by another user
+    AliasTaken { alias: String },
 }
 
 impl ValidationError {
@@ -105,6 +109,8 @@ impl ValidationError {
             ValidationError::InvalidIntent { .. } => 2009,
             ValidationError::MalformedMessage { .. } => 2010,
             ValidationError::UserNotFound { .. } => 2011,
+            ValidationError::AliasNotFound { .. } => 2012,
+            ValidationError::AliasTaken { .. } => 2013,
         }
     }
 
@@ -149,6 +155,12 @@ impl ValidationError {
             ValidationError::InvalidIntent { .. } => "Unrecognized request.".to_string(),
             ValidationError::MalformedMessage { .. } => "Malformed message.".to_string(),
             ValidationError::UserNotFound { .. } => "User not found.".to_string(),
+            ValidationError::AliasNotFound { alias } => {
+                format!("Alias '{}' not found.", alias)
+            }
+            ValidationError::AliasTaken { alias } => {
+                format!("Alias '{}' is already taken.", alias)
+            }
         }
     }
 }
@@ -195,7 +207,12 @@ impl fmt::Display for ValidationError {
             ValidationError::UserNotFound { identifier } => {
                 write!(f, "User not found: {}", identifier)
             }
-        }
+            ValidationError::AliasNotFound { alias } => {
+                write!(f, "Alias not found: {}", alias)
+            }
+            ValidationError::AliasTaken { alias } => {
+                write!(f, "Alias already taken: {}", alias)
+            }
     }
 }
 
@@ -235,6 +252,12 @@ pub enum DbError {
     WalletLookupFailed { address: String, reason: String },
     /// 5014 — Unexpected response shape from a DB query
     UnexpectedResult { context: String },
+    /// 5015 — Failed to create an alias
+    AliasCreationFailed { reason: String },
+    /// 5016 — Alias lookup query failed
+    AliasLookupFailed { alias: String, reason: String },
+    /// 5017 — Failed to delete an alias
+    AliasDeleteFailed { alias_id: i32, reason: String },
 }
 
 impl DbError {
@@ -254,6 +277,9 @@ impl DbError {
             DbError::PendingActionNotFound { .. } => 5012,
             DbError::WalletLookupFailed { .. } => 5013,
             DbError::UnexpectedResult { .. } => 5014,
+            DbError::AliasCreationFailed { .. } => 5015,
+            DbError::AliasLookupFailed { .. } => 5016,
+            DbError::AliasDeleteFailed { .. } => 5017,
         }
     }
 }
@@ -311,7 +337,15 @@ impl fmt::Display for DbError {
             DbError::UnexpectedResult { context } => {
                 write!(f, "Unexpected DB result: {}", context)
             }
-        }
+            DbError::AliasCreationFailed { reason } => {
+                write!(f, "Alias creation failed: {}", reason)
+            }
+            DbError::AliasLookupFailed { alias, reason } => {
+                write!(f, "Alias lookup failed for '{}': {}", alias, reason)
+            }
+            DbError::AliasDeleteFailed { alias_id, reason } => {
+                write!(f, "Alias delete failed for id {}: {}", alias_id, reason)
+            }
     }
 }
 

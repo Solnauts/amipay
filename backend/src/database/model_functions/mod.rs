@@ -1,8 +1,10 @@
+pub mod alias_model_function;
 pub mod conversation_model_function;
 pub mod ledger_model_function;
 pub mod pending_action_model_function;
 pub mod user_model_function;
 
+pub use alias_model_function::*;
 pub use conversation_model_function::*;
 pub use ledger_model_function::*;
 pub use pending_action_model_function::*;
