@@ -5,6 +5,7 @@ import {
   Web3MobileWallet,
 } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 import { PublicKey } from '@solana/web3.js';
+import { toPublicKey } from '@/utils/getPublicKey';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ const APP_IDENTITY = {
   icon: 'favicon.png',
 };
 
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
@@ -49,19 +51,29 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           cluster: 'devnet',
           identity: APP_IDENTITY,
         });
-        const pk = new PublicKey(authResult.accounts[0].address);
+
+        console.log('[WalletConnect] authResult:', JSON.stringify(authResult));
+
+        const address = authResult.accounts[0].address;
+        console.log('[WalletConnect] address:', address, typeof address);
+
+        const pk = toPublicKey(address as string | Uint8Array);
+        console.log('[WalletConnect] publicKey:', pk.toBase58());
+
         setPublicKey(pk);
       });
     } catch (error: any) {
-      if (error?.message?.includes('User declined')) {
-        Alert.alert('Wallet connection cancelled', 'You rejected the connection request.');
-      } else if (error?.message?.includes('No wallet found')) {
+      console.error('[WalletConnect] error:', error);
+      const msg = String(error?.message ?? error);
+      if (msg.includes('User cancelled') || msg.includes('User declined') || msg.includes('declined')) {
+        // Silent — user chose not to connect
+      } else if (msg.includes('No wallet')) {
         Alert.alert(
           'No Wallet Found',
-          'Please install Phantom or another Solana wallet from the Play Store.',
+          'Please install Phantom or Solflare from the Play Store.',
         );
       } else {
-        Alert.alert('Connection Error', String(error?.message ?? error));
+        Alert.alert('Connection Error', msg);
       }
     } finally {
       setConnecting(false);

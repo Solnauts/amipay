@@ -6,6 +6,7 @@ import "react-native-reanimated";
 import { useColorScheme, View } from "react-native";
 import { Colors } from "@/constants/theme";
 import { WalletProvider } from "@/context/WalletContext";
+import { ThemedView } from "@/components/ui/ThemedView";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -18,7 +19,7 @@ export default function RootLayout() {
 
   return (
     <WalletProvider>
-      <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+      <ThemedView style={{ flex: 1, backgroundColor: themeColors.background }}>
         <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -26,7 +27,7 @@ export default function RootLayout() {
           </Stack>
           <StatusBar style={isDark ? "light" : "dark"} />
         </ThemeProvider>
-      </View>
+      </ThemedView>
     </WalletProvider>
   );
 }
