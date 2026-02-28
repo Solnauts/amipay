@@ -5,7 +5,7 @@ use crate::database::model_functions::{
 use crate::database::model_functions::user_model_function::{
     UserInfoRequest, UserInfoResponse, is_amount_valid,
 };
-use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError};
+use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError,};
 use actix_web::cookie::{Cookie, SameSite};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web::ResponseError;
@@ -687,8 +687,7 @@ pub async fn get_wallet_address(
 #[derive(Debug, Deserialize)]
 pub struct AddRecipientRequest {
     pub user_id: Option<i32>,
-    pub recipient_name: String,
-    pub recipient_wallet: String,
+    pub recipient_alias: String,
 }
 
 #[post("/wallet/add-recipient")]
