@@ -40,7 +40,7 @@ pub fn build_recipient_select_payload(
         .into_iter()
         .map(|r| RecipientCandidate {
             id: r.id,
-            name: r.name,
+            name: r.alias_used,
         })
         .collect();
 

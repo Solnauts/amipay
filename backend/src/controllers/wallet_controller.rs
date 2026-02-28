@@ -686,7 +686,6 @@ pub async fn get_wallet_address(
 
 #[derive(Debug, Deserialize)]
 pub struct AddRecipientRequest {
-    pub user_id: Option<i32>,
     pub recipient_alias: String,
 }
 
@@ -707,27 +706,25 @@ pub async fn add_recipient(
         AppError::Auth(AuthError::InvalidUserId {
             raw: claims.sub.clone(),
         })
-    })
+    })?;
 
-    match user_id {
-        Ok(id) => id,
-        Err(e) => {
-            //throw error of user not login 
-            HttpResponse::Unauthorized().json(serde_json::json!({
-               Err(AppError::Auth(AuthError::MissingSessionCookie)); 
-            }));
-    }
+    let alias_str = data.into_inner().recipient_alias;
 
-    //add recipient
-    let recipient_id = add_recipient(AddRecipientRequest {
-        user_id,
-        recipient_name: data.recipient_name.clone(),
-        recipient_wallet: data.recipient_wallet.clone(),
+    let result = web::block(move || {
+        let conn = &mut establish_connection()?;
+        crate::database::model_functions::add_recipient_by_alias(conn, user_id, &alias_str)
     })
-    .map_err(|e| -> AppError { e })?;
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?
+    .map_err(|e: AppError| -> AppError { e })?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
-        "data": recipient_id
+        "recipient_id": result.id,
+        "recipient_user_id": result.recipient_user_id,
+        "alias_used": result.alias_used
     })))
 }

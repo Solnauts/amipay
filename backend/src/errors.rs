@@ -213,6 +213,7 @@ impl fmt::Display for ValidationError {
             ValidationError::AliasTaken { alias } => {
                 write!(f, "Alias already taken: {}", alias)
             }
+        }
     }
 }
 
@@ -346,6 +347,7 @@ impl fmt::Display for DbError {
             DbError::AliasDeleteFailed { alias_id, reason } => {
                 write!(f, "Alias delete failed for id {}: {}", alias_id, reason)
             }
+        }
     }
 }
 
@@ -644,8 +646,6 @@ impl From<AiError> for AppError {
         AppError::Ai(e)
     }
 }
-
-
 
 // ── actix_web::ResponseError — maps AppError to HTTP responses ──────────
 impl actix_web::ResponseError for AppError {

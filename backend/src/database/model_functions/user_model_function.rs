@@ -58,7 +58,7 @@ pub fn get_user_info(request: UserInfoRequest) -> Result<UserInfoResponse, AppEr
             let recipient_name = request.recipient_name.clone().unwrap_or_default();
             let recpient_result = recipient
                 .filter(userid.eq(&request.user_id))
-                .filter(name.eq(&recipient_name))
+                .filter(alias_used.eq(&recipient_name))
                 .get_result::<Dbrecipient>(connection);
 
             match recpient_result {

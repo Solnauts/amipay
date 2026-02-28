@@ -222,7 +222,7 @@ pub async fn handle_user_message(
                 amount as f64,
                 &currency,
                 recipient.id,
-                &recipient.name,
+                &recipient.alias_used,
                 &user_info_ref.unique_id,
             );
 
