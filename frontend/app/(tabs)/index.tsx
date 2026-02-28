@@ -1,10 +1,15 @@
-import { SafeAreaView, View, TouchableOpacity } from 'react-native';
+import { SafeAreaView, View } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ButtonComponent } from '@/components/ui/ButtonComponent';
-
+import { useWallet } from '@/context/WalletContext';
 export default function HomeScreen() {
+  const { publicKey, isConnected, connecting, connect, disconnect } = useWallet();
+
+  const displayKey = publicKey
+    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+    : null;
   return (
     <SafeAreaView className="flex-1 bg-background">
       <ThemedView className="flex-1 px-6 pt-12 pb-8">
@@ -41,12 +46,18 @@ export default function HomeScreen() {
         </ThemedView>
 
         {/* Connect Button Section */}
-         <ThemedView className="mt-auto">
-          <ButtonComponent label="Connect Wallet" onPress={() => {}} disabled={false} />
-                 <ThemedText variant="secondary" className="text-center text-sm px-4">
+        <ThemedView className="mt-auto">
+          <ButtonComponent
+            label={isConnected ? `✓ ${displayKey}` : 'Connect Wallet'}
+            onPress={isConnected ? disconnect : connect}
+            loading={connecting}
+            icon={isConnected ? 'checkmark.circle.fill' : 'wallet.pass.fill'}
+            variant={isConnected ? 'success' : 'primary'}
+          />
+          <ThemedText variant="secondary" className="text-center text-sm px-4">
             We support Phantom, Solflare, and other popular Solana wallets
           </ThemedText>
-         </ThemedView>
+        </ThemedView>
       </ThemedView>
     </SafeAreaView>
   );

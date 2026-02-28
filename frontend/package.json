@@ -16,6 +16,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.2.5",
+    "@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.2.5",
     "@solana/web3.js": "^1.89.1",
     "@wallet-ui/react-native-web3js": "^3.3.0",
     "buffer": "^6.0.3",
