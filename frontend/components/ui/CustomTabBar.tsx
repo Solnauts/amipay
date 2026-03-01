@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Colors } from '@/constants/theme';
@@ -128,6 +129,7 @@ export default function CustomTabBar({
             if (Platform.OS !== 'web') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }
+            router.push('/pay');
           }}
           style={styles.payTouchable}
         >
