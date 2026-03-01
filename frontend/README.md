@@ -4,58 +4,127 @@ A React Native mobile app for Solana-based crypto payments, built with Expo. Con
 
 ---
 
-## Prerequisites
+## 🛠 Full Setup Guide (for new team members)
 
-Make sure you have the following installed before starting:
+Follow every step in order. Skipping steps is the #1 cause of build failures.
 
-| Tool | Version | Install |
-|---|---|---|
-| **Node.js** | 18+ | [nodejs.org](https://nodejs.org) |
-| **npm** | 9+ | Included with Node |
-| **Java JDK** | 17 | [Adoptium](https://adoptium.net) |
-| **Android SDK** | API 34+ | Via [Android Studio](https://developer.android.com/studio) |
+---
 
-**Set these environment variables** in your `~/.zshrc` or `~/.bashrc`:
+### Step 1 — Install Homebrew (if not already installed)
 
 ```bash
-export JAVA_HOME=/path/to/jdk-17
-export ANDROID_HOME=$HOME/Library/Android/sdk
-export PATH=$PATH:$ANDROID_HOME/platform-tools
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Verify:
+```bash
+brew --version
 ```
 
 ---
 
-## Getting Started
+### Step 2 — Install Node.js 18+
 
-### 1. Install dependencies
+```bash
+brew install node@18
+```
+
+Verify:
+```bash
+node --version   # should print v18.x.x or higher
+npm --version    # should print 9.x.x or higher
+```
+
+---
+
+### Step 3 — Install Java 17 (Temurin)
+
+> ⚠️ **This is the most commonly missed step.** Android builds (Gradle) require Java 17 exactly. Do not use Java 11 or Java 21.
+
+```bash
+brew install --cask temurin@17
+```
+
+---
+
+### Step 4 — Install Android Studio
+
+1. Download from [developer.android.com/studio](https://developer.android.com/studio)
+2. Open Android Studio → go through the setup wizard
+3. In **SDK Manager** (`Settings → Languages & Frameworks → Android SDK`), make sure these are installed:
+   - **Android SDK Platform 34**
+   - **Android SDK Build-Tools 34**
+   - **Android Emulator** (if using an emulator)
+   - **Android SDK Platform-Tools** (has `adb`)
+
+---
+
+### Step 5 — Set Environment Variables (permanent)
+
+Add the following to your `~/.zshrc` (or `~/.bashrc` if using bash):
+
+```bash
+# Java 17
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+
+# Android SDK
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+export PATH=$PATH:$ANDROID_HOME/emulator
+```
+
+Then reload your shell:
+```bash
+source ~/.zshrc
+```
+
+Verify everything:
+```bash
+java -version       # openjdk version "17.x.x"
+adb --version       # Android Debug Bridge version x.x.x
+echo $ANDROID_HOME  # /Users/<you>/Library/Android/sdk
+```
+
+---
+
+### Step 6 — Install project dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 2. Run on Android (physical device or emulator)
+---
 
-> ⚠️ This app uses **native modules** (Solana wallet adapter, quick-crypto). It **cannot** run in Expo Go — you must use a custom development build.
+### Step 7 — Connect your Android device
+
+1. On your Android phone go to **Settings → About Phone** → tap **Build Number** 7 times to enable Developer Options
+2. Go to **Settings → Developer Options** → enable **USB Debugging**
+3. Plug your phone in via USB
+4. Run `adb devices` — you should see your device listed
+
+---
+
+### Step 8 — Run the app
+
+> ⚠️ This app uses **native modules** (Solana wallet adapter, quick-crypto). It **cannot** run in Expo Go — a custom dev build is required.
 
 ```bash
-# Connect your Android device via USB with USB debugging enabled, then:
 npx expo run:android
 ```
 
-This will:
-- Compile native code (takes ~2–3 min on first run)
-- Install and launch the app on your device
+This compiles native code and installs the app on your device (~2–3 min on first run).
 
-### 3. After the first native build — start Metro only
+### After the first build — Metro only
 
-Once the native app is installed on your device, you don't need to rebuild every time:
+Once the native app is installed, you don't need to rebuild every time:
 
 ```bash
 npx expo start --clear
 ```
 
-Press `a` to open on Android, or scan the QR code with the Expo app.
+Press `a` to reload on Android.
 
 ---
 
@@ -66,16 +135,17 @@ frontend/
 ├── app/
 │   ├── _layout.tsx               # Root layout — wraps app in WalletProvider
 │   └── (tabs)/
-│       └── index.tsx             # Home screen (composes all home components)
+│       └── index.tsx             # Home screen
 ├── components/
 │   ├── home/                     # Home screen components
 │   │   ├── HomeHeader.tsx        # Wallet avatar + clock/QR icons header
 │   │   ├── BalanceSection.tsx    # Balance + Deposit/Claim buttons + token pills
 │   │   ├── RecentContacts.tsx    # Horizontally scrollable contacts row
-│   │   ├── RecentTransactions.tsx # Transaction list with empty state
+│   │   ├── RecentTransactions.tsx# Transaction list with empty state
 │   │   └── homeData.ts           # Mock contacts & transactions data + types
 │   └── ui/                       # Reusable UI kit
 │       ├── ButtonComponent.tsx   # Themed button (primary/success/error variants)
+│       ├── CustomTabBar.tsx      # Custom bottom tab bar
 │       ├── ThemedText.tsx        # Text with automatic dark/light colors
 │       └── ThemedView.tsx        # View with automatic dark/light background
 ├── context/
@@ -93,23 +163,6 @@ frontend/
 
 ---
 
-## Wallet Connection
-
-The app uses the official [Solana Mobile Wallet Adapter](https://github.com/solana-mobile/mobile-wallet-adapter) to connect to any MWA-compatible wallet installed on the device.
-
-**Supported wallets:**
-- [Phantom](https://play.google.com/store/apps/details?id=app.phantom)
-- [Solflare](https://play.google.com/store/apps/details?id=com.solflare.mobile)
-- Any wallet implementing the MWA protocol
-
-**To test:**
-1. Install **Phantom** from the Play Store.
-2. Create or import a Solana wallet.
-3. Switch Phantom to **Devnet** in its settings.
-4. Open the app → tap **Connect Wallet** → approve in Phantom.
-
----
-
 ## Theme System
 
 Colors are defined in **one place** — `tailwind.config.js` — and applied everywhere via NativeWind. Dark mode automatically follows the device system setting.
@@ -124,6 +177,23 @@ primary: {
 ```
 
 Also update the matching value in `constants/theme.ts` to keep inline styles in sync.
+
+---
+
+## Wallet Connection
+
+The app uses the [Solana Mobile Wallet Adapter](https://github.com/solana-mobile/mobile-wallet-adapter).
+
+**Supported wallets:**
+- [Phantom](https://play.google.com/store/apps/details?id=app.phantom)
+- [Solflare](https://play.google.com/store/apps/details?id=com.solflare.mobile)
+- Any MWA-compatible wallet
+
+**To test:**
+1. Install **Phantom** from the Play Store.
+2. Create or import a Solana wallet.
+3. Switch Phantom to **Devnet** in its settings.
+4. Open the app → tap **Connect Wallet** → approve in Phantom.
 
 ---
 
@@ -149,3 +219,15 @@ const connection = new Connection('https://api.mainnet-beta.solana.com', 'confir
 // context/WalletContext.tsx
 cluster: 'mainnet-beta',
 ```
+
+---
+
+## Common Errors
+
+| Error | Cause | Fix |
+|---|---|---|
+| `Unable to locate a Java Runtime` | Java not installed | Follow Step 3 above |
+| `JAVA_HOME is set to an invalid directory` | Env var set but Java not installed | Run `brew install --cask temurin@17` then re-add to `~/.zshrc` |
+| `adb: command not found` | platform-tools not on PATH | Check Step 5 env vars |
+| `No devices found` | USB debugging not enabled | Follow Step 7 |
+| App crashes on launch | Native build outdated | Run `npx expo run:android` again |
