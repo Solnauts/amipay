@@ -83,6 +83,7 @@ export default function RewardsScreen() {
   return (
     <ThemedView variant="default" className="flex-1">
       <GroupPaymentHeader
+        title="Send Payment"
         subtitle={STEP_SUBTITLES[step]}
         showBack={true}
         onBack={goBack}
@@ -95,7 +96,11 @@ export default function RewardsScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 32 }}
         >
-          <SearchBar value={query} onChangeText={setQuery} />
+          <SearchBar
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search contacts or paste address..."
+          />
 
           {searchResults ? (
             // Search mode — show results flat

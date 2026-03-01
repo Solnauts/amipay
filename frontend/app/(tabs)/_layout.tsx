@@ -24,7 +24,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="rewards"
-        options={{ title: 'Rewards' }}
+        options={{ title: 'Recipient' }}
       />
     </Tabs>
   );

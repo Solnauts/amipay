@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ScrollView, TouchableOpacity, useColorScheme } from 'react-native';
+import { router } from 'expo-router';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -34,7 +35,7 @@ export function RecentContacts() {
         ))}
 
         {/* More button */}
-        <TouchableOpacity className="items-center gap-2" style={{ width: 60 }}>
+        <TouchableOpacity className="items-center gap-2" style={{ width: 60 }} onPress={() => router.push('/rewards')}>
           <View
             className="w-14 h-14 rounded-full items-center justify-center"
             style={{ borderWidth: 1.5, borderColor, borderStyle: 'dashed', backgroundColor: 'transparent' }}

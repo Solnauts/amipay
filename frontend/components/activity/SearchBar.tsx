@@ -10,9 +10,10 @@ import { Colors } from '@/constants/theme';
 type Props = {
   value: string;
   onChangeText: (text: string) => void;
+  placeholder?: string;
 };
 
-export function SearchBar({ value, onChangeText }: Props) {
+export function SearchBar({ value, onChangeText, placeholder = 'Search transactions...' }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
@@ -27,7 +28,7 @@ export function SearchBar({ value, onChangeText }: Props) {
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          placeholder="Search transactions..."
+          placeholder={placeholder}
           placeholderTextColor={colors.mutedForeground}
           style={{
             flex: 1,

@@ -9,12 +9,13 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
 
 type Props = {
+  title?: string;     // defaults to 'Group Payment'
   subtitle: string;
   showBack: boolean;
   onBack?: () => void;
 };
 
-export function GroupPaymentHeader({ subtitle, showBack, onBack }: Props) {
+export function GroupPaymentHeader({ title = 'Group Payment', subtitle, showBack, onBack }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
@@ -41,7 +42,7 @@ export function GroupPaymentHeader({ subtitle, showBack, onBack }: Props) {
         {/* Title block — centred */}
         <ThemedView className="items-center">
           <ThemedText type="subtitle" variant="default">
-            Group Payment
+            {title}
           </ThemedText>
           <ThemedText variant="muted" className="text-xs mt-0.5">
             {subtitle}

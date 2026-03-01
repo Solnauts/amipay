@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, useColorScheme } from 'react-native';
+import { router } from 'expo-router';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -21,7 +22,7 @@ export function RecentTransactions({ isConnected, onConnect }: Props) {
     <ThemedView className="px-6">
       <ThemedView className="flex-row items-center justify-between mb-4">
         <ThemedText variant="default" className="font-bold text-lg">Recent Transactions</ThemedText>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/activities')}>
           <ThemedText className="text-primary text-sm font-semibold">View All →</ThemedText>
         </TouchableOpacity>
       </ThemedView>
