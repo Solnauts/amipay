@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, TouchableOpacity, useColorScheme } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ButtonComponent } from '@/components/ui/ButtonComponent';
 import { useWallet } from '@/context/WalletContext';
+import { Colors } from '@/constants/theme';
 
 type Props = {
   balance: number | null;
@@ -15,11 +16,13 @@ const TOKENS = ['SOL', 'USDC', 'App Wallet'];
 
 export function BalanceSection({ balance, connecting }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
-  const surfaceBg = isDark ? '#1f2937' : '#ffffff';
-  const borderColor = isDark ? '#374151' : '#e5e7eb';
+  const surfaceBg = colors.surface;
+  const borderColor = colors.border;
 
   const { isConnected, connect } = useWallet();
+  const [selectedToken, setSelectedToken] = useState('SOL');
 
   return (
     <>
@@ -61,19 +64,24 @@ export function BalanceSection({ balance, connecting }: Props) {
         )}
       </ThemedView>
 
-      {/* Token pills */}
+      {/* Token pills — selectedToken drives active state */}
       <ThemedView className="flex-row gap-2 px-6 mb-8">
-        {TOKENS.map((token, i) => (
-          <TouchableOpacity
-            key={token}
-            className={`px-4 py-2 rounded-full ${i === 0 ? 'bg-primary' : ''}`}
-            style={i !== 0 ? { backgroundColor: surfaceBg, borderWidth: 1, borderColor } : {}}
-          >
-            <ThemedText className={`text-sm font-medium ${i === 0 ? 'text-white' : ''}`}>
-              {token}
-            </ThemedText>
-          </TouchableOpacity>
-        ))}
+        {TOKENS.map((token) => {
+          const isActive = token === selectedToken;
+          return (
+            <TouchableOpacity
+              key={token}
+              onPress={() => setSelectedToken(token)}
+              activeOpacity={0.75}
+              className={`px-4 py-2 rounded-full ${isActive ? 'bg-primary' : ''}`}
+              style={!isActive ? { backgroundColor: surfaceBg, borderWidth: 1, borderColor } : {}}
+            >
+              <ThemedText className={`text-sm font-medium ${isActive ? 'text-white' : ''}`}>
+                {token}
+              </ThemedText>
+            </TouchableOpacity>
+          );
+        })}
       </ThemedView>
     </>
   );

@@ -231,3 +231,136 @@ cluster: 'mainnet-beta',
 | `adb: command not found` | platform-tools not on PATH | Check Step 5 env vars |
 | `No devices found` | USB debugging not enabled | Follow Step 7 |
 | App crashes on launch | Native build outdated | Run `npx expo run:android` again |
+
+---
+
+## 🧩 How to Create a New Feature / Screen
+
+All screens follow a strict **4-layer pattern**. Stick to it and the codebase stays clean.
+
+```
+data file      →  components/[feature]/featureData.ts
+utils file     →  utils/featureUtils.ts
+components     →  components/[feature]/MyComponent.tsx
+screen         →  app/(tabs)/featureName.tsx
+```
+
+---
+
+### Layer 1 — Data file (`featureData.ts`)
+
+Define your types and mock data here. No UI logic.
+
+```ts
+// components/activity/activityData.ts
+export type Transaction = {
+  id: string;
+  name: string;
+  amount: number;
+  type: 'sent' | 'received';
+  date: Date;
+};
+
+export const TRANSACTIONS: Transaction[] = [
+  { id: '1', name: 'Mom', amount: 50, type: 'sent', date: new Date() },
+];
+```
+
+---
+
+### Layer 2 — Utils file (`utils/featureUtils.ts`)
+
+Pure functions only — no imports of React or UI components. Easy to test.
+
+```ts
+// utils/activityUtils.ts
+export function filterByType(txs: Transaction[], type: string) {
+  if (type === 'all') return txs;
+  return txs.filter((tx) => tx.type === type);
+}
+```
+
+---
+
+### Layer 3 — Components (`components/[feature]/MyComponent.tsx`)
+
+**Rules:**
+- Always use `ThemedView` / `ThemedText` — never `View`/`Text` with hardcoded colors
+- Use `Colors[colorScheme]` for any color that can't be expressed as a NativeWind class
+- Use NativeWind `className` for layout, spacing, sizing
+- Keep each component to a single responsibility (one job, one file)
+
+```tsx
+// components/activity/TransactionCard.tsx
+import { ThemedView } from '@/components/ui/ThemedView';
+import { ThemedText } from '@/components/ui/ThemedText';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from 'react-native';
+
+type Props = { transaction: Transaction };
+
+export function TransactionCard({ transaction }: Props) {
+  const colors = Colors[useColorScheme() ?? 'light'];
+
+  return (
+    <ThemedView
+      variant="surface"
+      className="flex-row items-center rounded-2xl p-4 mx-6 mb-3"
+      style={{ borderWidth: 1, borderColor: colors.border }}
+    >
+      <ThemedText type="defaultSemiBold">{transaction.name}</ThemedText>
+      <ThemedText variant="muted">{transaction.amount} USDC</ThemedText>
+    </ThemedView>
+  );
+}
+```
+
+---
+
+### Layer 4 — Screen (clean composer)
+
+The screen file owns **state only**. All logic goes to utils, all UI goes to components.
+
+```tsx
+// app/(tabs)/activities.tsx
+import React, { useState, useMemo } from 'react';
+import { FlatList } from 'react-native';
+import { ThemedView } from '@/components/ui/ThemedView';
+import { filterByType } from '@/utils/activityUtils';
+import { TRANSACTIONS } from '@/components/activity/activityData';
+import { TransactionCard } from '@/components/activity/TransactionCard';
+
+export default function ActivityScreen() {
+  const [filter, setFilter] = useState('all');
+
+  // Logic lives in utils, not here
+  const filtered = useMemo(
+    () => filterByType(TRANSACTIONS, filter),
+    [filter],
+  );
+
+  return (
+    <ThemedView variant="default" className="flex-1">
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <TransactionCard transaction={item} />}
+      />
+    </ThemedView>
+  );
+}
+```
+
+---
+
+### Quick rules summary
+
+| Rule | Why |
+|---|---|
+| Always `ThemedView` / `ThemedText` | Automatic dark/light mode |
+| Colors from `Colors[colorScheme]` | Single source of truth, easy to update |
+| NativeWind `className` for layout | Consistent spacing, no magic numbers |
+| `StyleSheet` only when NativeWind can't | e.g. shadows, `LinearGradient` children |
+| State only in the screen file | Keeps components pure and reusable |
+| Logic only in `utils/` | Easy to test, no UI coupling |
+
