@@ -1,4 +1,4 @@
-# Remitly Frontend — AI-Powered Stablecoin Remittance 💸
+# Remitly Frontend — AI-Powered Stablecoin Remittance �
 
 This is the Expo (React Native) mobile application for Remitly, using a clean 3-layer Service Architecture with Class-Based patterns.
 
@@ -31,25 +31,51 @@ The bridge between UI and Services.
 - **Auto-Fetching**: Hooks like `useBalance` and `useRecipients` handle data loading on mount.
 - **Memory Safety**: `useChat` automatically cleans up WebSocket listeners and connections on unmount.
 
-## 🚀 Get Started
+## ⚙️ Environment Setup
 
-1. **Install Dependencies**
-   ```bash
-   npm install
-   npx expo install axios @react-native-async-storage/async-storage
-   ```
+### 1. Android & Java (macOS)
+To run the app on an Android emulator or device, you need to configure your environment variables. 
 
-2. **Configure Environment**
-   Create a `.env.local` file in the `frontend` root:
-   ```env
-   EXPO_PUBLIC_API_URL=http://localhost:4000
-   EXPO_PUBLIC_WS_URL=ws://localhost:4000/main_caller
-   ```
+**Install Java 17:**
+```bash
+brew install --cask temurin@17
+```
 
-3. **Start Developing**
-   ```bash
-   npx expo start
-   ```
+**Update your shell profile (`~/.zshrc` or `~/.bash_profile`):**
+```bash
+# Android & Java
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+```
+*After adding the above, run `source ~/.zshrc` to apply changes.*
+
+**Verify Installation:**
+```bash
+java -version
+adb --version
+```
+
+### 2. Dependencies
+```bash
+npm install
+npx expo install axios @react-native-async-storage/async-storage
+```
+
+### 3. API Configuration
+Create a `.env.local` file in the `frontend` root:
+```env
+EXPO_PUBLIC_API_URL=http://localhost:4000
+EXPO_PUBLIC_WS_URL=ws://localhost:4000/main_caller
+```
+
+## 🚀 Development
+
+Start the app:
+```bash
+npx expo start
+```
 
 ## 🛠️ Tech Stack
 - **Framework**: React Native + Expo (Expo Router)
