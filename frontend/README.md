@@ -1,50 +1,88 @@
-# Welcome to your Expo app 👋
+# Remitly Frontend — AI-Powered Stablecoin Remittance �
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is the Expo (React Native) mobile application for Remitly, using a clean 3-layer Service Architecture with Class-Based patterns.
 
-## Get started
+## 🏗️ Service Architecture
 
-1. Install dependencies
+The frontend follows a strict 3-layer architecture to ensure concerns are separated and the codebase is easy to maintain.
 
-   ```bash
-   npm install
-   ```
+### Layer 1: Types (`src/types/`)
+All API and WebSocket message shapes are strictly defined in `api.ts`.
+- **Zero `any` types**: TypeScript strict mode is enforced throughout.
+- **Discriminated Unions**: Used for WebSocket messages to allow safe type narrowing.
 
-2. Start the app
+### Layer 2: Services (`src/services/`)
+Singleton classes that handle all external communication.
+- **`BaseService`**: Abstract base with an `axios` instance.
+  - **Async Token Interceptor**: Automatically attaches the `remitly_token` from `AsyncStorage`.
+  - **Auto-Logout**: Automatically clears the token and redirects to `/login` on `401 Unauthorized`.
+- **`AuthService`**: Handles registration, login, and token persistence.
+- **`UserService`**: Handles balance and profile fetching.
+- **`RecipientService`**: Full CRUD for contact management.
+- **`TransactionService`**: Paginated transaction history.
+- **`ChatService`**: Manages the global React Native WebSocket for AI-powered chat.
+  - **Retry Logic**: Includes exponential backoff for connection stability.
+  - **Listener Pattern**: Components can subscribe/unsubscribe to messages and errors.
 
-   ```bash
-   npx expo start
-   ```
+### Layer 3: Custom Hooks (`hooks/`)
+The bridge between UI and Services.
+- **Rule**: Components **NEVER** import services directly. They only use hooks.
+- **Stable References**: Actions are wrapped in `useCallback` to prevent unnecessary re-renders.
+- **Auto-Fetching**: Hooks like `useBalance` and `useRecipients` handle data loading on mount.
+- **Memory Safety**: `useChat` automatically cleans up WebSocket listeners and connections on unmount.
 
-In the output, you'll find options to open the app in a
+## ⚙️ Environment Setup
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 1. Android & Java (macOS)
+To run the app on an Android emulator or device, you need to configure your environment variables. 
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+**Install Java 17:**
 ```bash
-npm run reset-project
+brew install --cask temurin@17
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Update your shell profile (`~/.zshrc` or `~/.bash_profile`):**
+```bash
+# Android & Java
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+```
+*After adding the above, run `source ~/.zshrc` to apply changes.*
 
-## Learn more
+**Verify Installation:**
+```bash
+java -version
+adb --version
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### 2. Dependencies
+```bash
+npm install
+npx expo install axios @react-native-async-storage/async-storage
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 3. API Configuration
+Create a `.env.local` file in the `frontend` root:
+```env
+EXPO_PUBLIC_API_URL=http://localhost:4000
+EXPO_PUBLIC_WS_URL=ws://localhost:4000/main_caller
+```
 
-## Join the community
+## 🚀 Development
 
-Join our community of developers creating universal apps.
+Start the app:
+```bash
+npx expo start
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 🛠️ Tech Stack
+- **Framework**: React Native + Expo (Expo Router)
+- **Language**: TypeScript (Strict Mode)
+- **HTTP**: Axios
+- **Storage**: @react-native-async-storage/async-storage
+- **Real-time**: Native WebSocket API
+
+---
+*Built with React Native ⚛️ and Expo 🚀*
