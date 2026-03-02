@@ -265,6 +265,9 @@ pub async fn update_profile(
         reason: format!("bcrypt hash failed: {}", e),
     })?;
 
+     //create the unique alias for the user
+     let alias = create_unique_alias(&payload.username);
+
     // Step 3: Update the user profile
     let updated_user = web::block(move || {
         let conn = &mut establish_connection()?;
@@ -683,7 +686,6 @@ pub async fn get_wallet_address(
 }
 
 //--- Add Recipient ---
-
 #[derive(Debug, Deserialize)]
 pub struct AddRecipientRequest {
     pub recipient_alias: String,
@@ -710,6 +712,7 @@ pub async fn add_recipient(
 
     let alias_str = data.into_inner().recipient_alias;
 
+    //call the add recipient function
     let result = web::block(move || {
         let conn = &mut establish_connection()?;
         crate::database::model_functions::add_recipient_by_alias(conn, user_id, &alias_str)
