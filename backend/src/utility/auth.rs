@@ -1,22 +1,27 @@
-//import the crate called name used to import random crate 
 use petname::petname;
-use rand::Rng;
-
+use rand::{self, Rng};
 
 /// Create a unique alias for a user
-pub fn create_unique_alias() -> Vec<String>{
- let mut alias_vec: Vec<String> = Vec::new();
-    loop{
-    let mut alias = petname();
-    let mut i = 1;
-    while alias.len() < 6 {
-        alias.push_str(&i.to_string());
-        i += 1;
+pub fn create_unique_alias() -> Vec<String> {
+    let mut alias_vec: Vec<String> = Vec::new();
+
+    loop {
+        let mut alias = petname(2, "").expect("failed to load petname");
+        alias = alias.to_lowercase();
+        
+        //create a random number
+        let mut rng = rand::thread_rng();
+        let random_number = rng.gen_range(0..100);
+      
+      //create the main suffix 
+      let suffix = "@amipay";
+       let main_alias = format!("{}{}{}", alias, random_number, suffix);
+
+       alias_vec.push(main_alias);
+        if alias_vec.len() == 10 {
+            break;
+        }
     }
-    alias_vec.push(alias);
-    if alias_vec.len() == 10 {
-    break;
-    }
-    }
-   return alias_vec;
+
+    return alias_vec;
 }

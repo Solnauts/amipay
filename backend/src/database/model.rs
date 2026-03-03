@@ -1,4 +1,4 @@
-use crate::schema::{alias, conversation, ledger, pending_action, recipient, user};
+use crate::schema::{alias, conversation, ledger, pending_action, user};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
