@@ -236,6 +236,32 @@ pub async fn wallet_login(
     }))
 }
 
+// GET /wallet/unique-alias
+#[get("/wallet/unique-alias")]
+pub async fn get_unique_alias() -> actix_web::Result<impl Responder> {
+    //create the unique alias for the user
+    let alias = create_unique_alias();
+
+    //check if the alias already exists in the database 
+    let alias_db_result = web::block(move || {
+        let conn = &mut establish_connection()?;
+        let is_existing_alias = check_alias_exists(conn, &alias)?;
+        Ok(is_existing_alias)
+    })
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: "failed to generate unique username".to_string(),
+    })?;
+
+     //if the 
+    Ok(HttpResponse::Ok().json(UniqueAliasResponse { alias }))
+}
+
+
+
+
+
 /// `POST /wallet/update-profile`
 #[post("/wallet/update-profile")]
 pub async fn update_profile(
