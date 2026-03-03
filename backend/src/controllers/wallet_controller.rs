@@ -240,6 +240,7 @@ pub async fn wallet_login(
 #[get("/wallet/unique-alias")]
 pub async fn get_unique_alias() -> actix_web::Result<impl Responder> {
     //create the unique alias for the user
+    //return an array of unique username
     let alias = create_unique_alias();
 
     //check if the alias already exists in the database 
