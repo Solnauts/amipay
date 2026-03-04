@@ -1,5 +1,6 @@
 use crate::database::{
-    establish_connection, model::DbAlias, model_functions::alias_model_function::is_alias_exists,
+    establish_connection, 
+    model_functions::alias_model_function::is_alias_exists,
 };
 use petname::petname;
 use rand::{self, Rng};

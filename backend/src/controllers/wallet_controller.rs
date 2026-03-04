@@ -16,6 +16,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
+use crate::utility::create_unique_alias;
 
 // ─── Request / Response Types ───────────────────────────────────────────────
 
@@ -77,6 +78,10 @@ pub struct Claims {
     pub iat: usize,
 }
 
+#[derive(Serialize)]
+pub struct UniqueAliasResponse {
+    pub alias: Vec<String>,
+}
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
 /// Get the JWT secret from environment variables
@@ -239,29 +244,19 @@ pub async fn wallet_login(
 // GET /wallet/unique-alias
 #[get("/wallet/unique-alias")]
 pub async fn get_unique_alias() -> actix_web::Result<impl Responder> {
-    //create the unique alias for the user
-    //return an array of unique username
-    let alias = create_unique_alias();
-
-    //check if the alias already exists in the database 
-    let alias_db_result = web::block(move || {
-        let conn = &mut establish_connection()?;
-        let is_existing_alias = check_alias_exists(conn, &alias)?;
-        Ok(is_existing_alias)
+   //call the create_unique_alias function 
+    let alias_val = web::block(move || {
+        let alias = create_unique_alias();
+        alias
     })
-    .await
-    .map_err(|e| AppError::Internal {
+    .await.map_err(|e| AppError::Internal {
         code: 5010,
-        reason: "failed to generate unique username".to_string(),
-    })?;
-
-     //if the 
-    Ok(HttpResponse::Ok().json(UniqueAliasResponse { alias }))
+        reason: format!("blocking task failed: {}", e),
+    })? ; 
+    
+    //return an array of unique username
+    Ok(HttpResponse::Ok().json(UniqueAliasResponse { alias: alias_val }))
 }
-
-
-
-
 
 /// `POST /wallet/update-profile`
 #[post("/wallet/update-profile")]
@@ -292,8 +287,6 @@ pub async fn update_profile(
         reason: format!("bcrypt hash failed: {}", e),
     })?;
 
-     //create the unique alias for the user
-     let alias = create_unique_alias(&payload.username);
 
     // Step 3: Update the user profile
     let updated_user = web::block(move || {

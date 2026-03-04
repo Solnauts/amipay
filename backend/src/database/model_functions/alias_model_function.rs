@@ -2,7 +2,6 @@ use crate::database::model::{DbAlias, NewAlias};
 use crate::errors::{AppError, DbError, ValidationError};
 use diesel::prelude::*;
 use diesel::PgConnection;
-use std::collections::HashSet;
 
 
 pub fn create_alias(
