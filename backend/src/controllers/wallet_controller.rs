@@ -315,6 +315,7 @@ pub async fn update_profile(
     }))
 }
 
+#[derive(Deserialize)]
 pub struct CreateAliasPayload {
     pub alias: String,
 }
@@ -327,7 +328,8 @@ pub struct CreateAliasResponse {
 }
 
 //function to create alias 
-pub fn create_user_alias(request: HttpRequest, data: web::Json<CreateAliasPayload>) -> actix_web::Result<impl Responder>{
+#[post("/wallet/create-alias")]
+pub async fn create_user_alias(request: HttpRequest, data: web::Json<CreateAliasPayload>) -> actix_web::Result<impl Responder>{
     //Step 1: Extract session token
     let token = request
         .cookie("session_token")
@@ -357,7 +359,7 @@ pub fn create_user_alias(request: HttpRequest, data: web::Json<CreateAliasPayloa
   Ok(HttpResponse::Ok().json(CreateAliasResponse {
     status: "success".to_string(),
     message: "Alias created successfully".to_string(),
-    alias: Some(alias_result.alias_name),
+    alias: Some(alias_result.unwrap().alias_name),
   }))
 
 }
