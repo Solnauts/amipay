@@ -109,44 +109,40 @@ pub fn delete_alias(
     Ok(deleted)
 }
 
-pub fn is_alias_exists(conn: &mut PgConnection, alias_vec: Vec<String>){
+
+//create the is alias exist function
+pub fn is_alias_exists(conn: &mut PgConnection, alias_vec: Vec<String>) -> Result<Vec<String>, DbError>{
 //get the dsl from the alias table
 use crate::schema::alias::dsl::*;
 
-//Hashset to fetch db alias 
-let mut db_alias_set : HashSet<String> = HashSet::new();
-
 //iterate through the alias_str and check if any of them exists
 let db_result = alias.filter(alias_name.eq_any(&alias_vec)).load::<DbAlias>(conn);
+
+//create the return vector 
+let mut new_alias_vec = Vec::new();
 
 match db_result{
     Ok(db_alias_vec) => {
      //get the alias from the db_alias_vec and pop those from the aliasa_vec and return the new alias vec 
      for alias_val in db_alias_vec{
-        db_alias_set.insert(alias_val.alias_name);
+       //directly check the value from the db_alias_vec and pop those from the aliasa_vec and return the new alias vec 
+        if alias_vec.contains(&alias_val.alias_name){
+        new_alias_vec.push(alias_val.alias_name);
      };
-
        }
+       //return the new alias vec 
+     return Ok(new_alias_vec);
+    }
     Err(e) => {
     //return the db erorr as server error from the function 
-    return DbError::AliasLookupFailed {
+    return Err(DbError::AliasLookupFailed {
         alias: "server error".to_string(),
         reason: e.to_string(),
-    }
-    .into(); 
+    }); 
 }
 }
-
-let mut new_alias_vec = Vec::new();
-
-//remove the already present value from the alias_vec 
-for alias_val in alias_vec{
-    if !db_alias_set.contains(&alias_val){
-        new_alias_vec.push(alias_val);
-    }
 }
 
 
 
 
-}
