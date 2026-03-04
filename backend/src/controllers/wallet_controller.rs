@@ -1,14 +1,15 @@
 use crate::database::establish_connection;
-use crate::database::model_functions::{
-    create_wallet_user, find_user_by_wallet, get_user_info, update_wallet_user_profile,
-};
 use crate::database::model_functions::user_model_function::{
     UserInfoRequest, UserInfoResponse, is_amount_valid,
 };
-use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError,};
+use crate::database::model_functions::{
+    create_wallet_user, find_user_by_wallet, get_user_info, update_wallet_user_profile, create_alias
+};
+use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError};
+use crate::utility::create_unique_alias;
+use actix_web::ResponseError;
 use actix_web::cookie::{Cookie, SameSite};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
-use actix_web::ResponseError;
 use bcrypt::{DEFAULT_COST, hash};
 use chrono::Utc;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -16,7 +17,6 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
-use crate::utility::create_unique_alias;
 
 // ─── Request / Response Types ───────────────────────────────────────────────
 
@@ -86,11 +86,9 @@ pub struct UniqueAliasResponse {
 
 /// Get the JWT secret from environment variables
 fn get_jwt_secret() -> Result<String, AppError> {
-    env::var("JWT_SECRET").map_err(|_| {
-        AppError::Internal {
-            code: 5300,
-            reason: "JWT_SECRET env var not set".to_string(),
-        }
+    env::var("JWT_SECRET").map_err(|_| AppError::Internal {
+        code: 5300,
+        reason: "JWT_SECRET env var not set".to_string(),
     })
 }
 
@@ -126,9 +124,11 @@ pub fn validate_session_token(token: &str) -> Result<Claims, AppError> {
         &DecodingKey::from_secret(secret.as_bytes()),
         &Validation::default(),
     )
-    .map_err(|e| AppError::Auth(AuthError::InvalidToken {
-        reason: e.to_string(),
-    }))?;
+    .map_err(|e| {
+        AppError::Auth(AuthError::InvalidToken {
+            reason: e.to_string(),
+        })
+    })?;
 
     Ok(token_data.claims)
 }
@@ -244,16 +244,17 @@ pub async fn wallet_login(
 // GET /wallet/unique-alias
 #[get("/wallet/unique-alias")]
 pub async fn get_unique_alias() -> actix_web::Result<impl Responder> {
-   //call the create_unique_alias function 
+    //call the create_unique_alias function
     let alias_val = web::block(move || {
         let alias = create_unique_alias();
         alias
     })
-    .await.map_err(|e| AppError::Internal {
+    .await
+    .map_err(|e| AppError::Internal {
         code: 5010,
         reason: format!("blocking task failed: {}", e),
-    })? ; 
-    
+    })?;
+
     //return an array of unique username
     Ok(HttpResponse::Ok().json(UniqueAliasResponse { alias: alias_val }))
 }
@@ -287,7 +288,6 @@ pub async fn update_profile(
         reason: format!("bcrypt hash failed: {}", e),
     })?;
 
-
     // Step 3: Update the user profile
     let updated_user = web::block(move || {
         let conn = &mut establish_connection()?;
@@ -299,7 +299,7 @@ pub async fn update_profile(
         reason: format!("blocking task failed: {}", e),
     })?
     .map_err(|e: DbError| -> AppError { e.into() })?;
-
+ 
     let user_info = UserPublicInfo {
         id: updated_user.id,
         name: updated_user.name.clone(),
@@ -314,6 +314,55 @@ pub async fn update_profile(
         user: user_info,
     }))
 }
+
+pub struct CreateAliasPayload {
+    pub alias: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateAliasResponse {
+    pub status: String,
+    pub message: String,
+    pub alias: Option<String>,
+}
+
+//function to create alias 
+pub fn create_user_alias(request: HttpRequest, data: web::Json<CreateAliasPayload>) -> actix_web::Result<impl Responder>{
+    //Step 1: Extract session token
+    let token = request
+        .cookie("session_token")
+        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
+        .value()
+        .to_string();
+
+    let claims = validate_session_token(&token)?;
+
+    let user_id: i32 = claims.sub.parse().map_err(|_| {
+        AppError::Auth(AuthError::InvalidUserId {
+            raw: claims.sub.clone(),
+        })
+    })?;
+
+    let payload = data.into_inner();
+
+    //call the create alias db function 
+    let alias_result = web::block(move || {
+        let conn = &mut establish_connection()?;
+       create_alias(conn, user_id, &payload.alias, false)
+    }).await.map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?;
+  
+  Ok(HttpResponse::Ok().json(CreateAliasResponse {
+    status: "success".to_string(),
+    message: "Alias created successfully".to_string(),
+    alias: Some(alias_result.alias_name),
+  }))
+
+}
+
+
 
 // ─── Claim Amount ───────────────────────────────────────────────────────────
 
@@ -548,8 +597,8 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
     let solana_amount = payload.amount;
     let uid_clone = unique_id.clone();
 
-    let solana_result = web::block(move || solana_utilities::claim_amount(uid_clone, solana_amount))
-        .await;
+    let solana_result =
+        web::block(move || solana_utilities::claim_amount(uid_clone, solana_amount)).await;
 
     match solana_result {
         Ok(Ok(rpc_response)) => {

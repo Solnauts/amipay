@@ -12,15 +12,15 @@ pub struct RequestBody {
 
 #[derive(Deserialize, Debug)]
 pub struct AiResponse {
-    model: String,
-    created_at: String,
-    response: String,
+    pub model: String,
+    pub created_at: String,
+    pub response: String,
     //critical this must be a string
-    thinking: String,
-    done: bool,
-    done_reason: String,
-    context: Vec<u64>,
-    total_duration: u64,
+    pub thinking: String,
+    pub done: bool,
+    pub done_reason: String,
+    pub context: Vec<u64>,
+    pub total_duration: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
