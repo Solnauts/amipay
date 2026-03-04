@@ -111,7 +111,7 @@ pub fn delete_alias(
 
 
 //create the is alias exist function
-pub fn is_alias_exists(conn: &mut PgConnection, alias_vec: Vec<String>) -> Result<Vec<String>, DbError>{
+pub fn is_alias_exists(conn: &mut PgConnection, alias_vec: Vec<String>) -> Vec<String>{
 //get the dsl from the alias table
 use crate::schema::alias::dsl::*;
 
@@ -131,14 +131,12 @@ match db_result{
      };
        }
        //return the new alias vec 
-     return Ok(new_alias_vec);
+     return new_alias_vec;
     }
-    Err(e) => {
-    //return the db erorr as server error from the function 
-    return Err(DbError::AliasLookupFailed {
-        alias: "server error".to_string(),
-        reason: e.to_string(),
-    }); 
+    Err(_) => {
+
+ //there might be no alias in the db so return the alias vec itself 
+ return alias_vec;
 }
 }
 }
