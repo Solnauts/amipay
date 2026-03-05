@@ -42,6 +42,17 @@ class AuthService extends BaseService {
     return AuthService.instance;
   }
 
+  // ── Store JWT returned from /wallet/login ─────────────────────────────────
+  // Call this immediately after a successful login so all subsequent
+  // protected requests carry `Authorization: Bearer <token>`.
+  setToken(token: string): void {
+    this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
+
+  clearToken(): void {
+    delete this.client.defaults.headers.common['Authorization'];
+  }
+
   // ── Step 1: Fetch a one-time nonce to sign ────────────────────────────────
   async getNonce(): Promise<NonceResponse> {
     try {

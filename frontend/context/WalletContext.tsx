@@ -113,13 +113,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
         console.log('[Auth] Login response:', JSON.stringify(loginResponse));
 
+        // Store the JWT so all future API calls send Authorization: Bearer <token>
+        authService.setToken(loginResponse.token);
+
         // ── 2. Store state ────────────────────────────────────────────────────
         setPublicKey(pk);
         setWalletAddress(addressBase58);
         setUser(loginResponse.user);
 
-        if (loginResponse.is_new_user) {
-          // New user → show onboarding (alias + PIN selection)
+        if (loginResponse.is_new_user || !loginResponse.user.has_pin) {
+          // New user OR existing user who never completed setup → onboarding
           setAuthStep('onboarding');
         } else {
           setAuthStep('ready');
@@ -155,6 +158,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setWalletAddress(null);
     setUser(null);
     setAuthStep('idle');
+    authService.clearToken();
   }, []);
 
   // ── Called by OnboardingScreen once alias + PIN are saved ─────────────────

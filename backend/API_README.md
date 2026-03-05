@@ -17,7 +17,7 @@
    - [POST /wallet/add-recipient](#17-post-walletadd-recipient)
    - [POST /wallet/get_user_alias](#18-post-walletget_user_alias)
 2. [Account](#2-account)
-   - [POST /createaccount](#21-post-createaccount)
+
 3. [Ledger / Claiming](#3-ledger--claiming)
    - [POST /claimamount](#31-post-claimamount)
 4. [WebSocket — Orchestrator](#4-websocket--orchestrator)

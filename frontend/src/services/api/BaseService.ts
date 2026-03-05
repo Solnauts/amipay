@@ -26,7 +26,11 @@ abstract class BaseService {
     this.client = axios.create({
       baseURL,
       timeout: 15_000,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Bypass ngrok's browser-warning interstitial page for non-browser clients
+        'ngrok-skip-browser-warning': '1',
+      },
       // CRITICAL: tells axios (and the native layer) to include cookies
       withCredentials: true,
     });

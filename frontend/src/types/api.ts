@@ -17,15 +17,16 @@ export interface WalletLoginRequest {
 
 export interface BackendUser {
   id: number;
-  name: string;
-  wallet_address: string;
+  name: string | null;          // Optional<String> on the backend
+  wallet_address: string | null; // Optional<String> on the backend
   method_type: string;
   has_pin: boolean;
 }
 
-/** POST /wallet/login — response  (also sets session_token cookie) */
+/** POST /wallet/login — response. Backend returns JWT in body (not cookie). */
 export interface WalletLoginResponse {
   status: 'success' | 'error';
+  token: string;       // JWT — must be stored and sent as Authorization: Bearer <token>
   is_new_user: boolean;
   user: BackendUser;
 }
