@@ -178,10 +178,14 @@ pub async fn get_nonce() -> actix_web::Result<impl Responder> {
 }
 
 /// `POST /wallet/login`
-#[post("/wallet/login")]
+#[post("/wallet/login ")]
 pub async fn wallet_login(
     data: web::Json<WalletLoginPayload>,
 ) -> actix_web::Result<impl Responder> {
+    //two step flow :
+    //if the user exist
+    //if user don't exist
+
     let payload = data.into_inner();
 
     // Step 1: Verify the signature
@@ -196,7 +200,9 @@ pub async fn wallet_login(
         let existing_user = find_user_by_wallet(conn, &address_clone)?;
 
         match existing_user {
-            Some(user) => Ok((user, false)),
+            Some(user) => {
+                Ok((user, false))
+            }
             None => {
                 let new_user = create_wallet_user(conn, &address_clone)?;
                 Ok((new_user, true))
@@ -239,8 +245,10 @@ pub async fn wallet_login(
         status: "success".to_string(),
         is_new_user,
         user: user_info,
-    }))
+    })) 
 }
+
+
 
 // GET /wallet/unique-alias
 #[get("/wallet/unique-alias")]
@@ -350,7 +358,7 @@ pub async fn create_user_alias(
     })?;
 
     let payload = data.into_inner();
-    
+
     //create the half alias from the alias
     let half_alias = payload.alias.split("@").collect::<Vec<&str>>()[0].to_string();
     //call the create alias db function
@@ -370,7 +378,6 @@ pub async fn create_user_alias(
         alias: Some(alias_result.unwrap().alias_name),
     }))
 }
-
 
 // ─── Claim Amount ───────────────────────────────────────────────────────────
 
