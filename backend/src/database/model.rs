@@ -222,5 +222,6 @@ pub struct NewAlias {
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::alias)]
 pub struct DbAliasName {
+    pub half_alias: String,
     pub alias_name: String,
 }

@@ -319,7 +319,6 @@ pub async fn update_profile(
 #[derive(Deserialize)]
 pub struct CreateAliasPayload {
     pub alias: String,
-    pub half_alias: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -351,11 +350,13 @@ pub async fn create_user_alias(
     })?;
 
     let payload = data.into_inner();
-
+    
+    //create the half alias from the alias
+    let half_alias = payload.alias.split("@").collect::<Vec<&str>>()[0].to_string();
     //call the create alias db function
     let alias_result = web::block(move || {
         let conn = &mut establish_connection()?;
-        create_alias(conn, user_id, &payload.alias, false, &payload.half_alias)
+        create_alias(conn, user_id, &payload.alias, false, &half_alias)
     })
     .await
     .map_err(|e| AppError::Internal {
@@ -369,6 +370,7 @@ pub async fn create_user_alias(
         alias: Some(alias_result.unwrap().alias_name),
     }))
 }
+
 
 // ─── Claim Amount ───────────────────────────────────────────────────────────
 
