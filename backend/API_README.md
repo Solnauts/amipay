@@ -151,7 +151,7 @@ Returns a list of unique, system-generated alias suggestions the user can pick f
 
 Saves a chosen alias for the authenticated user.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -179,7 +179,7 @@ Saves a chosen alias for the authenticated user.
 
 Returns the authenticated user's on-chain wallet address.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -206,7 +206,7 @@ Returns the authenticated user's on-chain wallet address.
 
 Adds another user as a recipient for the authenticated user, looked up by their alias.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -235,7 +235,7 @@ Adds another user as a recipient for the authenticated user, looked up by their 
 
 Retrieves all aliases associated with the authenticated user.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request:** No body required.
 
@@ -489,7 +489,7 @@ Sent after the server sends an `AssistanceMessage` with a `pending_action_id`.
 
 | Code Range | Category | Examples |
 |------------|----------|---------|
-| `4000–4099` | Auth errors | Missing cookie, invalid token, invalid user ID |
+| `4000–4099` | Auth errors | Missing/invalid Bearer token, invalid user ID |
 | `4100–4199` | Validation errors | Missing fields, malformed messages, invalid conversation ID |
 | `4200–4299` | Business / Ledger errors | Invalid amount, invalid claim method, insufficient balance, missing pubkey |
 | `5000–5099` | Internal / DB errors | Blocking task failures, DB query errors |

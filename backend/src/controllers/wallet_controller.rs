@@ -193,7 +193,7 @@ pub async fn get_nonce() -> actix_web::Result<impl Responder> {
 }
 
 /// `POST /wallet/login`
-#[post("/wallet/login ")]
+#[post("/wallet/login")]
 pub async fn wallet_login(
     data: web::Json<WalletLoginPayload>,
 ) -> actix_web::Result<impl Responder> {
