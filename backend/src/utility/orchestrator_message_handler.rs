@@ -6,31 +6,32 @@ use crate::database::model_functions::{
     get_user_info,
     ledger_model_function::record_transfer_and_update_amounts,
     pending_action_model_function::{
-        build_pin_verify_payload, build_transfer_confirm_payload, create_pending_action,
+        build_pin_verify_payload, create_pending_action,
         update_pending_action_status,
     },
     user_model_function::{
         UserInfoRequest, UserInfoResponse, get_transaction_history, match_user_pin,
     },
 };
+use crate::errors::{AppError, AuthError, DbError, ValidationError};
 use crate::utility::{
     ActionResponsePayload, AssistantMessagePayload, ErrorPayload, ServerMessage,
     get_user_ata_balance, transfer_to_vault,
 };
 use actix_ws::{CloseCode, CloseReason, Session};
-use diesel::PgConnection;
-// ── Helper: send a JSON text frame to client ────────────────────────────
-async fn send_error(
+
+// ── Helper: send a typed error over the WebSocket ───────────────────────
+async fn send_app_error(
     session: &Session,
-    message: &str,
+    err: AppError,
     conversation_id: i32,
     pending_action_id: Option<i32>,
 ) {
-    let payload = ServerMessage::Error(ErrorPayload {
-        conversation_id: conversation_id,
-        pending_action_id: Some(pending_action_id.unwrap()),
-        error_message: message.to_string(),
-    });
+    // Always log full detail server-side
+    eprintln!("{}", err.log_message());
+
+    let payload =
+        ServerMessage::Error(ErrorPayload::from_app_error(&err, conversation_id, pending_action_id));
     if let Ok(json) = serde_json::to_string(&payload) {
         let _ = session.clone().text(json).await;
     }
@@ -43,8 +44,8 @@ async fn send_message(
     pending_action_id: Option<i32>,
 ) {
     let payload = ServerMessage::AssistanceMessage(AssistantMessagePayload {
-        conversation_id: conversation_id,
-        pending_action_id: Some(pending_action_id.unwrap()),
+        conversation_id,
+        pending_action_id,
         task: text.to_string(),
         action_buttons: None,
     });
@@ -62,8 +63,7 @@ async fn close_with_reason(session: &Session, code: CloseCode, description: &str
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Main handler – every error branch sends a message over the stream
-// instead of silently returning or panicking.
+// Main handler
 // ──────────────────────────────────────────────────────────────────────────
 pub async fn handle_user_message(
     user_message: String,
@@ -72,15 +72,24 @@ pub async fn handle_user_message(
     conversation_id: i32,
 ) {
     // Open a mutable DB connection for this request
-    let mut db_connection = establish_connection();
+    let mut db_connection = match establish_connection() {
+        Ok(conn) => conn,
+        Err(e) => {
+            send_app_error(stream, e.into(), conversation_id, None).await;
+            return;
+        }
+    };
 
-    // 1. Deserialize incoming message — tell the client if it's bad JSON
+    // 1. Deserialize incoming message
     let serialized_message = match serde_json::from_str::<RequestBody>(&user_message) {
         Ok(msg) => msg,
         Err(e) => {
-            send_error(
+            send_app_error(
                 stream,
-                &format!("failed to receive instruction {}", e),
+                ValidationError::MalformedMessage {
+                    reason: e.to_string(),
+                }
+                .into(),
                 conversation_id,
                 None,
             )
@@ -96,37 +105,38 @@ pub async fn handle_user_message(
         recipient_name: None,
     };
 
-    let user_info = get_user_info(request_payload);
-
-    //userinfo
-    let user_info = match user_info {
-        UserInfoResponse::FullInfo(info) => info,
-        UserInfoResponse::Error(err) => {
-            send_error(
+    let user_info = match get_user_info(request_payload) {
+        Ok(UserInfoResponse::FullInfo(info)) => info,
+        Ok(_) => {
+            send_app_error(
                 stream,
-                &format!("Failed to load user info: {}", err),
+                DbError::UnexpectedResult {
+                    context: "get_user_info returned non-FullInfo variant".to_string(),
+                }
+                .into(),
                 conversation_id,
                 None,
             )
             .await;
             return;
         }
-        _ => {
-            send_error(
-                stream,
-                "Unexpected response while loading user",
-                conversation_id,
-                None,
-            )
-            .await;
+        Err(e) => {
+            send_app_error(stream, e, conversation_id, None).await;
             return;
         }
     };
 
     // 3. Get AI intent
-    let intent_response = get_ai_response(serialized_message).await;
+    let intent_response = match get_ai_response(serialized_message).await {
+        Ok(resp) => resp,
+        Err(e) => {
+            send_app_error(stream, e.into(), conversation_id, None).await;
+            return;
+        }
+    };
 
-    // NOTE: Box::leak creates a 'static reference – this leaks memory per request. to match the existing pattern in the codebase.
+    // NOTE: Box::leak creates a 'static reference – this leaks memory per request.
+    // to match the existing pattern in the codebase.
     let intent_result = Box::leak(Box::new(intent_response));
     let user_info_ref: &'static DbUser = Box::leak(Box::new(user_info));
 
@@ -140,7 +150,16 @@ pub async fn handle_user_message(
             let amount = match response.amount {
                 Some(amt) => amt,
                 None => {
-                    send_error(stream, "Invalid amount instruction", conversation_id, None).await;
+                    send_app_error(
+                        stream,
+                        ValidationError::MissingField {
+                            field: "amount".to_string(),
+                        }
+                        .into(),
+                        conversation_id,
+                        None,
+                    )
+                    .await;
                     return;
                 }
             };
@@ -148,21 +167,22 @@ pub async fn handle_user_message(
             match get_user_ata_balance(user_info_ref.unique_id.to_string(), amount).await {
                 Ok(balance_response) => {
                     if !balance_response.success {
-                        let issue = balance_response
-                            .issue
-                            .unwrap_or("Insufficient balance".to_string());
-                        send_error(stream, &issue, conversation_id, None).await;
+                        send_app_error(
+                            stream,
+                            ValidationError::InsufficientBalance {
+                                requested: amount as i64,
+                                available: balance_response.amount as i64,
+                            }
+                            .into(),
+                            conversation_id,
+                            None,
+                        )
+                        .await;
                         return;
                     }
                 }
                 Err(e) => {
-                    send_error(
-                        stream,
-                        &format!("Failed to check your balance: {}", e),
-                        conversation_id,
-                        None,
-                    )
-                    .await;
+                    send_app_error(stream, e.into(), conversation_id, None).await;
                     return;
                 }
             }
@@ -174,42 +194,35 @@ pub async fn handle_user_message(
                 recipient_name: response.recipient.clone(),
             };
 
-            let recipient_info = get_user_info(request_payload);
-
-            let recipient = match recipient_info {
-                UserInfoResponse::Recipient(r) => r,
-                UserInfoResponse::Error(err) => {
-                    send_error(
+            let recipient = match get_user_info(request_payload) {
+                Ok(UserInfoResponse::Recipient(r)) => r,
+                Ok(_) => {
+                    send_app_error(
                         stream,
-                        &format!("Recipient not found: {}", err),
+                        DbError::UnexpectedResult {
+                            context: "get_user_info returned non-Recipient variant".to_string(),
+                        }
+                        .into(),
                         conversation_id,
                         None,
                     )
                     .await;
                     return;
                 }
-                _ => {
-                    send_error(
-                        stream,
-                        "Unexpected response while looking up recipient",
-                        conversation_id,
-                        None,
-                    )
-                    .await;
+                Err(e) => {
+                    send_app_error(stream, e, conversation_id, None).await;
                     return;
                 }
             };
 
-            // 4c. Build payload and create pending_action — then STOP.
-            //     The actual transfer happens in handle_action_response
-            //     after the user confirms + provides PIN.
+            // 4c. Build payload and create pending_action
             let currency = response.currency.clone().unwrap_or("USDC".to_string());
 
             let payload = build_pin_verify_payload(
                 amount as f64,
                 &currency,
                 recipient.id,
-                &recipient.name,
+                &recipient.alias_used,
                 &user_info_ref.unique_id,
             );
 
@@ -222,19 +235,15 @@ pub async fn handle_user_message(
             ) {
                 Ok(pending_action) => {
                     let msg = "Please enter your PIN to confirm";
-
-                    send_message(stream, &msg, conversation_id, Some(pending_action.id)).await;
+                    send_message(stream, msg, conversation_id, Some(pending_action.id)).await;
                     println!(
                         "[transfer] pending_action created: id={} for user={}",
                         pending_action.id, user_info_ref.id
                     );
-                    // ── STOP HERE ──
-                    // The flow continues in handle_action_response
-                    // when the client sends ActionResponse with this pending_action.id
                     return;
                 }
                 Err(e) => {
-                    send_error(stream, "Server Error", conversation_id, None).await;
+                    send_app_error(stream, e.into(), conversation_id, None).await;
                     return;
                 }
             }
@@ -249,30 +258,27 @@ pub async fn handle_user_message(
                 user_id,
                 recipient_name: None,
             };
-            let balance_info = get_user_info(request_payload);
 
-            match balance_info {
-                UserInfoResponse::NUmber(amount) => {
+            match get_user_info(request_payload) {
+                Ok(UserInfoResponse::NUmber(amount)) => {
                     let msg = format!("Your current balance is: {}", amount);
                     send_message(stream, &msg, conversation_id, None).await;
                 }
-                UserInfoResponse::Error(err) => {
-                    send_error(
+                Ok(_) => {
+                    send_app_error(
                         stream,
-                        &format!("Could not fetch balance: {}", err),
+                        DbError::UnexpectedResult {
+                            context: "get_user_info returned non-Number variant for balance"
+                                .to_string(),
+                        }
+                        .into(),
                         conversation_id,
                         None,
                     )
                     .await;
                 }
-                _ => {
-                    send_error(
-                        stream,
-                        "Unexpected response while checking balance",
-                        conversation_id,
-                        None,
-                    )
-                    .await;
+                Err(e) => {
+                    send_app_error(stream, e, conversation_id, None).await;
                 }
             }
         }
@@ -283,35 +289,26 @@ pub async fn handle_user_message(
 
             let number_of_transaction_limit = 10;
 
-            let transaction_history_result =
-                get_transaction_history(user_id, number_of_transaction_limit);
-
-            match transaction_history_result {
-                Ok(value) => {
-                    // Serialize the ledger entry and send it to the client
-                    match serde_json::to_string(&value) {
-                        Ok(json) => {
-                            send_message(stream, &json, conversation_id, None).await;
-                        }
-                        Err(e) => {
-                            send_error(
-                                stream,
-                                &format!("Failed to serialize transaction history: {}", e),
-                                conversation_id,
-                                None,
-                            )
-                            .await;
-                        }
+            match get_transaction_history(user_id, number_of_transaction_limit) {
+                Ok(value) => match serde_json::to_string(&value) {
+                    Ok(json) => {
+                        send_message(stream, &json, conversation_id, None).await;
                     }
-                }
-                Err(error) => {
-                    send_error(
-                        stream,
-                        &format!("Failed to fetch transaction history: {}", error),
-                        conversation_id,
-                        None,
-                    )
-                    .await;
+                    Err(e) => {
+                        send_app_error(
+                            stream,
+                            AppError::Internal {
+                                code: 5500,
+                                reason: format!("serialization failed: {}", e),
+                            },
+                            conversation_id,
+                            None,
+                        )
+                        .await;
+                    }
+                },
+                Err(e) => {
+                    send_app_error(stream, e, conversation_id, None).await;
                 }
             }
         }
@@ -319,9 +316,12 @@ pub async fn handle_user_message(
         // ── Unknown intent → close the stream ───────────────────────
         _ => {
             println!("invalid request");
-            send_error(
+            send_app_error(
                 stream,
-                "Unrecognized intent — closing connection",
+                ValidationError::InvalidIntent {
+                    intent: "unknown".to_string(),
+                }
+                .into(),
                 conversation_id,
                 None,
             )
@@ -331,177 +331,218 @@ pub async fn handle_user_message(
     }
 }
 
-//handle user action response function
+// ══════════════════════════════════════════════════════════════════════════
+//  handle_action_response
+// ══════════════════════════════════════════════════════════════════════════
+
 pub async fn handle_action_response(action_response: ActionResponsePayload, stream: Session) {
-    //handle the things on the basis of the message we got
     let ActionResponsePayload {
         conversation_id,
         pending_action_id,
         response,
     } = action_response;
 
-    //create the db conection
-    let mut db_connection = PgConnection::from(establish_connection());
+    // Create the DB connection
+    let mut db_connection = match establish_connection() {
+        Ok(conn) => conn,
+        Err(e) => {
+            send_app_error(&stream, e.into(), conversation_id, Some(pending_action_id)).await;
+            return;
+        }
+    };
 
-    //get the current pending action on the basis of pending action id
-    let pending_action_db_result = get_pending_action_by_id(&mut db_connection, pending_action_id);
+    // Get the current pending action
+    let pending_action_db_result =
+        get_pending_action_by_id(&mut db_connection, pending_action_id);
 
-    match pending_action_db_result {
-        Ok(result) => {
-            let main_result = result.unwrap();
+    let main_result = match pending_action_db_result {
+        Ok(Some(result)) => result,
+        Ok(None) => {
+            send_app_error(
+                &stream,
+                DbError::PendingActionNotFound {
+                    action_id: pending_action_id,
+                }
+                .into(),
+                conversation_id,
+                Some(pending_action_id),
+            )
+            .await;
+            return;
+        }
+        Err(e) => {
+            send_app_error(&stream, e.into(), conversation_id, Some(pending_action_id)).await;
+            return;
+        }
+    };
 
-            //read the task and take steps on the basis of that
-            let task = main_result.action_type;
+    let task = main_result.action_type;
 
-            match task {
-                task if task == "pin_verify" => {
-                    //take the response from the user
-                    let userpin_check_result = match_user_pin(main_result.user_id, response);
+    match task.as_str() {
+        "pin_verify" => {
+            // Verify PIN
+            let pin_result = match match_user_pin(main_result.user_id, response) {
+                Ok(is_valid) => is_valid,
+                Err(e) => {
+                    send_app_error(&stream, e, conversation_id, Some(pending_action_id)).await;
+                    return;
+                }
+            };
 
-                    if userpin_check_result.success == true {
-                        //call the user pin
-                        let request_payload = UserInfoRequest {
-                            user_id: main_result.user_id,
-                            intent: "unique_id".to_string(),
-                            recipient_name: None,
-                        };
-                        let user_info = get_user_info(request_payload);
-                        let unique_id = match user_info {
-                            UserInfoResponse::UniqueId(info) => info,
-                            UserInfoResponse::Error(err) => {
-                                send_error(
-                                    &stream,
-                                    &format!("Failed to load user info: {}", err),
-                                    conversation_id,
-                                    None,
-                                )
-                                .await;
-                                return;
+            if !pin_result {
+                send_app_error(
+                    &stream,
+                    AuthError::InvalidPin.into(),
+                    conversation_id,
+                    Some(pending_action_id),
+                )
+                .await;
+                return;
+            }
+
+            // Get user unique_id
+            let request_payload = UserInfoRequest {
+                user_id: main_result.user_id,
+                intent: "unique_id".to_string(),
+                recipient_name: None,
+            };
+
+            let unique_id = match get_user_info(request_payload) {
+                Ok(UserInfoResponse::UniqueId(info)) => info,
+                Ok(_) => {
+                    send_app_error(
+                        &stream,
+                        DbError::UnexpectedResult {
+                            context: "get_user_info returned non-UniqueId variant".to_string(),
+                        }
+                        .into(),
+                        conversation_id,
+                        Some(pending_action_id),
+                    )
+                    .await;
+                    return;
+                }
+                Err(e) => {
+                    send_app_error(&stream, e, conversation_id, Some(pending_action_id)).await;
+                    return;
+                }
+            };
+
+            // Parse the pending action payload
+            let parsed_payload: PendingActionPayload =
+                match serde_json::from_value(main_result.payload) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        send_app_error(
+                            &stream,
+                            DbError::UnexpectedResult {
+                                context: format!("payload deserialization failed: {}", e),
                             }
-                            _ => {
-                                send_error(
-                                    &stream,
-                                    "Unexpected response while loading user",
-                                    conversation_id,
+                            .into(),
+                            conversation_id,
+                            Some(pending_action_id),
+                        )
+                        .await;
+                        return;
+                    }
+                };
+
+            match parsed_payload {
+                PendingActionPayload::PinVerify {
+                    amount,
+                    currency,
+                    recipient_id,
+                    recipient_name,
+                    sender_unique_id: _,
+                } => {
+                    let transfer_result = transfer_to_vault(unique_id, amount as u64);
+
+                    match transfer_result {
+                        Ok(value) => {
+                            if value.success {
+                                // 1. Record in ledger + update balances
+                                let ledger_result = record_transfer_and_update_amounts(
+                                    &mut db_connection,
+                                    main_result.user_id,
+                                    recipient_id,
+                                    amount as i64,
+                                    currency.clone(),
                                     None,
-                                )
-                                .await;
-                                return;
-                            }
-                        };
+                                );
 
-                        //how to exract the amount and other data from the payload
-                        //already made the db and get main result
-                        let parsed_payload: PendingActionPayload =
-                            serde_json::from_value(main_result.payload).unwrap();
-                        match parsed_payload {
-                            PendingActionPayload::PinVerify {
-                                amount,
-                                currency,
-                                recipient_id,
-                                recipient_name,
-                                sender_unique_id,
-                            } => {
-                                let transfer_result = transfer_to_vault(unique_id, amount as u64);
+                                match ledger_result {
+                                    Ok(transfer_record) => {
+                                        // 2. Mark pending_action as confirmed
+                                        let _ = update_pending_action_status(
+                                            &mut db_connection,
+                                            pending_action_id,
+                                            "confirmed",
+                                        );
 
-                                match transfer_result {
-                                    Ok(value) => {
-                                        if value.success {
-                                            // 1. Record in ledger + update balances
-                                            let ledger_result = record_transfer_and_update_amounts(
-                                                &mut db_connection,
-                                                main_result.user_id,
-                                                recipient_id,
-                                                amount as i64,
-                                                currency.clone(),
-                                                None,
-                                            );
-
-                                            match ledger_result {
-                                                Ok(transfer_record) => {
-                                                    // 2. Mark pending_action as confirmed
-                                                    let _ = update_pending_action_status(
-                                                        &mut db_connection,
-                                                        pending_action_id,
-                                                        "confirmed",
-                                                    );
-
-                                                    // 3. Send success message AFTER everything is done
-                                                    let msg = format!(
-                                                        "✅ Transfer of {} {} to {} successful! Your new balance: {}",
-                                                        amount,
-                                                        currency,
-                                                        recipient_name,
-                                                        transfer_record.sender_new_balance
-                                                    );
-                                                    send_message(
-                                                        &stream,
-                                                        &msg,
-                                                        conversation_id,
-                                                        Some(pending_action_id),
-                                                    )
-                                                    .await;
-                                                }
-                                                Err(db_err) => {
-                                                    println!("[transfer] DB error: {}", db_err);
-                                                    send_error(
-                                                        &stream,
-                                                        "Transfer sent on-chain but failed to record in database",
-                                                        conversation_id,
-                                                        Some(pending_action_id),
-                                                    )
-                                                    .await;
-                                                }
-                                            }
-                                        } else {
-                                            send_error(
-                                                &stream,
-                                                "On-chain transfer did not succeed",
-                                                conversation_id,
-                                                Some(pending_action_id),
-                                            )
-                                            .await;
-                                        }
-                                    }
-                                    Err(err) => {
-                                        println!("[transfer] on-chain error: {}", err);
-                                        send_error(
+                                        // 3. Send success message
+                                        let msg = format!(
+                                            "✅ Transfer of {} {} to {} successful! Your new balance: {}",
+                                            amount,
+                                            currency,
+                                            recipient_name,
+                                            transfer_record.sender_new_balance
+                                        );
+                                        send_message(
                                             &stream,
-                                            "Transaction failed on-chain",
+                                            &msg,
+                                            conversation_id,
+                                            Some(pending_action_id),
+                                        )
+                                        .await;
+                                    }
+                                    Err(db_err) => {
+                                        // CRITICAL: on-chain succeeded but DB failed
+                                        let err = AppError::OnChainSuccessDbFailed {
+                                            user_id: main_result.user_id,
+                                            amount: amount as i64,
+                                            reason: db_err.to_string(),
+                                        };
+                                        send_app_error(
+                                            &stream,
+                                            err,
                                             conversation_id,
                                             Some(pending_action_id),
                                         )
                                         .await;
                                     }
                                 }
-                            }
-                            _ => {
-                                //send the server error
-                                send_error(
+                            } else {
+                                send_app_error(
                                     &stream,
-                                    "not getting the value",
+                                    AppError::Internal {
+                                        code: 5103,
+                                        reason: "on-chain transfer returned success=false"
+                                            .to_string(),
+                                    },
                                     conversation_id,
                                     Some(pending_action_id),
                                 )
                                 .await;
                             }
                         }
-                    } else {
-                        //send the error
-                        send_error(
-                            &stream,
-                            "invalid user_pin",
-                            conversation_id,
-                            Some(pending_action_id),
-                        )
-                        .await;
+                        Err(solana_err) => {
+                            send_app_error(
+                                &stream,
+                                solana_err.into(),
+                                conversation_id,
+                                Some(pending_action_id),
+                            )
+                            .await;
+                        }
                     }
                 }
-
                 _ => {
-                    send_error(
+                    send_app_error(
                         &stream,
-                        "Server Error",
+                        DbError::UnexpectedResult {
+                            context: "expected PinVerify payload variant".to_string(),
+                        }
+                        .into(),
                         conversation_id,
                         Some(pending_action_id),
                     )
@@ -510,10 +551,13 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
             }
         }
 
-        Err(error) => {
-            send_error(
+        _ => {
+            send_app_error(
                 &stream,
-                "pending action id is incorrect",
+                DbError::UnexpectedResult {
+                    context: format!("unknown action_type: {}", task),
+                }
+                .into(),
                 conversation_id,
                 Some(pending_action_id),
             )

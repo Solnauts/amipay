@@ -1,4 +1,4 @@
-use crate::schema::{conversation, ledger, pending_action, user};
+use crate::schema::{alias, conversation, ledger, pending_action, user};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,13 +19,22 @@ pub struct DbUser {
     pub wallet_address: Option<String>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
 #[diesel(table_name = crate::schema::recipient)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Dbrecipient {
-    pub name: String,
     pub userid: i32,
     pub id: i32,
+    pub recipient_user_id: i32,
+    pub alias_used: String,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::recipient)]
+pub struct NewRecipient {
+    pub userid: i32,
+    pub recipient_user_id: i32,
+    pub alias_used: String,
 }
 
 // Insertable struct for creating a user via contact number (full data upfront)
@@ -185,4 +194,34 @@ pub enum PendingActionPayload {
 pub struct RecipientCandidate {
     pub id: i32,
     pub name: String,
+}
+
+// ── Alias Models (UPI-style handles) ────────────────────────────────────────
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[diesel(table_name = crate::schema::alias)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbAlias {
+    pub id: i32,
+    pub user_id: i32,
+    pub alias_name: String,
+    pub is_primary: bool,
+    pub created_at: DateTime<Utc>,
+    pub half_alias: String,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = alias)]
+pub struct NewAlias {
+    pub user_id: i32,
+    pub alias_name: String,
+    pub is_primary: bool,
+    pub half_alias: String,
+}
+
+//struct for useralias of all the users
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::schema::alias)]
+pub struct DbAliasName {
+    pub half_alias: String,
+    pub alias_name: String,
 }

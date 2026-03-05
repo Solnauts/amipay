@@ -1,42 +1,57 @@
 use crate::controllers::wallet_controller::validate_session_token;
 use crate::database::model_functions::conversation_model_function::create_conversation;
+use crate::errors::{AppError, AuthError, ValidationError};
 use crate::utility::orchestrator_message_handler::handle_user_message;
-use crate::utility::{ClientMessage, ErrorPayload, ServerMessage, handle_action_response};
+use crate::utility::{
+    ErrorPayload, ServerMessage,
+    handle_action_response,
+};
+use crate::utility::ws_types::ClientMessage;
 use actix_web::{HttpRequest, Responder, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
+
+// ── Helper: send an AppError as a WS error frame ────────────────────────
+async fn send_ws_error(
+    session: &actix_ws::Session,
+    err: AppError,
+    conversation_id: i32,
+    pending_action_id: Option<i32>,
+) {
+    eprintln!("{}", err.log_message());
+    let payload =
+        ServerMessage::Error(ErrorPayload::from_app_error(&err, conversation_id, pending_action_id));
+    if let Ok(json) = serde_json::to_string(&payload) {
+        let _ = session.clone().text(json).await;
+    }
+}
 
 //web socket function
 pub async fn main_caller(
     req: HttpRequest,
     body: web::Payload,
 ) -> actix_web::Result<impl Responder> {
-    // Check the user is logged in or not FIRST, before handling WebSocket upgrade.
+    // Check the user is logged in
     let token = match req.cookie("session_token") {
         Some(cookie) => cookie.value().to_string(),
         None => {
-            return Err(actix_web::error::ErrorUnauthorized(
-                "Missing session cookie. Please log in first.",
-            ));
+            return Err(AppError::Auth(AuthError::MissingSessionCookie).into());
         }
     };
 
-    let claims = match validate_session_token(&token) {
-        Ok(token_claims) => token_claims,
-        Err(e) => return Err(actix_web::error::ErrorUnauthorized(e)),
-    };
+    let claims = validate_session_token(&token).map_err(|e| {
+        AppError::Auth(AuthError::InvalidToken {
+            reason: e.to_string(),
+        })
+    })?;
 
-    // Getting user id
-    let user_id = match claims.sub.parse::<i32>() {
-        Ok(id) => id,
-        Err(_) => {
-            return Err(actix_web::error::ErrorInternalServerError(
-                "Invalid user ID in token",
-            ));
-        }
-    };
+    let user_id = claims.sub.parse::<i32>().map_err(|_| {
+        AppError::Auth(AuthError::InvalidUserId {
+            raw: claims.sub.clone(),
+        })
+    })?;
 
-    // Now that auth is verified, upgrade to WebSocket connection
+    // Upgrade to WebSocket connection
     let (response, session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
     // Spawn async task for websocket communication
@@ -46,97 +61,103 @@ pub async fn main_caller(
                 Message::Text(text) => {
                     let main_msg_text = text.to_string();
 
-                    // Safely deserialize — send error frame instead of panicking
+                    // Safely deserialize
                     let client_message = match serde_json::from_str::<ClientMessage>(&main_msg_text)
                     {
                         Ok(parsed) => parsed,
                         Err(e) => {
-                            let err_payload = ServerMessage::Error(ErrorPayload {
-                                conversation_id: 0,
-                                pending_action_id: None,
-                                error_message: format!("Malformed message: {}", e),
-                            });
-                            if let Ok(json) = serde_json::to_string(&err_payload) {
-                                let _ = session.clone().text(json).await;
-                            }
-                            continue; // keep listening for the next message
+                            send_ws_error(
+                                &session,
+                                ValidationError::MalformedMessage {
+                                    reason: e.to_string(),
+                                }
+                                .into(),
+                                0,
+                                None,
+                            )
+                            .await;
+                            continue;
                         }
                     };
 
                     match client_message {
                         ClientMessage::UserMessage(value) => {
-                            // conversation_id is Option<String> — handle None gracefully
                             let conversation_id_str =
                                 value.conversation_id.clone().unwrap_or_default();
 
                             let conversation_id: i32 = if conversation_id_str.is_empty() {
-                                // Create a new conversation and use its ID
-                                let new_conv = create_conversation(user_id);
-                                new_conv.id
+                                match create_conversation(user_id) {
+                                    Ok(new_conv) => new_conv.id,
+                                    Err(e) => {
+                                        send_ws_error(&session, e.into(), 0, None).await;
+                                        continue;
+                                    }
+                                }
                             } else {
-                                // Parse the existing conversation ID
                                 match conversation_id_str.parse::<i32>() {
                                     Ok(id) => id,
                                     Err(_) => {
-                                        let err_payload = ServerMessage::Error(ErrorPayload {
-                                            conversation_id: 0,
-                                            pending_action_id: None,
-                                            error_message: "Invalid conversation_id".to_string(),
-                                        });
-                                        if let Ok(json) = serde_json::to_string(&err_payload) {
-                                            let _ = session.clone().text(json).await;
-                                        }
+                                        send_ws_error(
+                                            &session,
+                                            ValidationError::InvalidConversationId {
+                                                raw: conversation_id_str,
+                                            }
+                                            .into(),
+                                            0,
+                                            None,
+                                        )
+                                        .await;
                                         continue;
                                     }
                                 }
                             };
 
-                            // Delegate to the handler (all errors sent over stream inside)
                             handle_user_message(value.content, user_id, &session, conversation_id)
                                 .await;
                         }
                         ClientMessage::ActionResponse(value) => {
-                            println!("action response received: {}", value.pending_action_id);
-                            // TODO: handle action response
+                            println!(
+                                "action response received: {}",
+                                value.pending_action_id
+                            );
                             handle_action_response(value, session.clone()).await;
                         }
                     }
                 }
 
                 Message::Binary(_) => {
-                    // Binary frames not supported — notify client
-                    let err_payload = ServerMessage::Error(ErrorPayload {
-                        conversation_id: 0,
-                        pending_action_id: None,
-                        error_message: "Binary messages are not supported".to_string(),
-                    });
-                    if let Ok(json) = serde_json::to_string(&err_payload) {
-                        let _ = session.clone().text(json).await;
-                    }
+                    send_ws_error(
+                        &session,
+                        ValidationError::MalformedMessage {
+                            reason: "binary messages not supported".to_string(),
+                        }
+                        .into(),
+                        0,
+                        None,
+                    )
+                    .await;
                 }
 
                 Message::Close(reason) => {
                     println!("Client sent close frame: {:?}", reason);
                     break;
-                    // exit the loop and close below
                 }
 
-                // Ping/Pong/Continuation — actix-ws handles pings automatically
                 _ => {
-                    //failed to load the server to make thing
-                    let err_payload = ServerMessage::Error(ErrorPayload {
-                        conversation_id: 0,
-                        pending_action_id: None,
-                        error_message: "Binary messages are not supported".to_string(),
-                    });
-                    if let Ok(json) = serde_json::to_string(&err_payload) {
-                        let _ = session.clone().text(json).await;
-                    }
+                    send_ws_error(
+                        &session,
+                        ValidationError::MalformedMessage {
+                            reason: "unsupported message type".to_string(),
+                        }
+                        .into(),
+                        0,
+                        None,
+                    )
+                    .await;
                 }
             }
         }
 
-        // Gracefully close the session
         let _ = session.close(None).await;
     });
 
