@@ -46,7 +46,7 @@ export default function HomeScreen() {
     return (
       <WalletConnectScreen
         onConnect={connect}
-        connecting={false}
+        authStep={authStep}
       />
     );
   }
@@ -56,7 +56,7 @@ export default function HomeScreen() {
     return (
       <WalletConnectScreen
         onConnect={connect}
-        connecting={true}
+        authStep={authStep}
       />
     );
   }

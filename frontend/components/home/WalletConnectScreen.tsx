@@ -17,12 +17,14 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { Colors } from '@/constants/theme';
 
+import { AuthStep } from '@/context/WalletContext';
+
 type Props = {
   onConnect: () => void;
-  connecting: boolean;
+  authStep: AuthStep;
 };
 
-export function WalletConnectScreen({ onConnect, connecting }: Props) {
+export function WalletConnectScreen({ onConnect, authStep }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
@@ -80,9 +82,9 @@ export function WalletConnectScreen({ onConnect, connecting }: Props) {
         {/* Connect Wallet button — same design as Deposit / Withdraw */}
         <TouchableOpacity
           onPress={onConnect}
-          disabled={connecting}
+          disabled={authStep !== 'idle'}
           activeOpacity={0.88}
-          style={[styles.connectBtn, { opacity: connecting ? 0.7 : 1 }]}
+          style={[styles.connectBtn, { opacity: authStep !== 'idle' ? 0.7 : 1 }]}
         >
           <LinearGradient
             colors={['#A78BFA', '#8B5CF6']}
@@ -90,13 +92,15 @@ export function WalletConnectScreen({ onConnect, connecting }: Props) {
             end={{ x: 0, y: 1 }}
             style={styles.connectGradient}
           >
-            {connecting ? (
+            {authStep !== 'idle' ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <MaterialIcons name="account-balance-wallet" size={20} color="#fff" />
             )}
             <ThemedText style={styles.connectBtnText}>
-              {connecting ? 'Connecting…' : 'Connect Wallet'}
+              {authStep === 'connecting' ? 'Opening Wallet…'
+                : authStep === 'logging_in' ? 'Verifying…'
+                : 'Connect Wallet'}
             </ThemedText>
           </LinearGradient>
         </TouchableOpacity>
