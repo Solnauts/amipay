@@ -13,17 +13,25 @@ module.exports = {
           DEFAULT: "#22c55e",
           foreground: "#ffffff",
         },
+        // Violet/purple — used for action buttons (Deposit / Withdraw)
+        violet: {
+          DEFAULT: "#7C3AED",
+          light: "#9333EA",
+          muted: "#EDE9FE",
+          "muted-dark": "#4C1D95",
+          foreground: "#ffffff",
+        },
         background: {
-          DEFAULT: "#ffffff",
-          dark: "#111827",
-          secondary: "#f0fdf4",
-          "secondary-dark": "#1f2937",
+          DEFAULT: "#f4f4f8",
+          dark: "#0D0D1A",
+          secondary: "#ebebf5",
+          "secondary-dark": "#1a1a2e",
         },
         surface: {
-          DEFAULT: "#f8fafc",
-          dark: "#1f2937",
+          DEFAULT: "#ffffff",
+          dark: "#16163a",
           elevated: "#ffffff",
-          "elevated-dark": "#374151",
+          "elevated-dark": "#1f1f40",
         },
         text: {
           DEFAULT: "#111827",
@@ -35,13 +43,13 @@ module.exports = {
         },
         muted: {
           DEFAULT: "#e5e7eb",
-          dark: "#374151",
+          dark: "#2a2a50",
           foreground: "#6b7280",
           "foreground-dark": "#9ca3af",
         },
         border: {
-          DEFAULT: "#e5e7eb",
-          dark: "#374151",
+          DEFAULT: "#e2e2ee",
+          dark: "#2a2a50",
         },
         success: {
           DEFAULT: "#22c55e",

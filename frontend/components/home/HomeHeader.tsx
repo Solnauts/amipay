@@ -4,12 +4,11 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useWallet } from '@/context/WalletContext';
+import { Colors } from '@/constants/theme';
 
 export function HomeHeader() {
   const colorScheme = useColorScheme() ?? 'light';
-  const isDark = colorScheme === 'dark';
-  const borderColor = isDark ? '#374151' : '#e5e7eb';
-  const textMuted = '#9ca3af';
+  const colors = Colors[colorScheme];
 
   const { publicKey, isConnected, connect, disconnect } = useWallet();
 
@@ -19,40 +18,48 @@ export function HomeHeader() {
     : 'Not Connected';
 
   return (
-    <ThemedView className="flex-row items-center justify-between px-6 pt-12 pb-4">
-      {/* Wallet avatar + label */}
+    <ThemedView
+      variant="default"
+      className="flex-row items-center justify-between px-6 pt-12 pb-4"
+    >
+      {/* ── Left: wallet avatar + account label ── */}
       <TouchableOpacity
         className="flex-row items-center gap-3"
+        activeOpacity={0.75}
         onPress={isConnected ? disconnect : connect}
       >
+        {/* Avatar circle */}
         <View
-          className="w-10 h-10 rounded-full items-center justify-center"
-          style={{ backgroundColor: isConnected ? '#22c55e' : '#9ca3af' }}
+          className="w-9 h-9 rounded-full items-center justify-center"
+          style={{ backgroundColor: isConnected ? colors.violet : colors.mutedForeground }}
         >
-          <ThemedText className="text-white font-bold text-base">{walletInitial}</ThemedText>
-        </View>
-        <ThemedView>
-          <ThemedText variant="default" className="font-semibold text-base">
-            {isConnected ? 'Main Wallet' : 'Not Connected'}
+          <ThemedText style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+            {walletInitial}
           </ThemedText>
-          <ThemedText variant="muted" className="text-xs">{displayKey}</ThemedText>
-        </ThemedView>
-        <IconSymbol name="chevron.down" size={14} color={textMuted} />
+        </View>
+
+        {/* Label + chevron */}
+        <ThemedText variant="default" className="font-semibold text-base">
+          Main Account
+        </ThemedText>
+        <IconSymbol name="chevron.down" size={13} color={colors.textMuted} />
       </TouchableOpacity>
 
-      {/* Right icons */}
-      <ThemedView className="flex-row gap-3">
+      {/* ── Right: bell + scan icons ── */}
+      <ThemedView variant="default" className="flex-row gap-2">
         <TouchableOpacity
-          className="w-9 h-9 rounded-full bg-surface dark:bg-surface-dark items-center justify-center"
-          style={{ borderWidth: 1, borderColor }}
+          className="w-9 h-9 rounded-full items-center justify-center"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+          activeOpacity={0.7}
         >
-          <IconSymbol name="clock" size={16} color={textMuted} />
+          <IconSymbol name="clock" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <TouchableOpacity
-          className="w-9 h-9 rounded-full bg-surface dark:bg-surface-dark items-center justify-center"
-          style={{ borderWidth: 1, borderColor }}
+          className="w-9 h-9 rounded-full items-center justify-center"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+          activeOpacity={0.7}
         >
-          <IconSymbol name="qrcode.viewfinder" size={16} color={textMuted} />
+          <IconSymbol name="qrcode.viewfinder" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </ThemedView>
     </ThemedView>
