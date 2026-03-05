@@ -1,16 +1,36 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LoginRequest, LoginResponse, RegisterRequest, UserProfile } from '../../types/api';
-import BaseService, { TOKEN_KEY } from './BaseService';
+import BaseService from './BaseService';
+import {
+  NonceResponse,
+  WalletLoginRequest,
+  WalletLoginResponse,
+  UpdateProfileRequest,
+  UpdateProfileResponse,
+  UniqueAliasResponse,
+  CreateAliasRequest,
+  CreateAliasResponse,
+  GetUserAliasResponse,
+  WalletAddressResponse,
+  AddRecipientRequest,
+  AddRecipientResponse,
+} from '../../types/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AuthService — Singleton
+// Handles all wallet-based authentication and profile management.
+//
+// Flow:
+//  1. getNonce()             → GET  /wallet/nonce
+//  2. login()                → POST /wallet/login   (sets session_token cookie)
+//  3. [new user] getAliasSuggestions() → GET  /wallet/unique-alias
+//  4. [new user] createAlias()         → POST /wallet/create-alias
+//  5. [new user] updateProfile()       → POST /wallet/update-profile
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AuthService extends BaseService {
   private static instance: AuthService;
 
   private constructor() {
-    super(process.env.EXPO_PUBLIC_API_URL!);
+    super(process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000');
   }
 
   public static getInstance(): AuthService {
@@ -20,47 +40,109 @@ class AuthService extends BaseService {
     return AuthService.instance;
   }
 
-  // ── Register ───────────────────────────────────────────────────────────────
-  // POST /api/auth/register
-  async register(data: RegisterRequest): Promise<UserProfile> {
+  // ── Step 1: Fetch a one-time nonce to sign ────────────────────────────────
+  async getNonce(): Promise<NonceResponse> {
     try {
-      const response = await this.client.post<UserProfile>(
-        '/api/auth/register',
-        data,
-      );
-      return response.data;
+      const res = await this.client.get<NonceResponse>('/wallet/nonce');
+      return res.data;
     } catch (error) {
       this.handleError(error);
     }
   }
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-  // POST /api/auth/login
-  // Persists JWT to AsyncStorage on success.
-  async login(data: LoginRequest): Promise<LoginResponse> {
+  // ── Step 2: Submit signed nonce → receive session_token cookie ────────────
+  async login(payload: WalletLoginRequest): Promise<WalletLoginResponse> {
     try {
-      const response = await this.client.post<LoginResponse>(
-        '/api/auth/login',
-        data,
+      const res = await this.client.post<WalletLoginResponse>(
+        '/wallet/login',
+        payload,
       );
-      const { token } = response.data;
-      await AsyncStorage.setItem(TOKEN_KEY, token);
-      return response.data;
+      return res.data;
     } catch (error) {
       this.handleError(error);
     }
   }
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
-  // Removes JWT from AsyncStorage — no backend call needed.
-  async logout(): Promise<void> {
-    await AsyncStorage.removeItem(TOKEN_KEY);
+  // ── Step 3 (new users): Get alias suggestions ────────────────────────────
+  async getAliasSuggestions(): Promise<string[]> {
+    try {
+      const res = await this.client.get<UniqueAliasResponse>(
+        '/wallet/unique-alias',
+      );
+      return res.data.alias;
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
-  // ── Get Token ──────────────────────────────────────────────────────────────
-  // Returns the stored JWT or null if not logged in.
-  async getToken(): Promise<string | null> {
-    return AsyncStorage.getItem(TOKEN_KEY);
+  // ── Step 4 (new users): Save the chosen alias ─────────────────────────────
+  async createAlias(alias: string): Promise<CreateAliasResponse> {
+    try {
+      const payload: CreateAliasRequest = { alias };
+      const res = await this.client.post<CreateAliasResponse>(
+        '/wallet/create-alias',
+        payload,
+      );
+      return res.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Step 5 (new users): Set display name & PIN ────────────────────────────
+  async updateProfile(
+    data: UpdateProfileRequest,
+  ): Promise<UpdateProfileResponse> {
+    try {
+      const res = await this.client.post<UpdateProfileResponse>(
+        '/wallet/update-profile',
+        data,
+      );
+      return res.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Get all aliases for the logged-in user ───────────────────────────────
+  async getUserAliases(): Promise<GetUserAliasResponse> {
+    try {
+      const res = await this.client.post<GetUserAliasResponse>(
+        '/wallet/get_user_alias',
+      );
+      return res.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Get wallet address of logged-in user ─────────────────────────────────
+  async getWalletAddress(): Promise<string> {
+    try {
+      const res = await this.client.post<WalletAddressResponse>(
+        '/wallet/address',
+        { user_id: null },
+      );
+      return res.data.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Add a recipient by alias ──────────────────────────────────────────────
+  async addRecipient(
+    recipientAlias: string,
+  ): Promise<AddRecipientResponse> {
+    try {
+      const payload: AddRecipientRequest = { recipient_alias: recipientAlias };
+      const res = await this.client.post<AddRecipientResponse>(
+        '/wallet/add-recipient',
+        payload,
+      );
+      return res.data;
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 }
 

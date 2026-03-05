@@ -1,124 +1,174 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTH
+// WALLET AUTH
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface RegisterRequest {
-  name: string;
-  password: string;
+/** GET /wallet/nonce */
+export interface NonceResponse {
+  nonce: string;
+  message: string; // e.g. "Sign in to Remitly: <nonce>"
 }
 
-export interface LoginRequest {
-  name: string;
-  password: string;
+/** POST /wallet/login — body */
+export interface WalletLoginRequest {
+  address: string;   // base58 Solana public key
+  signature: string; // base58 Ed25519 signature of the nonce message
+  nonce: string;
 }
 
-export interface LoginResponse {
-  token: string;
-  user: UserProfile;
-}
-
-export interface UserProfile {
+export interface BackendUser {
   id: number;
   name: string;
-  pubkey: string;
-  amount: number;
+  wallet_address: string;
+  method_type: string;
+  has_pin: boolean;
+}
+
+/** POST /wallet/login — response  (also sets session_token cookie) */
+export interface WalletLoginResponse {
+  status: 'success' | 'error';
+  is_new_user: boolean;
+  user: BackendUser;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RECIPIENTS
+// PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface Recipient {
-  id: number;
-  name: string;
-  pubkey: string;
-  userId: number;
+/** POST /wallet/update-profile */
+export interface UpdateProfileRequest {
+  username: string;
+  pin: string; // plain-text PIN; bcrypt-hashed on server
 }
 
-export interface CreateRecipientRequest {
-  name: string;
-  pubkey: string;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TRANSACTIONS
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface Transaction {
-  id: number;
-  senderId: number;
-  receiverId: number;
-  amount: number;
-  currency: string;
-  txSignature: string | null;
+export interface UpdateProfileResponse {
   status: string;
-  createdAt: string;
-}
-
-export interface TransactionHistoryResponse {
-  transactions: Transaction[];
-  total: number;
+  message: string;
+  user: BackendUser;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WEBSOCKET — INBOUND (Server → App)
+// ALIAS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface Action {
-  id: string;
-  label: string;
+/** GET /wallet/unique-alias */
+export interface UniqueAliasResponse {
+  alias: string[];
 }
 
-export interface AssistantMessage {
-  type: 'assistant_message';
-  conversationId: string;
-  content: string;
-  actions?: Action[];
-  pendingActionId?: string;
+/** POST /wallet/create-alias */
+export interface CreateAliasRequest {
+  alias: string;
 }
 
-export interface TxStatus {
-  type: 'tx_status';
-  conversationId: string;
+export interface CreateAliasResponse {
   status: string;
-  txSignature?: string;
-  explorerUrl?: string;
+  message: string;
+  alias: string;
 }
 
-export type WsInboundMessage = AssistantMessage | TxStatus;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WEBSOCKET — OUTBOUND (App → Server)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface UserMessage {
-  type: 'user_message';
-  conversationId: string;
-  content: string;
+/** POST /wallet/get_user_alias */
+export interface AliasRecord {
+  id: number;
+  user_id: number;
+  alias_name: string;
+  is_primary: boolean;
+  created_at: string;
+  half_alias: string;
 }
 
-export interface ActionResponse {
-  type: 'action_response';
-  conversationId: string;
-  pendingActionId: string;
-  response: string;
+export interface GetUserAliasResponse {
+  status: string;
+  alias: AliasRecord[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI INTENT
+// WALLET ADDRESS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type IntentType =
-  | 'transfer'
-  | 'check_balance'
-  | 'transaction_history'
-  | 'unknown';
-
-export interface IntentJson {
-  intent: IntentType;
-  amount: number | null;
-  currency: string;
-  recipient: string | null;
-  historyLimit: number | null;
-  timePeriod: string | null;
+/** POST /wallet/address */
+export interface WalletAddressResponse {
+  status: string;
+  data: string; // base58 wallet address
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECIPIENTS (CONTACTS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** POST /wallet/add-recipient */
+export interface AddRecipientRequest {
+  recipient_alias: string;
+}
+
+export interface AddRecipientResponse {
+  status: string;
+  recipient_id: number;
+  recipient_user_id: number;
+  alias_used: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLAIM / TRANSFER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** POST /claimamount */
+export interface ClaimRequest {
+  amount: number;           // lamports / smallest unit
+  method: 'Auto-Claim' | 'Manual-Claim';
+  recipient_pubkey: string | null; // required for Manual-Claim
+  recipient_id: number;
+}
+
+export interface ClaimResponse {
+  status: string;
+  error_code: number | null;
+  message: string;
+  claimed_amount: number | null;
+  new_balance: number | null;
+  tx_signature: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WEBSOCKET — OUTBOUND  (App → Server)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WsUserMessage {
+  UserMessage: {
+    conversation_id: string | null;
+    content: string;
+  };
+}
+
+export interface WsActionResponse {
+  ActionResponse: {
+    conversation_id: number;
+    pending_action_id: number;
+    response: 'confirm' | 'cancel' | string;
+  };
+}
+
+export type WsOutboundMessage = WsUserMessage | WsActionResponse;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WEBSOCKET — INBOUND  (Server → App)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WsAssistanceMessage {
+  AssistanceMessage: {
+    conversation_id: number;
+    pending_action_id: number | null;
+    task: string;
+    action_buttons: string | null; // comma-separated labels e.g. "confirm,cancel"
+  };
+}
+
+export interface WsError {
+  Error: {
+    conversation_id: number;
+    pending_action_id: number | null;
+    error_code: number;
+    error_message: string;
+  };
+}
+
+export type WsInboundMessage = WsAssistanceMessage | WsError;
