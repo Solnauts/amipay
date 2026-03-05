@@ -1,6 +1,17 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    alias (id) {
+        id -> Int4,
+        user_id -> Int4,
+        alias_name -> Text,
+        is_primary -> Bool,
+        created_at -> Timestamptz,
+        half_alias -> Varchar,
+    }
+}
+
+diesel::table! {
     conversation (id) {
         id -> Int4,
         user_id -> Int4,
@@ -37,9 +48,10 @@ diesel::table! {
 
 diesel::table! {
     recipient (id) {
-        name -> Text,
         userid -> Int4,
         id -> Int4,
+        recipient_user_id -> Int4,
+        alias_used -> Text,
     }
 }
 
@@ -57,12 +69,13 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(alias -> user (user_id));
 diesel::joinable!(conversation -> user (user_id));
 diesel::joinable!(pending_action -> conversation (conversation_id));
 diesel::joinable!(pending_action -> user (user_id));
-diesel::joinable!(recipient -> user (userid));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    alias,
     conversation,
     ledger,
     pending_action,

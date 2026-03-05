@@ -1,5 +1,6 @@
 use crate::database::establish_connection;
 use crate::database::model::{DbLedger, NewLedger};
+use crate::errors::DbError;
 use crate::schema::{ledger, user};
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
@@ -34,23 +35,14 @@ pub struct ClaimResult {
 }
 
 // ── Core: calculate balance from ledger ─────────────────────────────────────
-//
-// Balance = SUM(amount where user is receiver AND status='confirmed')
-//         − SUM(amount where user is sender   AND status='confirmed')
-//
-// This is the **single source of truth** for a user's balance.
-// The `user.amount` column is just a cached snapshot of this value.
 
-/// Helper: run a SUM query with an explicit BIGINT cast to avoid
-/// Diesel's Numeric return type on sum(Int8).
+/// Helper: run a SUM query with an explicit BIGINT cast.
 fn sum_amount_for(
     conn: &mut PgConnection,
     filter_column: &str,
     target_user_id: i32,
     status_filter: &str,
-) -> Result<i64, DieselError> {
-    // Using raw SQL because diesel::dsl::sum(Int8) → Numeric,
-    // but we want i64 directly.
+) -> Result<i64, DbError> {
     let query = format!(
         "SELECT COALESCE(SUM(amount)::BIGINT, 0) FROM ledger WHERE \"{}\" = $1 AND status = $2",
         filter_column
@@ -65,7 +57,11 @@ fn sum_amount_for(
     let row = diesel::sql_query(query)
         .bind::<diesel::sql_types::Int4, _>(target_user_id)
         .bind::<diesel::sql_types::Text, _>(status_filter)
-        .get_result::<SumRow>(conn)?;
+        .get_result::<SumRow>(conn)
+        .map_err(|e| DbError::BalanceCalcFailed {
+            user_id: target_user_id,
+            reason: e.to_string(),
+        })?;
 
     Ok(row.coalesce)
 }
@@ -74,13 +70,9 @@ fn sum_amount_for(
 pub fn calculate_balance_from_ledger(
     conn: &mut PgConnection,
     target_user_id: i32,
-) -> Result<BalanceCalcResult, DieselError> {
-    // Total money received (user is the receiver in confirmed txs)
+) -> Result<BalanceCalcResult, DbError> {
     let total_in = sum_amount_for(conn, "receiverId", target_user_id, "confirmed")?;
-
-    // Total money sent (user is the sender in confirmed txs)
     let total_out = sum_amount_for(conn, "senderId", target_user_id, "confirmed")?;
-
     let net = total_in - total_out;
 
     Ok(BalanceCalcResult {
@@ -97,12 +89,16 @@ pub fn calculate_balance_from_ledger(
 pub fn update_user_amount_from_ledger(
     conn: &mut PgConnection,
     target_user_id: i32,
-) -> Result<i64, DieselError> {
+) -> Result<i64, DbError> {
     let calc = calculate_balance_from_ledger(conn, target_user_id)?;
 
     diesel::update(user::table.filter(user::id.eq(target_user_id)))
         .set(user::amount.eq(calc.net_balance))
-        .execute(conn)?;
+        .execute(conn)
+        .map_err(|e| DbError::BalanceCalcFailed {
+            user_id: target_user_id,
+            reason: e.to_string(),
+        })?;
 
     println!(
         "[balance] user {} → received={} sent={} net={}",
@@ -117,13 +113,13 @@ pub fn update_both_user_amounts(
     conn: &mut PgConnection,
     sender_id: i32,
     receiver_id: i32,
-) -> Result<(i64, i64), DieselError> {
+) -> Result<(i64, i64), DbError> {
     let sender_balance = update_user_amount_from_ledger(conn, sender_id)?;
     let receiver_balance = update_user_amount_from_ledger(conn, receiver_id)?;
     Ok((sender_balance, receiver_balance))
 }
 
-// ── Record transfer + update amounts (all in one DB transaction) ────────────
+// ── Record transfer + update amounts ────────────────────────────────────────
 
 /// Called after the on-chain `transfer_to_vault` succeeds.
 ///
@@ -132,8 +128,7 @@ pub fn update_both_user_amounts(
 ///   2. Recalculates `user.amount` for BOTH users from the full ledger
 ///   3. Returns the new balances
 ///
-/// Everything runs inside a single Diesel/PG transaction so either ALL
-/// writes succeed or NONE do.
+/// Everything runs inside a single Diesel/PG transaction.
 pub fn record_transfer_and_update_amounts(
     conn: &mut PgConnection,
     sender_user_id: i32,
@@ -141,9 +136,9 @@ pub fn record_transfer_and_update_amounts(
     transfer_amount: i64,
     currency_val: String,
     tx_sig: Option<String>,
-) -> Result<TransferResult, DieselError> {
+) -> Result<TransferResult, DbError> {
     conn.transaction::<TransferResult, DieselError, _>(|txn_conn| {
-        // ── 1. Insert ledger entry ──────────────────────────────────────
+        // 1. Insert ledger entry
         let new_entry = NewLedger {
             sender_id: sender_user_id,
             receiver_id: receiver_user_id,
@@ -157,9 +152,11 @@ pub fn record_transfer_and_update_amounts(
             .values(&new_entry)
             .get_result(txn_conn)?;
 
-        // ── 2. Recalculate amounts for both ─────────────────────────────
-        let (sender_bal, receiver_bal) =
-            update_both_user_amounts(txn_conn, sender_user_id, receiver_user_id)?;
+        // 2. Recalculate amounts for both — propagate DbError as DieselError
+        let sender_bal = update_user_amount_from_ledger(txn_conn, sender_user_id)
+            .map_err(|_| DieselError::RollbackTransaction)?;
+        let receiver_bal = update_user_amount_from_ledger(txn_conn, receiver_user_id)
+            .map_err(|_| DieselError::RollbackTransaction)?;
 
         Ok(TransferResult {
             success: true,
@@ -172,59 +169,37 @@ pub fn record_transfer_and_update_amounts(
             ),
         })
     })
+    .map_err(|e| DbError::LedgerInsertFailed {
+        reason: e.to_string(),
+    })
 }
 
-// ── Claim flow (recipient withdraws from vault) ─────────────────────────────
-//
-// Right now the recipient must "claim" the money. This means:
-//   1. The ledger already shows them as the receiver (status = "confirmed")
-//   2. Their `user.amount` already reflects the incoming amount
-//   3. The actual on-chain withdrawal (vault → recipient USDC ATA) happens
-//      when they trigger the claim
-//   4. We record a separate "claim" ledger entry to track the on-chain
-//      disbursement
-//
-// We introduce a new status: "claimed" to distinguish between:
-//   - "confirmed"  → money is in the vault, ledger updated, user.amount updated
-//   - "claimed"    → money has been disbursed from vault to recipient on-chain
+// ── Claim flow ──────────────────────────────────────────────────────────────
 
-/// Get total claimable amount for a user (confirmed transfers where they
-/// are the receiver, minus any amounts already claimed).
-pub fn get_claimable_amount(
-    conn: &mut PgConnection,
-    target_user_id: i32,
-) -> Result<i64, DieselError> {
-    // Total confirmed incoming
+/// Get total claimable amount for a user.
+pub fn get_claimable_amount(conn: &mut PgConnection, target_user_id: i32) -> Result<i64, DbError> {
     let total_confirmed_in = sum_amount_for(conn, "receiverId", target_user_id, "confirmed")?;
-
-    // Total already claimed (withdrawn on-chain)
     let total_claimed = sum_amount_for(conn, "senderId", target_user_id, "claimed")?;
-
     Ok(total_confirmed_in - total_claimed)
 }
 
 /// Record a successful claim (vault → recipient on-chain withdrawal).
-///
-/// This creates a ledger entry of type "claimed" and then recalculates
-/// the user's balance. The `vault_user_id` represents the system/vault
-/// entity in the ledger (you might use a sentinel user ID like 0 or a
-/// dedicated "vault" user row).
 pub fn record_claim(
     conn: &mut PgConnection,
     recipient_user_id: i32,
     claim_amount: i64,
     currency_val: String,
     tx_sig: Option<String>,
-    vault_user_id: i32, // system user representing the vault
-) -> Result<ClaimResult, DieselError> {
+    vault_user_id: i32,
+) -> Result<ClaimResult, DbError> {
     conn.transaction::<ClaimResult, DieselError, _>(|txn_conn| {
-        // Verify they actually have enough to claim
-        let claimable = get_claimable_amount(txn_conn, recipient_user_id)?;
+        let claimable = get_claimable_amount(txn_conn, recipient_user_id)
+            .map_err(|_| DieselError::RollbackTransaction)?;
+
         if claim_amount > claimable {
             return Err(DieselError::RollbackTransaction);
         }
 
-        // Record the claim as: vault → recipient, status = "claimed"
         let claim_entry = NewLedger {
             sender_id: vault_user_id,
             receiver_id: recipient_user_id,
@@ -238,8 +213,8 @@ pub fn record_claim(
             .values(&claim_entry)
             .execute(txn_conn)?;
 
-        // Recalculate the recipient's balance
-        let new_balance = update_user_amount_from_ledger(txn_conn, recipient_user_id)?;
+        let new_balance = update_user_amount_from_ledger(txn_conn, recipient_user_id)
+            .map_err(|_| DieselError::RollbackTransaction)?;
 
         Ok(ClaimResult {
             success: true,
@@ -251,16 +226,16 @@ pub fn record_claim(
             ),
         })
     })
+    .map_err(|e| DbError::ClaimRecordFailed {
+        user_id: recipient_user_id,
+        reason: e.to_string(),
+    })
 }
 
-// ── Standalone helper (uses its own connection) ─────────────────────────────
-// Use this when you don't already have a connection in scope.
+// ── Standalone helpers ──────────────────────────────────────────────────────
 
 /// Standalone: recalculate and persist amounts for both sender and receiver.
-/// Opens its own DB connection.
-pub fn update_amounts_standalone(sender_id: i32, receiver_id: i32) -> Result<(i64, i64), String> {
-    let conn = &mut establish_connection();
-
+pub fn update_amounts_standalone(sender_id: i32, receiver_id: i32) -> Result<(i64, i64), DbError> {
+    let conn = &mut establish_connection()?;
     update_both_user_amounts(conn, sender_id, receiver_id)
-        .map_err(|e| format!("Failed to update amounts: {}", e))
 }

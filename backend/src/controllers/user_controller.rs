@@ -1,5 +1,6 @@
 use crate::database::establish_connection;
 use crate::database::model_functions::create_user;
+use crate::errors::AppError;
 use crate::utility::create_user_ata;
 use actix_web::{HttpResponse, Responder, post, web};
 use bcrypt::{DEFAULT_COST, hash};
@@ -26,23 +27,38 @@ pub struct NormalizedUser {
 
 impl ContactPayload {
     /// Normalize the contact number payload into a NormalizedUser.
-    /// Hashes the pin and contact number before storing.
-    pub fn normalize(self) -> NormalizedUser {
-        let user_pin = hash(self.userpin.to_string(), DEFAULT_COST).unwrap();
+    pub fn normalize(self) -> Result<NormalizedUser, AppError> {
+        let user_pin = hash(self.userpin.to_string(), DEFAULT_COST).map_err(|e| {
+            AppError::Internal {
+                code: 5302,
+                reason: format!("bcrypt hash failed for pin: {}", e),
+            }
+        })?;
 
-        let user_contact = hash(self.contact_number.unwrap().to_string(), DEFAULT_COST).unwrap();
+        let contact = self.contact_number.ok_or(AppError::Validation(
+            crate::errors::ValidationError::MissingField {
+                field: "contact_number".to_string(),
+            },
+        ))?;
 
-        NormalizedUser {
+        let user_contact = hash(contact.to_string(), DEFAULT_COST).map_err(|e| {
+            AppError::Internal {
+                code: 5302,
+                reason: format!("bcrypt hash failed for contact: {}", e),
+            }
+        })?;
+
+        Ok(NormalizedUser {
             username: self.username.unwrap_or_else(|| "Guest".to_string()),
             unique_id: user_contact,
             method_type: "phone".to_string(),
             user_pin,
             email: self.email,
-        }
+        })
     }
 }
 
-// ─── Account Info Types (unchanged) ─────────────────────────────────────────
+// ─── Account Info Types ─────────────────────────────────────────────────────
 
 pub struct AccountBalanceInfo {
     pub user_id: String,
@@ -97,15 +113,15 @@ impl UserAccountInfo {
 #[post("/createaccount")]
 async fn create_user_handler(data: web::Json<ContactPayload>) -> actix_web::Result<impl Responder> {
     // Normalize and hash the contact payload
-    let user = data.into_inner().normalize();
+    let user = data.into_inner().normalize()?;
 
     // Create the Solana USDC ATA for this user
-    let user_ata = create_user_ata(user.unique_id.clone())?;
+    let user_ata = create_user_ata(user.unique_id.clone()).map_err(|e| -> AppError { e.into() })?;
     let user_usdc_ata = user_ata.value.to_string();
 
     // Insert the new user into the database
-    let db_result = web::block(move || {
-        let conn = &mut establish_connection();
+    let _db_result = web::block(move || {
+        let conn = &mut establish_connection()?;
         create_user(
             conn,
             user.username,
@@ -115,8 +131,14 @@ async fn create_user_handler(data: web::Json<ContactPayload>) -> actix_web::Resu
             user.email,
             user_usdc_ata,
         )
+        .map_err(AppError::from)
     })
-    .await?;
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?
+    .map_err(|e: AppError| e)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",

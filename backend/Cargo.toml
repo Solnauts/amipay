@@ -29,3 +29,4 @@ jsonwebtoken = "9.3.0"
 chrono = { version = "0.4.38", features = ["serde"] }
 bs58 = "0.5.1"
 hex = "0.4.3"
+petname = "2.0.2"

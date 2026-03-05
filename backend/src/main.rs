@@ -7,13 +7,14 @@ use crate::controllers::{
 use crate::database::establish_connection;
 mod controllers;
 mod database;
+pub mod errors;
 mod schema;
 mod utility;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    // Initialize database connection on startup
-    establish_connection();
+    // Verify database connection on startup
+    establish_connection().expect("Failed to connect to database on startup");
 
     // Create and run the HTTP server
     HttpServer::new(|| {
