@@ -3,7 +3,8 @@ use crate::database::model_functions::user_model_function::{
     UserInfoRequest, UserInfoResponse, is_amount_valid,
 };
 use crate::database::model_functions::{
-    create_wallet_user, find_user_by_wallet, get_user_info, update_wallet_user_profile, create_alias
+    create_alias, create_wallet_user, find_user_by_wallet, get_user_info,
+    update_wallet_user_profile,
 };
 use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError};
 use crate::utility::create_unique_alias;
@@ -299,7 +300,7 @@ pub async fn update_profile(
         reason: format!("blocking task failed: {}", e),
     })?
     .map_err(|e: DbError| -> AppError { e.into() })?;
- 
+
     let user_info = UserPublicInfo {
         id: updated_user.id,
         name: updated_user.name.clone(),
@@ -318,6 +319,7 @@ pub async fn update_profile(
 #[derive(Deserialize)]
 pub struct CreateAliasPayload {
     pub alias: String,
+    pub half_alias: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -327,9 +329,12 @@ pub struct CreateAliasResponse {
     pub alias: Option<String>,
 }
 
-//function to create alias 
+//function to create alias
 #[post("/wallet/create-alias")]
-pub async fn create_user_alias(request: HttpRequest, data: web::Json<CreateAliasPayload>) -> actix_web::Result<impl Responder>{
+pub async fn create_user_alias(
+    request: HttpRequest,
+    data: web::Json<CreateAliasPayload>,
+) -> actix_web::Result<impl Responder> {
     //Step 1: Extract session token
     let token = request
         .cookie("session_token")
@@ -347,24 +352,23 @@ pub async fn create_user_alias(request: HttpRequest, data: web::Json<CreateAlias
 
     let payload = data.into_inner();
 
-    //call the create alias db function 
+    //call the create alias db function
     let alias_result = web::block(move || {
         let conn = &mut establish_connection()?;
-       create_alias(conn, user_id, &payload.alias, false)
-    }).await.map_err(|e| AppError::Internal {
+        create_alias(conn, user_id, &payload.alias, false, &payload.half_alias)
+    })
+    .await
+    .map_err(|e| AppError::Internal {
         code: 5010,
         reason: format!("blocking task failed: {}", e),
     })?;
-  
-  Ok(HttpResponse::Ok().json(CreateAliasResponse {
-    status: "success".to_string(),
-    message: "Alias created successfully".to_string(),
-    alias: Some(alias_result.unwrap().alias_name),
-  }))
 
+    Ok(HttpResponse::Ok().json(CreateAliasResponse {
+        status: "success".to_string(),
+        message: "Alias created successfully".to_string(),
+        alias: Some(alias_result.unwrap().alias_name),
+    }))
 }
-
-
 
 // ─── Claim Amount ───────────────────────────────────────────────────────────
 

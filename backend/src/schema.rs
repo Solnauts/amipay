@@ -7,6 +7,7 @@ diesel::table! {
         alias_name -> Text,
         is_primary -> Bool,
         created_at -> Timestamptz,
+        half_alias -> Varchar,
     }
 }
 

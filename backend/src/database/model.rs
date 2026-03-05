@@ -197,7 +197,6 @@ pub struct RecipientCandidate {
 }
 
 // ── Alias Models (UPI-style handles) ────────────────────────────────────────
-
 #[derive(Queryable, Selectable, Serialize, Clone, Debug)]
 #[diesel(table_name = crate::schema::alias)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -207,6 +206,7 @@ pub struct DbAlias {
     pub alias_name: String,
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
+    pub half_alias: String,
 }
 
 #[derive(Insertable)]
@@ -215,4 +215,12 @@ pub struct NewAlias {
     pub user_id: i32,
     pub alias_name: String,
     pub is_primary: bool,
+    pub half_alias: String,
+}
+
+//struct for useralias of all the users
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::schema::alias)]
+pub struct DbAliasName {
+    pub alias_name: String,
 }

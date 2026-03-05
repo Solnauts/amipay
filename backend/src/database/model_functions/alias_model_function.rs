@@ -1,14 +1,14 @@
-use crate::database::model::{DbAlias, NewAlias};
+use crate::database::model::{DbAlias, DbAliasName, NewAlias};
 use crate::errors::{AppError, DbError, ValidationError};
-use diesel::prelude::*;
 use diesel::PgConnection;
-
+use diesel::prelude::*;
 
 pub fn create_alias(
     conn: &mut PgConnection,
     target_user_id: i32,
     alias_str: &str,
     primary: bool,
+    half_alias_str: &str,
 ) -> Result<DbAlias, AppError> {
     use crate::schema::alias::dsl::*;
 
@@ -32,6 +32,7 @@ pub fn create_alias(
         user_id: target_user_id,
         alias_name: alias_str.to_string(),
         is_primary: primary,
+        half_alias: half_alias_str.to_string(),
     };
 
     diesel::insert_into(alias)
@@ -108,38 +109,57 @@ pub fn delete_alias(
     Ok(deleted)
 }
 
-
 //create the is alias exist function
-pub fn is_alias_exists(conn: &mut PgConnection, alias_vec: Vec<String>) -> Vec<String>{
-//get the dsl from the alias table
-use crate::schema::alias::dsl::*;
+pub fn is_alias_exists(conn: &mut PgConnection, alias_vec: Vec<String>) -> Vec<String> {
+    //get the dsl from the alias table
+    use crate::schema::alias::dsl::*;
 
-//iterate through the alias_str and check if any of them exists
-let db_result = alias.filter(alias_name.eq_any(&alias_vec)).load::<DbAlias>(conn);
+    //iterate through the alias_str and check if any of them exists
+    let db_result = alias
+        .filter(alias_name.eq_any(&alias_vec))
+        .load::<DbAlias>(conn);
 
-//create the return vector 
-let mut new_alias_vec = Vec::new();
+    //create the return vector
+    let mut new_alias_vec = Vec::new();
 
-match db_result{
-    Ok(db_alias_vec) => {
-     //get the alias from the db_alias_vec and pop those from the aliasa_vec and return the new alias vec 
-     for alias_val in db_alias_vec{
-       //directly check the value from the db_alias_vec and pop those from the aliasa_vec and return the new alias vec 
-        if alias_vec.contains(&alias_val.alias_name){
-        new_alias_vec.push(alias_val.alias_name);
-     };
-       }
-       //return the new alias vec 
-     return new_alias_vec;
+    match db_result {
+        Ok(db_alias_vec) => {
+            //get the alias from the db_alias_vec and pop those from the aliasa_vec and return the new alias vec
+            for alias_val in db_alias_vec {
+                //directly check the value from the db_alias_vec and pop those from the aliasa_vec and return the new alias vec
+                if alias_vec.contains(&alias_val.alias_name) {
+                    new_alias_vec.push(alias_val.alias_name);
+                };
+            }
+            //return the new alias vec
+            return new_alias_vec;
+        }
+        Err(_) => {
+            //there might be no alias in the db so return the alias vec itself
+            return alias_vec;
+        }
     }
-    Err(_) => {
-
- //there might be no alias in the db so return the alias vec itself 
- return alias_vec;
-}
-}
 }
 
+pub struct AliasNameResponse {
+    pub name: String,
+    pub full_alias: String,
+}
 
+//get all the alias present in the database
+pub fn get_all_alias(conn: &mut PgConnection) -> Result<Vec<DbAliasName>, DbError> {
+    use crate::schema::alias::dsl::*;
 
+    //query function to get all the alias from the database
+    let alias_result = alias
+        .select(DbAliasName::as_select())
+        .load::<DbAliasName>(conn);
 
+    match alias_result {
+        Ok(result) => Ok(result),
+        Err(error) => Err(DbError::AliasLookupFailed {
+            alias: "all".to_string(),
+            reason: error.to_string(),
+        }),
+    }
+}
