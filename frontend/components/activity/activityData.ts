@@ -1,5 +1,5 @@
 // Shared types and mock data for the Activity screen
-// Add new transactions here — the utils will auto-group by date
+// Dates are adjusted to always be relative — use Date.now() offsets
 
 export type TxType = 'sent' | 'received';
 
@@ -9,27 +9,70 @@ export type ActivityTransaction = {
   name: string;
   description: string;
   token: string;
-  amount: number;    // positive for received, negative for sent
+  amount: number;    // positive = received, negative = sent
   type: TxType;
   color: string;    // avatar background
-  date: string;     // ISO date string: '2026-03-01T12:35:00Z'
+  date: string;     // ISO date string
 };
 
+// Helper — N hours ago from now
+function hoursAgo(h: number): string {
+  return new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
+}
+// Helper — N days ago from now
+function daysAgo(d: number): string {
+  return new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export const ACTIVITY_TRANSACTIONS: ActivityTransaction[] = [
-  // ── TODAY (2026-03-01) ──────────────────────────────────────────────
+  // ── TODAY ──────────────────────────────────────────────────────────────
   {
     id: '1',
-    initials: 'GE',
-    name: 'Gemini',
-    description: 'Monthly subscription',
+    initials: 'M',
+    name: 'Send To Mom',
+    description: 'Payment sent',
     token: 'USDC',
-    amount: -100,
+    amount: -50,
     type: 'sent',
-    color: '#111827',
-    date: '2026-03-01T12:35:00Z',
+    color: '#F97316',
+    date: hoursAgo(2),
   },
   {
     id: '2',
+    initials: 'T',
+    name: 'Received From Tolly',
+    description: 'Payment received',
+    token: 'USDC',
+    amount: 100,
+    type: 'received',
+    color: '#1e293b',
+    date: hoursAgo(5),
+  },
+  {
+    id: '3',
+    initials: 'C',
+    name: 'Sent To Crusty',
+    description: 'Payment sent',
+    token: 'USDC',
+    amount: -500,
+    type: 'sent',
+    color: '#1e3a5f',
+    date: hoursAgo(5),
+  },
+  // ── YESTERDAY ──────────────────────────────────────────────────────────
+  {
+    id: '4',
+    initials: 'M',
+    name: 'Send To Mom',
+    description: 'Payment sent',
+    token: 'USDC',
+    amount: -50,
+    type: 'sent',
+    color: '#F97316',
+    date: daysAgo(1),
+  },
+  {
+    id: '5',
     initials: 'SJ',
     name: 'Sarah Johnson',
     description: 'Payment sent',
@@ -37,11 +80,10 @@ export const ACTIVITY_TRANSACTIONS: ActivityTransaction[] = [
     amount: -250,
     type: 'sent',
     color: '#6366f1',
-    date: '2026-03-01T09:35:00Z',
+    date: daysAgo(1),
   },
-  // ── YESTERDAY (2026-02-28) ──────────────────────────────────────────
   {
-    id: '3',
+    id: '6',
     initials: 'RE',
     name: 'Rewards',
     description: 'Cashback earned',
@@ -49,11 +91,11 @@ export const ACTIVITY_TRANSACTIONS: ActivityTransaction[] = [
     amount: 50,
     type: 'received',
     color: '#22c55e',
-    date: '2026-02-28T02:35:00Z',
+    date: daysAgo(1),
   },
-  // ── FEB 27, 2026 ────────────────────────────────────────────────────
+  // ── 2 DAYS AGO ─────────────────────────────────────────────────────────
   {
-    id: '4',
+    id: '7',
     initials: 'AC',
     name: 'Alex Chen',
     description: 'Payment received',
@@ -61,35 +103,22 @@ export const ACTIVITY_TRANSACTIONS: ActivityTransaction[] = [
     amount: 500,
     type: 'received',
     color: '#9ca3af',
-    date: '2026-02-27T02:35:00Z',
+    date: daysAgo(2),
   },
-  // ── FEB 26, 2026 ────────────────────────────────────────────────────
   {
-    id: '5',
-    initials: 'MO',
-    name: 'Mom',
-    description: 'Family payment',
-    token: 'USDC',
-    amount: -1000,
-    type: 'sent',
-    color: '#3b82f6',
-    date: '2026-02-26T02:35:00Z',
-  },
-  // ── FEB 25, 2026 ────────────────────────────────────────────────────
-  {
-    id: '6',
-    initials: 'BR',
+    id: '8',
+    initials: 'B',
     name: 'Brother',
     description: 'Payment sent',
     token: 'SOL',
     amount: -150,
     type: 'sent',
     color: '#111827',
-    date: '2026-02-25T02:35:00Z',
+    date: daysAgo(2),
   },
-  // ── FEB 24, 2026 ────────────────────────────────────────────────────
+  // ── 3 DAYS AGO ─────────────────────────────────────────────────────────
   {
-    id: '7',
+    id: '9',
     initials: 'RP',
     name: 'Rewards Program',
     description: 'Staking rewards',
@@ -97,6 +126,6 @@ export const ACTIVITY_TRANSACTIONS: ActivityTransaction[] = [
     amount: 25.5,
     type: 'received',
     color: '#8b5cf6',
-    date: '2026-02-24T02:35:00Z',
+    date: daysAgo(3),
   },
 ];

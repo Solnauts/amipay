@@ -17,10 +17,10 @@ export function ThemedText({ className, variant = "default", type = "default", s
   };
 
   const typeStyles: Record<string, object> = {
-    default: {},
-    title: { fontSize: 28, fontWeight: "bold" },
-    subtitle: { fontSize: 20, fontWeight: "600" },
-    defaultSemiBold: { fontWeight: "600" },
+    default: { fontFamily: 'Poppins_400Regular' },
+    title: { fontSize: 28, fontWeight: "bold", fontFamily: 'Poppins_700Bold' },
+    subtitle: { fontSize: 20, fontWeight: "600", fontFamily: 'Poppins_600SemiBold' },
+    defaultSemiBold: { fontWeight: "600", fontFamily: 'Poppins_600SemiBold' },
   };
 
   return (

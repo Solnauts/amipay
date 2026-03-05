@@ -40,14 +40,16 @@ export function getDateLabel(isoDate: string): string {
 
 // ---------------------------------------------------------------------------
 // Time formatter
-// Returns "12:35 PM" from an ISO date string
+// Returns relative time like "2hr ago", "5hr ago", "2d ago"
 // ---------------------------------------------------------------------------
 export function formatTime(isoDate: string): string {
-  return new Date(isoDate).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60) return `${mins}min ago`;
+  if (hours < 24) return `${hours}hr ago`;
+  return `${days}d ago`;
 }
 
 // ---------------------------------------------------------------------------

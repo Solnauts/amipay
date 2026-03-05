@@ -1,6 +1,3 @@
-// AI Payment Screen — opened as a modal when user taps the Pay button
-// Chat-style interface with suggestion chips, message list, and text/mic input
-
 import React, { useState, useRef } from 'react';
 import {
   FlatList,
@@ -12,7 +9,7 @@ import {
   Platform,
   useColorScheme,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -26,20 +23,14 @@ type Message = {
   text: string;
   isUser: boolean;
   time: string;
+  confirmLabel?: string;
 };
 
-// Suggestion chips shown at the top
-const SUGGESTIONS = [
-  'Send $100 to Mom',
-  'Pay 50 USDC to Sarah',
-  'Send 0.5 SOL to Brother',
-  'Split $60 with Family',
-];
+const SUGGESTIONS = ['Send $50 to Mom', 'Send 5 SOL to Dad'];
 
-// Initial AI greeting message
 const INITIAL_MESSAGE: Message = {
   id: 'ai-0',
-  text: "Hi! I'm your AI payment assistant. You can say things like 'Send $100 to Sarah' or 'Pay 50 USDC to my brother'",
+  text: "Hi! I'm your AI payment assistant. Just tell me who you want to send money to and how much. Try saying 'Send $50 to Mom' or 'Send 2 SOL to Dad'.",
   isUser: false,
   time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 };
@@ -51,46 +42,81 @@ function nowTime() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function buildAiReply(input: string): string {
+function buildAiReply(input: string): { text: string; confirmLabel?: string } {
   const lower = input.toLowerCase();
   if (lower.includes('send') || lower.includes('pay')) {
-    return `Got it! Let me process that payment: "${input}". Please confirm the details.`;
+    return {
+      text: `Perfect! I'll help you send ${input}. Tap the button below to confirm the payment.`,
+      confirmLabel: `Confirm ${input}`,
+    };
   }
   if (lower.includes('split')) {
-    return `Sure! I'll help you split that. Shall I use equal amounts for each person?`;
+    return { text: `Sure! I'll help you split that. Shall I use equal amounts for each person?` };
   }
-  return `I understand you want to: "${input}". Can you provide more details like the amount and recipient?`;
+  return { text: `I understand you want to: "${input}". Can you provide more details like the amount and recipient?` };
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// ChatBubble
 // ---------------------------------------------------------------------------
-function ChatBubble({ msg, colors }: { msg: Message; colors: typeof Colors[keyof typeof Colors] }) {
+function ChatBubble({
+  msg,
+  colors,
+}: {
+  msg: Message;
+  colors: (typeof Colors)[keyof typeof Colors];
+}) {
   const isUser = msg.isUser;
+
   return (
-    <View
-      className={`mb-3 mx-4 max-w-xs ${isUser ? 'self-end items-end' : 'self-start items-start'}`}
-    >
+    <View className={`mb-4 mx-4 ${isUser ? 'items-end' : 'items-start'}`}>
+      {/* Name + dot */}
       <View
-        className="rounded-2xl px-4 py-3"
+        className={`flex-row items-center gap-1.5 mb-1.5 ${isUser ? 'flex-row-reverse' : ''}`}
+      >
+        <View
+          className="w-3 h-3 rounded-full"
+          style={{ backgroundColor: isUser ? '#22c55e' : '#8b5cf6' }}
+        />
+        <ThemedText className="text-xs font-semibold">
+          {isUser ? 'You' : 'Amipay'}
+        </ThemedText>
+      </View>
+
+      {/* Bubble */}
+      <View
+        className="rounded-2xl px-4 py-3 max-w-xs"
         style={{
-          backgroundColor: isUser ? colors.primary : colors.surface,
+          backgroundColor: isUser ? colors.surface : '#ede9fe',
           borderBottomRightRadius: isUser ? 4 : 16,
           borderBottomLeftRadius: isUser ? 16 : 4,
-          borderWidth: isUser ? 0 : 1,
+          borderWidth: isUser ? 1 : 0,
           borderColor: colors.border,
         }}
       >
         <ThemedText
           className="text-sm leading-5"
-          style={{ color: isUser ? colors.primaryForeground : colors.text }}
+          style={{ color: colors.text }}
         >
           {msg.text}
         </ThemedText>
       </View>
-      <ThemedText variant="muted" className="text-xs mt-1 px-1">
-        {msg.time}
-      </ThemedText>
+
+      {/* Confirm button — only on AI payment replies */}
+      {!isUser && msg.confirmLabel && (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          className="mt-3 px-5 py-3 rounded-full"
+          style={{ backgroundColor: '#0d0d0d' }}
+        >
+          <ThemedText
+            className="text-sm font-semibold"
+            style={{ color: '#ffffff' }}
+          >
+            {msg.confirmLabel}
+          </ThemedText>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -101,20 +127,34 @@ function ChatBubble({ msg, colors }: { msg: Message; colors: typeof Colors[keyof
 export default function PayScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const { to } = useLocalSearchParams<{ to?: string }>();
 
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
-  const [input, setInput] = useState('');
+  // Pre-fill input with contact name if navigated from contacts
+  const [input, setInput] = useState(to ? `Send to ${to} ` : '');
   const listRef = useRef<FlatList>(null);
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;
 
-    const userMsg: Message = { id: `u-${Date.now()}`, text: text.trim(), isUser: true, time: nowTime() };
-    const aiMsg: Message   = { id: `a-${Date.now()}`, text: buildAiReply(text.trim()), isUser: false, time: nowTime() };
+    const reply = buildAiReply(text.trim());
+
+    const userMsg: Message = {
+      id: `u-${Date.now()}`,
+      text: text.trim(),
+      isUser: true,
+      time: nowTime(),
+    };
+    const aiMsg: Message = {
+      id: `a-${Date.now()}`,
+      text: reply.text,
+      confirmLabel: reply.confirmLabel,
+      isUser: false,
+      time: nowTime(),
+    };
 
     setMessages((prev) => [...prev, userMsg, aiMsg]);
     setInput('');
-    // Scroll to end after render
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
@@ -122,66 +162,31 @@ export default function PayScreen() {
     <ThemedView variant="default" className="flex-1">
 
       {/* ── Header ── */}
-      <>
-        <ThemedView
-          variant="default"
-          className="flex-row items-center justify-between px-5 pt-14 pb-4"
+      <ThemedView
+        variant="default"
+        className="flex-row items-center justify-between px-5 pt-14 pb-4"
+      >
+        {/* Back */}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          className="w-9 h-9 rounded-full items-center justify-center"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
         >
-          {/* Back / close */}
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            className="w-9 h-9 rounded-full items-center justify-center"
-            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-          >
-            <MaterialIcons name="arrow-back" size={18} color={colors.text} />
-          </TouchableOpacity>
+          <MaterialIcons name="arrow-back" size={18} color={colors.text} />
+        </TouchableOpacity>
 
-          {/* Title */}
-          <ThemedView variant="default" className="items-center">
-            <ThemedText type="subtitle" variant="default">AI Payment</ThemedText>
-            <ThemedText variant="muted" className="text-xs">Powered by AI</ThemedText>
-          </ThemedView>
+        {/* Title */}
+        <ThemedText type="subtitle" variant="default">AI Pay</ThemedText>
 
-          {/* AI star icon */}
-          <View
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: colors.primary }}
-          >
-            <MaterialIcons name="auto-awesome" size={20} color={colors.primaryForeground} />
-          </View>
-        </ThemedView>
+        {/* Spacer to keep title centered */}
+        <View style={{ width: 36 }} />
+      </ThemedView>
 
-        {/* Divider */}
-        <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 24, marginBottom: 12 }} />
-
-        {/* ── Suggestion chips ── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}
-          style={{ flexGrow: 0 }}
-        >
-          {SUGGESTIONS.map((s) => (
-            <TouchableOpacity
-              key={s}
-              onPress={() => sendMessage(s)}
-              activeOpacity={0.75}
-              className="rounded-full px-4 py-2"
-              style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-            >
-              <ThemedText variant="default" className="text-xs font-semibold" style={{ color: colors.text }}>
-                {s}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Progress bar (decorative — shows "AI thinking" feel) */}
-        <View style={{ height: 3, backgroundColor: colors.muted, marginHorizontal: 0, marginTop: 10 }}>
-          <View style={{ width: '35%', height: 3, backgroundColor: colors.primary, borderRadius: 2 }} />
-        </View>
-      </>
+      {/* Divider */}
+      <View
+        style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 24, marginBottom: 12 }}
+      />
 
       {/* ── Chat messages ── */}
       <FlatList
@@ -194,58 +199,78 @@ export default function PayScreen() {
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
       />
 
-      {/* ── Input bar ── */}
+      {/* ── Bottom area ── */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
+        {/* Suggestion chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingVertical: 8 }}
+          style={{ flexGrow: 0 }}
+        >
+          {SUGGESTIONS.map((s) => (
+            <TouchableOpacity
+              key={s}
+              onPress={() => sendMessage(s)}
+              activeOpacity={0.75}
+              className="rounded-full px-4 py-2"
+              style={{
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <ThemedText className="text-xs" style={{ color: colors.text }}>
+                {s}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Input bar */}
         <ThemedView
           variant="default"
           className="flex-row items-center px-4 py-3 gap-3"
           style={{ borderTopWidth: 1, borderTopColor: colors.border }}
         >
-          {/* Mic button */}
-          <TouchableOpacity
-            activeOpacity={0.75}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-          >
-            <MaterialIcons name="mic" size={20} color={colors.mutedForeground} />
-          </TouchableOpacity>
-
-          {/* Text input */}
+          {/* Input + mic inside */}
           <ThemedView
-            variant="surface"
-            className="flex-1 rounded-2xl px-4"
-            style={{ height: 44, justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+            className="flex-1 flex-row items-center rounded-full px-4"
+            style={{
+              height: 48,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
           >
             <TextInput
               value={input}
               onChangeText={setInput}
-              placeholder="Type your request..."
+              placeholder="Type or use voice"
               placeholderTextColor={colors.mutedForeground}
               onSubmitEditing={() => sendMessage(input)}
               returnKeyType="send"
-              style={{ color: colors.text, fontSize: 14, paddingVertical: 0 }}
+              style={{ flex: 1, color: colors.text, fontSize: 14, paddingVertical: 0 }}
             />
+            <MaterialIcons name="mic" size={20} color={colors.mutedForeground} />
           </ThemedView>
 
-          {/* Send button */}
+          {/* Pay pill */}
           <TouchableOpacity
             onPress={() => sendMessage(input)}
             activeOpacity={0.75}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{
-              backgroundColor: input.trim() ? colors.primary : colors.surface,
-              borderWidth: input.trim() ? 0 : 1,
-              borderColor: colors.border,
-            }}
+            className="px-5 rounded-full items-center justify-center"
+            style={{ height: 48, backgroundColor: colors.primary }}
           >
-            <MaterialIcons
-              name="send"
-              size={18}
-              color={input.trim() ? colors.primaryForeground : colors.mutedForeground}
-            />
+            <ThemedText
+              className="text-sm font-semibold"
+              style={{ color: colors.primaryForeground }}
+            >
+              Pay
+            </ThemedText>
           </TouchableOpacity>
         </ThemedView>
       </KeyboardAvoidingView>
