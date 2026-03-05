@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, useColorScheme } from 'react-native';
+import { router } from 'expo-router';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { Colors } from '@/constants/theme';
@@ -10,8 +11,6 @@ import { Feather } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 
 const COLUMNS = 4;
-
-
 
 /**
  * "People" section — shows a 2-row grid of recent contacts.
@@ -27,7 +26,7 @@ export function PeopleSection() {
   }
   // Fill the last row so the More button sits in the right slot
   const lastRow = rows[rows.length - 1];
-  while (lastRow.length < COLUMNS - 1) lastRow.push({ initials: '', name: '', color: 'transparent' });
+  while (lastRow.length < COLUMNS - 1) lastRow.push({ id: '', initials: '', name: '', color: 'transparent' });
 
   return (
     <ThemedView className="px-6 mb-6">
@@ -39,7 +38,12 @@ export function PeopleSection() {
         <ThemedView key={rowIdx} className="flex-row justify-between mb-3">
           {row.map((contact, colIdx) =>
             contact.name ? (
-              <ContactItem key={`${rowIdx}-${colIdx}`} contact={contact} size="md" />
+              <ContactItem
+                key={`${rowIdx}-${colIdx}`}
+                contact={contact}
+                size="md"
+                onPress={() => router.push(`/(tabs)/rewards?contactId=${contact.id}` as any)}
+              />
             ) : (
               <ThemedView key={`empty-${rowIdx}-${colIdx}`} style={{ width: 64 }} />
             )
@@ -48,6 +52,7 @@ export function PeopleSection() {
           {/* "More" button — only on the last row */}
           {rowIdx === rows.length - 1 && (
             <TouchableOpacity
+              onPress={() => router.push('/(tabs)/rewards' as any)}
               activeOpacity={0.75}
               className="items-center gap-1.5"
               style={{ width: 64 }}

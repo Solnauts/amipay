@@ -1,6 +1,7 @@
 // Shared types and mock data for the home screen
 
 export type Contact = {
+  id: string;
   initials: string;
   name: string;
   color: string;
@@ -19,20 +20,20 @@ export type Transaction = {
 
 // "People" grid — all contacts the user has interacted with recently
 export const PEOPLE: Contact[] = [
-  { initials: 'T',  name: 'Tolly',  color: '#9333EA' },
-  { initials: 'S',  name: 'Sid',    color: '#EF4444' },
-  { initials: 'M',  name: 'Manish', color: '#22c55e' },
-  { initials: 'R',  name: 'Raima',  color: '#F97316' },
-  { initials: 'Mo', name: 'Mom',    color: '#7C3AED' },
-  { initials: 'A',  name: 'Asish',  color: '#6B7280' },
-  { initials: 'D',  name: 'Disha',  color: '#3B82F6' },
+  { id: 'c4', initials: 'S',  name: 'Sarah',  color: '#9333EA' },
+  { id: 'c2', initials: 'D',  name: 'Dad',    color: '#EF4444' },
+  { id: 'c3', initials: 'B',  name: 'Brother', color: '#22c55e' },
+  { id: 'c1', initials: 'M',  name: 'Mom',    color: '#F97316' },
+  { id: 'c5', initials: 'R',  name: 'Raima',  color: '#7C3AED' },
+  { id: 'c6', initials: 'A',  name: 'Asish',  color: '#6B7280' },
+  { id: 'c7', initials: 'D',  name: 'Disha',  color: '#3B82F6' },
 ];
 
 // "Favourite" section — pinned contacts
 export const FAVOURITES: Contact[] = [
-  { initials: 'M', name: 'Mom',    color: '#7C3AED' },
-  { initials: 'D', name: 'Dad',    color: '#22c55e' },
-  { initials: 'S', name: 'Sister', color: '#3B82F6' },
+  { id: 'c1', initials: 'M', name: 'Mom',    color: '#7C3AED' },
+  { id: 'c2', initials: 'D', name: 'Dad',    color: '#22c55e' },
+  { id: 'c3', initials: 'S', name: 'Sister', color: '#3B82F6' },
 ];
 
 // Legacy — still used by existing RecentTransactions

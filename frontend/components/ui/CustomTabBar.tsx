@@ -1,19 +1,20 @@
-import { useState } from 'react';
 import { TouchableOpacity, useColorScheme, View } from 'react-native';
+import { router, usePathname } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
 
 const tabs = [
-  { name: 'Home', icon: 'home' },
-  { name: 'Wallet', icon: 'credit-card' },
-  { name: 'Contacts', icon: 'users' },
+  { name: 'Home',      icon: 'home',        route: '/'                 as const },
+   { name: 'Contacts',   icon: 'users',        route: '/contacts'    as const },
+  { name: 'Activities', icon: 'credit-card',   route: '/activities' as const },
+ 
 ];
 
 export function CustomTabBar() {
   const colors = Colors[useColorScheme() ?? 'light'];
-  const [activeTab, setActiveTab] = useState('Home');
+  const pathname = usePathname();
 
   return (
     <ThemedView
@@ -25,11 +26,11 @@ export function CustomTabBar() {
       {/* Left: Tabs */}
       <ThemedView className="flex-row items-center gap-1">
         {tabs.map((tab) => {
-          const isActive = activeTab === tab.name;
+          const isActive = pathname === tab.route;
           return (
             <TouchableOpacity
               key={tab.name}
-              onPress={() => setActiveTab(tab.name)}
+              onPress={() => router.push(tab.route)}
               activeOpacity={0.7}
               className="flex-row items-center gap-1.5 px-3 py-2 rounded-full"
               style={{
@@ -53,6 +54,7 @@ export function CustomTabBar() {
 
       {/* Right: Pay Button */}
       <TouchableOpacity
+        onPress={() => router.push('/pay')}
         activeOpacity={0.8}
         className="flex-row items-center gap-2 px-4 py-2.5 rounded-full"
         style={{ backgroundColor: '#0d0d0d' }}

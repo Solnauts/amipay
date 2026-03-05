@@ -1,74 +1,128 @@
-// Activity Screen — 2nd tab
-// Composes: ActivityHeader, SearchBar, FilterPills, TransactionGroup
-// All state + logic lives here; components receive only what they need
+// Activities Screen — wallet overview + recent transaction preview
+// Reuses HomeHeader + BalanceSection from the home screen.
+// "View all" navigates to /all-transactions for the full list.
 
 import React, { useState, useMemo } from 'react';
-import { FlatList, ListRenderItem } from 'react-native';
-import { ThemedView } from '@/components/ui/ThemedView';
-import { ThemedText } from '@/components/ui/ThemedText';
-import { ActivityHeader } from '@/components/activity/ActivityHeader';
-import { SearchBar } from '@/components/activity/SearchBar';
-import { FilterPills } from '@/components/activity/FilterPills';
+import {
+  ScrollView,
+  RefreshControl,
+  View,
+  TouchableOpacity,
+  useColorScheme,
+  SafeAreaView,
+} from 'react-native';
+import { router } from 'expo-router';
+
+// ── Shared home components ─────────────────────────────────────────────────
+import { HomeHeader }     from '@/components/home/HomeHeader';
+import { BalanceSection } from '@/components/home/BalanceSection';
+
+// ── Activity-specific components ───────────────────────────────────────────
+import { TokensSection }    from '@/components/activity/TokensSection';
 import { TransactionGroup } from '@/components/activity/TransactionGroup';
 import { ACTIVITY_TRANSACTIONS } from '@/components/activity/activityData';
+
 import {
-  FilterType,
   TransactionGroup as TxGroup,
   getFilteredGroups,
 } from '@/utils/activityUtils';
 
+import { ThemedView } from '@/components/ui/ThemedView';
+import { ThemedText } from '@/components/ui/ThemedText';
+import { Colors } from '@/constants/theme';
+
+// Only show a preview of the most recent 3 transactions on the overview
+const PREVIEW_COUNT = 3;
+
 export default function ActivityScreen() {
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [query, setQuery] = useState('');
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
 
-  // Pure pipeline: filter → search → group (memoized, only recalculates when deps change)
-  const groups: TxGroup[] = useMemo(
-    () => getFilteredGroups(ACTIVITY_TRANSACTIONS, filter, query),
-    [filter, query],
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Grab all groups (no filter/search on overview), then slice to preview
+  const allGroups: TxGroup[] = useMemo(
+    () => getFilteredGroups(ACTIVITY_TRANSACTIONS, 'all', ''),
+    [],
   );
 
-  // ---------------------------------------------------------------------------
-  // FlatList renderers — keeps JSX below clean
-  // ---------------------------------------------------------------------------
-  const renderGroup: ListRenderItem<TxGroup> = ({ item }) => (
-    <TransactionGroup group={item} />
-  );
+  // Show only the Today group (first group) for the preview, or first N items
+  const previewGroups: TxGroup[] = useMemo(() => {
+    let count = 0;
+    const result: TxGroup[] = [];
+    for (const group of allGroups) {
+      if (count >= PREVIEW_COUNT) break;
+      const sliced = group.data.slice(0, PREVIEW_COUNT - count);
+      result.push({ label: group.label, data: sliced });
+      count += sliced.length;
+    }
+    return result;
+  }, [allGroups]);
 
-  const keyExtractor = (item: TxGroup) => item.label;
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise((r) => setTimeout(r, 800));
+    setRefreshing(false);
+  };
 
-  const ListHeader = (
-    <>
-      <ActivityHeader />
-      <SearchBar value={query} onChangeText={setQuery} />
-      <FilterPills active={filter} onChange={setFilter} />
-    </>
-  );
-
-  const EmptyState = (
-    <ThemedView className="items-center justify-center py-16 px-8">
-      <ThemedText className="text-4xl mb-3">🔍</ThemedText>
-      <ThemedText type="defaultSemiBold" variant="default" className="text-base mb-1">
-        No transactions found
-      </ThemedText>
-      <ThemedText variant="muted" className="text-sm text-center">
-        Try a different search or change the filter.
-      </ThemedText>
-    </ThemedView>
-  );
-
-  // ---------------------------------------------------------------------------
   return (
-    <ThemedView variant="default" className="flex-1">
-      <FlatList
-        data={groups}
-        keyExtractor={keyExtractor}
-        renderItem={renderGroup}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={EmptyState}
-        contentContainerStyle={{ paddingBottom: 32 }}
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-      />
-    </ThemedView>
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
+        {/* ── Header — same as home ── */}
+        <HomeHeader />
+
+        {/* ── Balance — $4,234.23, Deposit/Withdraw ── */}
+        <BalanceSection balance={null} connecting={false} />
+
+        {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
+        <TokensSection />
+
+        {/* ── Divider ── */}
+        <ThemedView
+          style={{
+            height: 1,
+            backgroundColor: colors.border,
+            marginHorizontal: 24,
+            marginBottom: 8,
+          }}
+        />
+
+        {/* ── Recent Transactions header + "View all" link ── */}
+        <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
+          <ThemedText type="defaultSemiBold" variant="default" className="text-base">
+            Recent Transaction
+          </ThemedText>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/all-transactions')}
+          >
+            <ThemedText
+              className="text-sm font-semibold"
+              style={{ color: colors.primary }}
+            >
+              View all
+            </ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
+
+        {/* ── Preview: most recent 3 transactions grouped by date ── */}
+        {previewGroups.map((group) => (
+          <TransactionGroup key={group.label} group={group} />
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 }

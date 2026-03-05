@@ -58,14 +58,14 @@ export function BalanceSection({ balance, connecting }: Props) {
         </View>
 
         {/* Gain pill */}
-        <ThemedView
+        {/* <ThemedView
           className="self-start flex-row items-center px-3 py-1 rounded-full mt-2 mb-1"
           style={{ backgroundColor: '#c3f53c' }}
         >
           <ThemedText style={{ color: '#1a2e05', fontWeight: '700', fontSize: 12, fontFamily: 'Poppins_700Bold' }}>
             ${FAKE_GAIN_USD.toFixed(2)} ({FAKE_GAIN_PCT}%)
           </ThemedText>
-        </ThemedView>
+        </ThemedView> */}
       </ThemedView>
 
       {/* ── Action buttons (Deposit / Withdraw or Connect Wallet) ── */}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, useColorScheme } from 'react-native';
+import { router } from 'expo-router';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { Colors } from '@/constants/theme';
@@ -22,11 +23,17 @@ export function FavouriteSection() {
 
       <View className="flex-row gap-4">
         {FAVOURITES.map((contact) => (
-          <ContactItem key={contact.name} contact={contact} size="sm" />
+          <ContactItem
+            key={contact.name}
+            contact={contact}
+            size="sm"
+            onPress={() => router.push(`/(tabs)/rewards?contactId=${contact.id}` as any)}
+          />
         ))}
 
         {/* Add button */}
       <TouchableOpacity
+              onPress={() => router.push('/(tabs)/rewards' as any)}
               activeOpacity={0.75}
               className="items-center gap-1.5"
               style={{ width: 64 }}
