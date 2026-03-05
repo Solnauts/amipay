@@ -4,7 +4,7 @@ use crate::database::model_functions::user_model_function::{
 };
 use crate::database::model_functions::{
     create_alias, create_wallet_user, find_user_by_wallet, get_user_info,
-    update_wallet_user_profile,
+    update_wallet_user_profile, get_aliases_for_user
 };
 use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError};
 use crate::utility::create_unique_alias;
@@ -815,3 +815,38 @@ pub async fn add_recipient(
         "alias_used": result.alias_used
     })))
 }
+
+#[post("/wallet/get_user_alias")]
+pub async fn get_user_alias(req: HttpRequest) -> actix_web::Result<impl Responder> {
+    let token = req
+        .cookie("session_token")
+        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
+        .value()
+        .to_string();
+
+    let claims = validate_session_token(&token)?;
+
+    let user_id: i32 = claims.sub.parse().map_err(|_| {
+        AppError::Auth(AuthError::InvalidUserId {
+            raw: claims.sub.clone(),
+        })
+    })?;
+
+    //get the alias using userid 
+    let alias = web::block(move || {
+        let conn = &mut establish_connection()?;
+        crate::database::model_functions::get_aliases_for_user(conn, user_id)
+    })
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?;
+
+    //send the databack to the user 
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status": "success",
+        "alias": alias.unwrap()
+    })))
+}
+

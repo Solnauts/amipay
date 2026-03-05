@@ -15,6 +15,7 @@
    - [POST /wallet/create-alias](#15-post-walletcreate-alias)
    - [POST /wallet/address](#16-post-walletaddress)
    - [POST /wallet/add-recipient](#17-post-walletadd-recipient)
+   - [POST /wallet/get_user_alias](#18-post-walletget_user_alias)
 2. [Account](#2-account)
    - [POST /createaccount](#21-post-createaccount)
 3. [Ledger / Claiming](#3-ledger--claiming)
@@ -222,6 +223,33 @@ Adds another user as a recipient for the authenticated user, looked up by their 
   "recipient_id": 17,
   "recipient_user_id": 99,
   "alias_used": "swift_tiger_42"
+}
+```
+
+---
+
+### 1.8 `POST /wallet/get_user_alias`
+
+Retrieves all aliases associated with the authenticated user.
+
+**Auth required:** 🔒 `session_token` cookie
+
+**Request:** No body required.
+
+**Success Response `200 OK`:**
+```json
+{
+  "status": "success",
+  "alias": [
+    {
+      "id": 1,
+      "user_id": 42,
+      "alias_name": "swift_tiger_42",
+      "is_primary": false,
+      "created_at": "2026-03-05T12:00:00Z",
+      "half_alias": "swift_tiger"
+    }
+  ]
 }
 ```
 
