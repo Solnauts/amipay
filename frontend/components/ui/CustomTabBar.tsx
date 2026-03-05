@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
+import { useWallet } from '@/context/WalletContext';
 
 const tabs = [
   { name: 'Home',      icon: 'home',        route: '/'                 as const },
@@ -15,6 +16,10 @@ const tabs = [
 export function CustomTabBar() {
   const colors = Colors[useColorScheme() ?? 'light'];
   const pathname = usePathname();
+  const { isConnected } = useWallet();
+
+  // Hide the tab bar on the connect screen (wallet not yet connected)
+  if (!isConnected) return null;
 
   return (
     <ThemedView

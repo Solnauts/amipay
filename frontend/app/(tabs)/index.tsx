@@ -9,13 +9,13 @@ import { BalanceSection }      from '@/components/home/BalanceSection';
 import { PeopleSection }       from '@/components/home/PeopleSection';
 import { FavouriteSection }    from '@/components/home/FavouriteSection';
 import { AIPayBanner }         from '@/components/home/AIPayBanner';
-import { RecentTransactions }  from '@/components/home/RecentTransactions';
+import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
 
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
 export default function HomeScreen() {
   const { publicKey, isConnected, connecting, connect } = useWallet();
-  const [balance, setBalance]     = useState<number | null>(null);
+  const [balance, setBalance]       = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchBalance = async () => {
@@ -39,6 +39,12 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  // ── Gate: show connect screen until wallet is connected ──────────────────
+  if (!isConnected) {
+    return <WalletConnectScreen onConnect={connect} connecting={connecting} />;
+  }
+
+  // ── Home screen (wallet connected) ──────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <ScrollView
@@ -48,8 +54,8 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#22c55e"
-            colors={['#22c55e']}
+            tintColor="#8B5CF6"
+            colors={['#8B5CF6']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -57,7 +63,7 @@ export default function HomeScreen() {
         {/* Header — wallet avatar, account name, icon tray */}
         <HomeHeader />
 
-        {/* Balance — dollar amount, gain pill, Deposit/Withdraw buttons, token tabs */}
+        {/* Balance — dollar amount, Deposit/Withdraw buttons */}
         <BalanceSection balance={balance} connecting={connecting} />
 
         {/* People — 2-row avatar grid of recent contacts */}
@@ -68,9 +74,6 @@ export default function HomeScreen() {
 
         {/* AI Pay promo banner */}
         <AIPayBanner />
-
-        {/* Recent transactions list */}
-   
       </ScrollView>
     </SafeAreaView>
   );
