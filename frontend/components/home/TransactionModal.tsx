@@ -25,6 +25,7 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { Colors } from '@/constants/theme';
 import { useWallet } from '@/context/WalletContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ─── Keypad layout ────────────────────────────────────────────────────────────
 const KEYPAD: (string | null)[][] = [
@@ -156,6 +157,7 @@ export function TransactionModal({
               <MaterialIcons name="close" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
+          
 
           {/* ── Amount display ── */}
           <View style={styles.amountSection}>
