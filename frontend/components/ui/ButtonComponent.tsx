@@ -98,99 +98,69 @@
 //     letterSpacing: 0.2,
 //   },
 // });
-import React from "react";
-import { TouchableOpacity, ActivityIndicator, StyleSheet, useColorScheme } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { ThemedText } from "./ThemedText";
-import { IconSymbol } from "./icon-symbol";
-import { Colors } from '@/constants/theme';
+import { TouchableOpacity, View, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 
-type Variant = "primary" | "violet" | "success" | "error";
+const DepositIcon = () => (
+  <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+    <Path d="M6 1v10M1 6h10" stroke="white" strokeWidth={2} strokeLinecap="round" />
+  </Svg>
+);
 
-type ButtonProps = {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  icon?: React.ComponentProps<typeof IconSymbol>["name"];
-  variant?: Variant;
-};
+const WithdrawIcon = () => (
+  <Svg width={12} height={14} viewBox="0 0 12 14" fill="none">
+    <Path d="M6 1v10" stroke="white" strokeWidth={2} strokeLinecap="round" />
+    <Path d="M1 8l5 5 5-5" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
-export function ButtonComponent({
-  label,
-  onPress,
-  disabled = false,
-  loading = false,
-  icon = "wallet.pass.fill",
-}: ButtonProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
+export default function ActionButtons() {
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={onPress}
-      disabled={disabled || loading}
-      style={[
-        styles.actionBtn,
-        { opacity: disabled || loading ? 0.5 : 1 },
-      ]}
-    >
-      <LinearGradient
-        colors={['#a78bfa', '#8b5cf6']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradient}
+    <View className="flex-row gap-3">
+      
+      {/* Deposit Button */}
+      <TouchableOpacity
+        onPress={() => {}}
+        activeOpacity={0.9}
+        className="flex-1 rounded-full border border-[#7d4bfe] overflow-hidden"
       >
-        <ThemedText style={styles.insetHighlight} />
+        <LinearGradient
+          colors={['#A583FF', '#8154F7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          className="h-14 flex-row items-center justify-center gap-2"
+        >
+          <View className="w-5 h-5 items-center justify-center">
+            <DepositIcon />
+          </View>
+          <Text className="text-white text-base font-medium capitalize">
+            Deposit
+          </Text>
+        </LinearGradient>
+      </TouchableOpacity>
 
-        {loading ? (
-          <ActivityIndicator color="#ffffff" size="small" />
-        ) : (
-          <IconSymbol name={icon} size={20} color="#ffffff" />
-        )}
-        <ThemedText style={styles.btnText}>{label}</ThemedText>
-      </LinearGradient>
-    </TouchableOpacity>
+      {/* Withdraw Button */}
+      <TouchableOpacity
+        onPress={() => {}}
+        activeOpacity={0.9}
+        className="flex-1 rounded-full border border-[#7d4bfe] overflow-hidden"
+      >
+        <LinearGradient
+          colors={['#A583FF', '#3454F7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          className="h-14 flex-row items-center justify-center gap-2"
+        >
+          <View className="w-5 h-5 items-center justify-center">
+            <WithdrawIcon />
+          </View>
+          <Text className="text-white text-base font-medium capitalize">
+            Withdraw
+          </Text>
+        </LinearGradient>
+      </TouchableOpacity>
+
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  actionBtn: {
-    borderRadius: 50,
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    // Android shadow
-    elevation: 4,
-  },
-  gradient: {
-    height: 56,                  // h-14
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: '#8b5cf6',      // outline-violet-500
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,       // px-7
-    paddingVertical: 16,         // py-4
-    gap: 8,
-  },
-  insetHighlight: {
-    ...StyleSheet.absoluteFillObject,
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.5)',
-    borderRadius: 50,
-  },
-  btnText: {
-    color: '#ffffff',
-    fontSize: 16,                // text-base
-    fontWeight: '500',           // font-medium
-    fontFamily: 'Inter',
-    textTransform: 'capitalize',
-    lineHeight: 16,              // leading-none
-  },
-});

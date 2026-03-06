@@ -16,8 +16,8 @@ type Props = {
  * size="sm"  → 48px (Favourite grid)
  */
 export function ContactItem({ contact, size = 'md', onPress }: Props) {
-  const dim = size === 'md' ? 56 : 48;
-  const fontSize = size === 'md' ? 15 : 13;
+  const dim = 64;
+  const fontSize = 18;
 
   return (
     <TouchableOpacity
