@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView, ScrollView, RefreshControl, ActivityIndicator, View } from 'react-native';
 import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useWallet } from '@/context/WalletContext';
 
-// Home screen components — each has a single responsibility
+// Home screen components
 import { HomeHeader }          from '@/components/home/HomeHeader';
 import { BalanceSection }      from '@/components/home/BalanceSection';
 import { PeopleSection }       from '@/components/home/PeopleSection';
 import { FavouriteSection }    from '@/components/home/FavouriteSection';
 import { AIPayBanner }         from '@/components/home/AIPayBanner';
 import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
+import { OnboardingScreen }    from '@/components/home/OnboardingScreen';
+import { Colors }              from '@/constants/theme';
 
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
 export default function HomeScreen() {
-  const { publicKey, isConnected, connecting, connect } = useWallet();
-  const [balance, setBalance]       = useState<number | null>(null);
+  const { publicKey, authStep, connect } = useWallet();
+  const [balance, setBalance]     = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchBalance = async () => {
@@ -29,9 +31,9 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (isConnected) fetchBalance();
+    if (authStep === 'ready') fetchBalance();
     else setBalance(null);
-  }, [isConnected, publicKey]);
+  }, [authStep, publicKey]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -39,12 +41,32 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // ── Gate: show connect screen until wallet is connected ──────────────────
-  if (!isConnected) {
-    return <WalletConnectScreen onConnect={connect} connecting={connecting} />;
+  // ── Gate 1: Not connected at all ─────────────────────────────────────────
+  if (authStep === 'idle') {
+    return (
+      <WalletConnectScreen
+        onConnect={connect}
+        authStep={authStep}
+      />
+    );
   }
 
-  // ── Home screen (wallet connected) ──────────────────────────────────────
+  // ── Gate 2: MWA connecting / signing / calling backend ───────────────────
+  if (authStep === 'connecting' || authStep === 'logging_in') {
+    return (
+      <WalletConnectScreen
+        onConnect={connect}
+        authStep={authStep}
+      />
+    );
+  }
+
+  // ── Gate 3: New user — pick alias + PIN ──────────────────────────────────
+  if (authStep === 'onboarding') {
+    return <OnboardingScreen />;
+  }
+
+  // ── Home screen (authStep === 'ready') ───────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <ScrollView
@@ -60,19 +82,10 @@ export default function HomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header — wallet avatar, account name, icon tray */}
         <HomeHeader />
-
-        {/* Balance — dollar amount, Deposit/Withdraw buttons */}
-        <BalanceSection balance={balance} connecting={connecting} />
-
-        {/* People — 2-row avatar grid of recent contacts */}
+        <BalanceSection balance={balance} connecting={false} />
         <PeopleSection />
-
-        {/* Favourite — pinned contacts + Add button */}
         <FavouriteSection />
-
-        {/* AI Pay promo banner */}
         <AIPayBanner />
       </ScrollView>
     </SafeAreaView>

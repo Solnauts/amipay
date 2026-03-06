@@ -1,12 +1,9 @@
-use crate::controllers::wallet_controller::validate_session_token;
+use crate::controllers::wallet_controller::{extract_bearer_token, validate_session_token};
 use crate::database::model_functions::conversation_model_function::create_conversation;
 use crate::errors::{AppError, AuthError, ValidationError};
 use crate::utility::orchestrator_message_handler::handle_user_message;
-use crate::utility::{
-    ErrorPayload, ServerMessage,
-    handle_action_response,
-};
 use crate::utility::ws_types::ClientMessage;
+use crate::utility::{ErrorPayload, ServerMessage, handle_action_response};
 use actix_web::{HttpRequest, Responder, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
@@ -19,8 +16,11 @@ async fn send_ws_error(
     pending_action_id: Option<i32>,
 ) {
     eprintln!("{}", err.log_message());
-    let payload =
-        ServerMessage::Error(ErrorPayload::from_app_error(&err, conversation_id, pending_action_id));
+    let payload = ServerMessage::Error(ErrorPayload::from_app_error(
+        &err,
+        conversation_id,
+        pending_action_id,
+    ));
     if let Ok(json) = serde_json::to_string(&payload) {
         let _ = session.clone().text(json).await;
     }
@@ -31,13 +31,16 @@ pub async fn main_caller(
     req: HttpRequest,
     body: web::Payload,
 ) -> actix_web::Result<impl Responder> {
-    // Check the user is logged in
-    let token = match req.cookie("session_token") {
-        Some(cookie) => cookie.value().to_string(),
-        None => {
-            return Err(AppError::Auth(AuthError::MissingSessionCookie).into());
-        }
-    };
+    // Check the user is logged in — try Authorization header first, then ?token= query param
+    let token = extract_bearer_token(&req).or_else(|_| {
+        let query =
+            web::Query::<std::collections::HashMap<String, String>>::from_query(req.query_string())
+                .map_err(|_| AppError::Auth(AuthError::MissingSessionCookie))?;
+        query
+            .get("token")
+            .cloned()
+            .ok_or(AppError::Auth(AuthError::MissingSessionCookie))
+    })?;
 
     let claims = validate_session_token(&token).map_err(|e| {
         AppError::Auth(AuthError::InvalidToken {
@@ -116,10 +119,7 @@ pub async fn main_caller(
                                 .await;
                         }
                         ClientMessage::ActionResponse(value) => {
-                            println!(
-                                "action response received: {}",
-                                value.pending_action_id
-                            );
+                            println!("action response received: {}", value.pending_action_id);
                             handle_action_response(value, session.clone()).await;
                         }
                     }

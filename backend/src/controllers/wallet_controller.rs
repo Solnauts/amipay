@@ -3,13 +3,12 @@ use crate::database::model_functions::user_model_function::{
     UserInfoRequest, UserInfoResponse, is_amount_valid,
 };
 use crate::database::model_functions::{
-    create_alias, create_wallet_user, find_user_by_wallet, get_user_info,
-    update_wallet_user_profile, get_aliases_for_user
+    create_alias, create_wallet_user, find_user_by_wallet, get_aliases_for_user, get_user_info,
+    update_wallet_user_profile,
 };
 use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError};
 use crate::utility::create_unique_alias;
 use actix_web::ResponseError;
-use actix_web::cookie::{Cookie, SameSite};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use bcrypt::{DEFAULT_COST, hash};
 use chrono::Utc;
@@ -40,6 +39,7 @@ pub struct WalletLoginPayload {
 #[derive(Serialize)]
 pub struct WalletLoginResponse {
     pub status: String,
+    pub token: String,
     pub is_new_user: bool,
     pub user: UserPublicInfo,
 }
@@ -84,6 +84,21 @@ pub struct UniqueAliasResponse {
     pub alias: Vec<String>,
 }
 // ─── Helper Functions ───────────────────────────────────────────────────────
+
+/// Extract the JWT from the `Authorization: Bearer <token>` header.
+pub fn extract_bearer_token(req: &HttpRequest) -> Result<String, AppError> {
+    let header = req
+        .headers()
+        .get("Authorization")
+        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
+        .to_str()
+        .map_err(|_| AppError::Auth(AuthError::MissingSessionCookie))?;
+
+    header
+        .strip_prefix("Bearer ")
+        .map(|t| t.to_string())
+        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))
+}
 
 /// Get the JWT secret from environment variables
 fn get_jwt_secret() -> Result<String, AppError> {
@@ -178,7 +193,7 @@ pub async fn get_nonce() -> actix_web::Result<impl Responder> {
 }
 
 /// `POST /wallet/login`
-#[post("/wallet/login ")]
+#[post("/wallet/login")]
 pub async fn wallet_login(
     data: web::Json<WalletLoginPayload>,
 ) -> actix_web::Result<impl Responder> {
@@ -200,9 +215,7 @@ pub async fn wallet_login(
         let existing_user = find_user_by_wallet(conn, &address_clone)?;
 
         match existing_user {
-            Some(user) => {
-                Ok((user, false))
-            }
+            Some(user) => Ok((user, false)),
             None => {
                 let new_user = create_wallet_user(conn, &address_clone)?;
                 Ok((new_user, true))
@@ -224,15 +237,6 @@ pub async fn wallet_login(
         user.wallet_address.as_deref().unwrap_or(&payload.address),
     )?;
 
-    // Step 5: Build HttpOnly cookie
-    let cookie = Cookie::build("session_token", session_token)
-        .http_only(true)
-        .secure(false)
-        .same_site(SameSite::Lax)
-        .path("/")
-        .max_age(actix_web::cookie::time::Duration::hours(24))
-        .finish();
-
     let user_info = UserPublicInfo {
         id: user.id,
         name: user.name.clone(),
@@ -241,14 +245,13 @@ pub async fn wallet_login(
         has_pin: !user.user_pin.is_empty(),
     };
 
-    Ok(HttpResponse::Ok().cookie(cookie).json(WalletLoginResponse {
+    Ok(HttpResponse::Ok().json(WalletLoginResponse {
         status: "success".to_string(),
+        token: session_token,
         is_new_user,
         user: user_info,
-    })) 
+    }))
 }
-
-
 
 // GET /wallet/unique-alias
 #[get("/wallet/unique-alias")]
@@ -274,12 +277,8 @@ pub async fn update_profile(
     req: HttpRequest,
     data: web::Json<UpdateProfilePayload>,
 ) -> actix_web::Result<impl Responder> {
-    // Step 1: Extract session token
-    let token = req
-        .cookie("session_token")
-        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
-        .value()
-        .to_string();
+    // Step 1: Extract bearer token
+    let token = extract_bearer_token(&req)?;
 
     let claims = validate_session_token(&token)?;
 
@@ -342,12 +341,8 @@ pub async fn create_user_alias(
     request: HttpRequest,
     data: web::Json<CreateAliasPayload>,
 ) -> actix_web::Result<impl Responder> {
-    //Step 1: Extract session token
-    let token = request
-        .cookie("session_token")
-        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
-        .value()
-        .to_string();
+    //Step 1: Extract bearer token
+    let token = extract_bearer_token(&request)?;
 
     let claims = validate_session_token(&token)?;
 
@@ -739,11 +734,7 @@ pub async fn get_wallet_address(
     req: HttpRequest,
     _data: web::Json<GetWalletAddressRequest>,
 ) -> actix_web::Result<impl Responder> {
-    let token = req
-        .cookie("session_token")
-        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
-        .value()
-        .to_string();
+    let token = extract_bearer_token(&req)?;
 
     let claims = validate_session_token(&token)?;
 
@@ -780,11 +771,7 @@ pub async fn add_recipient(
     req: HttpRequest,
     data: web::Json<AddRecipientRequest>,
 ) -> actix_web::Result<impl Responder> {
-    let token = req
-        .cookie("session_token")
-        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
-        .value()
-        .to_string();
+    let token = extract_bearer_token(&req)?;
 
     let claims = validate_session_token(&token)?;
 
@@ -818,11 +805,7 @@ pub async fn add_recipient(
 
 #[post("/wallet/get_user_alias")]
 pub async fn get_user_alias(req: HttpRequest) -> actix_web::Result<impl Responder> {
-    let token = req
-        .cookie("session_token")
-        .ok_or(AppError::Auth(AuthError::MissingSessionCookie))?
-        .value()
-        .to_string();
+    let token = extract_bearer_token(&req)?;
 
     let claims = validate_session_token(&token)?;
 
@@ -832,7 +815,7 @@ pub async fn get_user_alias(req: HttpRequest) -> actix_web::Result<impl Responde
         })
     })?;
 
-    //get the alias using userid 
+    //get the alias using userid
     let alias = web::block(move || {
         let conn = &mut establish_connection()?;
         crate::database::model_functions::get_aliases_for_user(conn, user_id)
@@ -843,10 +826,9 @@ pub async fn get_user_alias(req: HttpRequest) -> actix_web::Result<impl Responde
         reason: format!("blocking task failed: {}", e),
     })?;
 
-    //send the databack to the user 
+    //send the databack to the user
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "alias": alias.unwrap()
     })))
 }
-

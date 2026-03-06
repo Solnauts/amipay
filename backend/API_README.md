@@ -1,7 +1,7 @@
 # Remitly Backend — API Reference
 
 > **Base URL:** `http://127.0.0.1:4000`  
-> **Authentication:** Most protected endpoints require a valid `session_token` **HttpOnly cookie** (issued by `POST /wallet/login`).
+> **Authentication:** Most protected endpoints require a valid JWT sent via the `Authorization: Bearer <token>` header (issued by `POST /wallet/login`).
 
 ---
 
@@ -17,7 +17,7 @@
    - [POST /wallet/add-recipient](#17-post-walletadd-recipient)
    - [POST /wallet/get_user_alias](#18-post-walletget_user_alias)
 2. [Account](#2-account)
-   - [POST /createaccount](#21-post-createaccount)
+
 3. [Ledger / Claiming](#3-ledger--claiming)
    - [POST /claimamount](#31-post-claimamount)
 4. [WebSocket — Orchestrator](#4-websocket--orchestrator)
@@ -49,7 +49,7 @@ Generates a one-time nonce that the client must sign with their Solana wallet to
 
 ### 1.2 `POST /wallet/login`
 
-Verifies the Ed25519 signature produced by the Solana wallet. Creates a new user if one doesn't exist, then issues a `session_token` **HttpOnly cookie** (valid 24 hours).
+Verifies the Ed25519 signature produced by the Solana wallet. Creates a new user if one doesn't exist, then returns a JWT `token` in the response body (valid 24 hours).
 
 **Auth required:** No
 
@@ -68,10 +68,11 @@ Verifies the Ed25519 signature produced by the Solana wallet. Creates a new user
 | `signature` | `string` | ✅ | Ed25519 signature of `"Sign in to Remitly: <nonce>"` (base58) |
 | `nonce` | `string` | ✅ | The nonce value received from `GET /wallet/nonce` |
 
-**Success Response `200 OK`** (also sets `Set-Cookie: session_token=...`):
+**Success Response `200 OK`:**
 ```json
 {
   "status": "success",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5c...",
   "is_new_user": false,
   "user": {
     "id": 42,
@@ -83,6 +84,8 @@ Verifies the Ed25519 signature produced by the Solana wallet. Creates a new user
 }
 ```
 
+> The client must store this `token` securely (e.g. `SecureStore` / `Keychain` on mobile) and send it as `Authorization: Bearer <token>` on all subsequent requests.
+>
 > `is_new_user` is `true` when the wallet address was seen for the first time and a new account was created automatically.
 
 ---
@@ -91,7 +94,7 @@ Verifies the Ed25519 signature produced by the Solana wallet. Creates a new user
 
 Sets or updates the user's display name and PIN. Requires an active session.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -357,7 +360,7 @@ Initiates a token claim from the vault. Validates the requested amount against t
 
 Upgrades to a persistent WebSocket connection. All AI-assisted commands (send money, check balance, view history, etc.) are handled over this socket.
 
-**Auth required:** 🔒 `session_token` cookie (validated before the upgrade is accepted)
+**Auth required:** 🔒 `Authorization: Bearer <token>` header **or** `?token=<jwt>` query parameter (validated before the upgrade is accepted)
 
 **Upgrade Headers:**
 ```
@@ -367,7 +370,17 @@ Upgrade: websocket
 Connection: Upgrade
 Sec-WebSocket-Key: <base64-key>
 Sec-WebSocket-Version: 13
-Cookie: session_token=<jwt>
+Authorization: Bearer <jwt>
+```
+
+**Alternative — token via query parameter:**
+```
+GET /main_caller?token=<jwt> HTTP/1.1
+Host: 127.0.0.1:4000
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: <base64-key>
+Sec-WebSocket-Version: 13
 ```
 
 ---
@@ -485,10 +498,15 @@ Sent after the server sends an `AssistanceMessage` with a `pending_action_id`.
 
 ---
 
-## Cookie
+## Authentication
 
-| Cookie | HttpOnly | Secure | SameSite | Path | Max-Age |
-|--------|----------|--------|----------|------|---------|
-| `session_token` | ✅ | ❌ (dev) | Lax | `/` | 24 hours |
+All protected endpoints expect the JWT in the **`Authorization`** HTTP header:
 
-> In production `Secure` should be set to `true` so the cookie is only sent over HTTPS.
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5c...
+```
+
+For WebSocket connections, the token can alternatively be passed as a `?token=` query parameter.
+
+The token is valid for **24 hours** from the time of login.
+
