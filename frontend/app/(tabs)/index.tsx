@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, ScrollView, RefreshControl, ActivityIndicator, View } from 'react-native';
-import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { SafeAreaView, ScrollView, RefreshControl } from 'react-native';
 import { useWallet } from '@/context/WalletContext';
 
 // Home screen components
@@ -11,29 +10,29 @@ import { FavouriteSection }    from '@/components/home/FavouriteSection';
 import { AIPayBanner }         from '@/components/home/AIPayBanner';
 import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
 import { OnboardingScreen }    from '@/components/home/OnboardingScreen';
-import { Colors }              from '@/constants/theme';
-
-const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+import { userService }         from '@/src/services/api/UserService';
 
 export default function HomeScreen() {
-  const { publicKey, authStep, connect } = useWallet();
+  const { authStep, connect } = useWallet();
   const [balance, setBalance]     = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchBalance = async () => {
-    if (!publicKey) return;
     try {
-      const lamports = await connection.getBalance(publicKey);
-      setBalance(lamports / LAMPORTS_PER_SOL);
+      const usdc = await userService.getUsdcBalance();
+      console.log('[Balance] API returned:', usdc, typeof usdc);
+      // usdc may be undefined if service swallows error — guard with ?? null
+      setBalance(typeof usdc === 'number' ? usdc : null);
     } catch (e) {
-      console.error('Balance fetch failed:', e);
+      console.warn('[Balance] fetch failed:', e);
+      setBalance(null);
     }
   };
 
   useEffect(() => {
     if (authStep === 'ready') fetchBalance();
     else setBalance(null);
-  }, [authStep, publicKey]);
+  }, [authStep]);
 
   const onRefresh = async () => {
     setRefreshing(true);

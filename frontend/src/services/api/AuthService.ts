@@ -49,6 +49,11 @@ class AuthService extends BaseService {
     this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
+  // Returns the current Authorization header value (used by other services)
+  getAuthHeader(): string | undefined {
+    return this.client.defaults.headers.common['Authorization'] as string | undefined;
+  }
+
   clearToken(): void {
     delete this.client.defaults.headers.common['Authorization'];
   }
