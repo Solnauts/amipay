@@ -7,29 +7,37 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ButtonComponent } from '@/components/ui/ButtonComponent';
 import { useWallet } from '@/context/WalletContext';
 import { Colors } from '@/constants/theme';
+import { DepositModal } from '@/components/home/DepositModal';
+import { WithdrawModal } from '@/components/home/WithdrawModal';
 
 type Props = {
   balance: number | null;
   connecting: boolean;
 };
 
-const TOKENS = ['SOL', 'USDC', 'App Wallet'];
-// Fake USD balance for display purposes
-const FAKE_USD_BALANCE = 4234.23;
-const FAKE_GAIN_USD    = 2499.22;
-const FAKE_GAIN_PCT    = 2.5;
+const TOKENS = ['USDC', 'App Wallet'];
+
 
 export function BalanceSection({ balance, connecting }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const { isConnected, connect } = useWallet();
- 
+  const [depositVisible, setDepositVisible] = useState(false);
+  const [withdrawVisible, setWithdrawVisible] = useState(false);
 
-  const displayBalance = isConnected && balance !== null
-    ? `$${(balance * FAKE_USD_BALANCE).toFixed(2)}`   
-    : `$${FAKE_USD_BALANCE.toFixed(2)}`;
 
-  const [whole, cents] = displayBalance.split('.');
+  // Real USDC balance from platform API, formatted to 2 dp
+  // Guard against undefined (API may not return 'balance' field yet)
+  const safeBalance = (typeof balance === 'number' && !isNaN(balance)) ? balance : null;
+
+  const usdcDisplay = safeBalance !== null
+    ? safeBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+
+  const [whole, cents] = usdcDisplay.includes('.')
+    ? usdcDisplay.split('.')
+    : [usdcDisplay, '00'];
+
 
   return (
     <>
@@ -41,7 +49,7 @@ export function BalanceSection({ balance, connecting }: Props) {
           className="flex-row items-center gap-1 px-3 py-1 rounded-full"
           style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
         >
-          <ThemedText variant="secondary" className="text-sm font-medium">$ USD</ThemedText>
+          <ThemedText variant="secondary" className="text-sm font-medium">USDC</ThemedText>
           <IconSymbol name="chevron.down" size={11} color={colors.textMuted} />
         </TouchableOpacity>
       </ThemedView>
@@ -73,21 +81,28 @@ export function BalanceSection({ balance, connecting }: Props) {
         {isConnected ? (
           <>
             {/* Deposit */}
-            <TouchableOpacity style={styles.actionBtn} activeOpacity={0.92}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              activeOpacity={0.92}
+              onPress={() => setDepositVisible(true)}
+            >
               <LinearGradient
-                // violet-400 → violet-500 top-to-bottom, matching the web ActionButton
                 colors={['#A78BFA', '#8B5CF6']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.gradient}
               >
                 <IconSymbol name="plus" size={16} color="#fff" />
-                <ThemedText style={styles.btnText}>Deposite</ThemedText>
+                <ThemedText style={styles.btnText}>Deposit</ThemedText>
               </LinearGradient>
             </TouchableOpacity>
 
             {/* Withdraw */}
-            <TouchableOpacity style={styles.actionBtn} activeOpacity={0.92}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              activeOpacity={0.92}
+              onPress={() => setWithdrawVisible(true)}
+            >
               <LinearGradient
                 colors={['#A78BFA', '#8B5CF6']}
                 start={{ x: 0, y: 0 }}
@@ -108,7 +123,19 @@ export function BalanceSection({ balance, connecting }: Props) {
             variant="primary"
           />
         )}
-      </ThemedView> 
+      </ThemedView>
+
+      {/* ── Deposit modal ── */}
+      <DepositModal
+        visible={depositVisible}
+        onClose={() => setDepositVisible(false)}
+      />
+
+      {/* ── Withdraw modal ── */}
+      <WithdrawModal
+        visible={withdrawVisible}
+        onClose={() => setWithdrawVisible(false)}
+      />
     </>
   );
 }

@@ -19,7 +19,7 @@
    - [POST /wallet/deposit](#19-post-walletdeposit)
    - [GET /wallet/getusdcamount](#110-get-walletgetusdcamount)
 2. [Account](#2-account)
-   - [POST /createaccount](#21-post-createaccount)
+
 3. [Ledger / Claiming](#3-ledger--claiming)
    - [POST /claimamount](#31-post-claimamount)
 4. [WebSocket — Orchestrator](#4-websocket--orchestrator)
