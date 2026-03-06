@@ -56,18 +56,39 @@ pub fn get_user_info(request: UserInfoRequest) -> Result<UserInfoResponse, AppEr
 
         "recipient" => {
             use crate::schema::recipient::dsl::*;
-            let recipient_name = request.recipient_name.clone().unwrap_or_default();
-            let recpient_result = recipient
-                .filter(userid.eq(&request.user_id))
-                .filter(alias_used.eq(&recipient_name))
-                .get_result::<Dbrecipient>(connection);
+            use diesel::TextExpressionMethods;
+            let lookup_term = request.recipient_name.clone().unwrap_or_default();
 
-            match recpient_result {
-                Ok(value) => Ok(UserInfoResponse::Recipient(value)),
-                Err(_) => Err(ValidationError::RecipientNotFound {
-                    name: recipient_name,
-                }
-                .into()),
+            // Try recipient_name first (user-given label like "Mom"),
+            // then fall back to alias_used (full Amipay ID like "mom@amypay").
+            // Both are case-insensitive via Postgres ILIKE.
+            let result = recipient
+                .filter(userid.eq(&request.user_id))
+                .filter(recipient_name.ilike(&lookup_term))
+                .first::<Dbrecipient>(connection)
+                .optional()
+                .map_err(|e: diesel::result::Error| DbError::QueryFailed {
+                    context: "recipient lookup by name".to_string(),
+                    reason: e.to_string(),
+                })?;
+
+            if let Some(found) = result {
+                return Ok(UserInfoResponse::Recipient(found));
+            }
+
+            let result2 = recipient
+                .filter(userid.eq(&request.user_id))
+                .filter(alias_used.ilike(&lookup_term))
+                .first::<Dbrecipient>(connection)
+                .optional()
+                .map_err(|e: diesel::result::Error| DbError::QueryFailed {
+                    context: "recipient lookup by alias".to_string(),
+                    reason: e.to_string(),
+                })?;
+
+            match result2 {
+                Some(found) => Ok(UserInfoResponse::Recipient(found)),
+                None => Err(ValidationError::RecipientNotFound { name: lookup_term }.into()),
             }
         }
 
@@ -349,19 +370,11 @@ pub fn is_amount_valid(
     }
 }
 
-
+/// Get the user's USDC balance by computing it live from the ledger.
+/// Returns the net balance in micro-USDC (credits − debits).
 pub fn get_usdc_balance(conn: &mut PgConnection, user_id: i32) -> Result<i64, DbError> {
-    use crate::schema::user::dsl::*;
+    use super::ledger_model_function::calculate_balance_from_ledger;
 
-   let user_result =  user.filter(id.eq(&user_id))
-        .get_result::<DbUser>(conn)
-        .map_err(|e| DbError::UserLookupFailed {
-            user_id,
-            reason: e.to_string(),
-        });
-
-        let user_amount = user_result.unwrap().amount.unwrap();
-
-        Ok(user_amount)
-
+    let calc = calculate_balance_from_ledger(conn, user_id)?;
+    Ok(calc.net_balance)
 }

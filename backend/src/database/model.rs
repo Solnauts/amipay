@@ -27,6 +27,7 @@ pub struct Dbrecipient {
     pub id: i32,
     pub recipient_user_id: i32,
     pub alias_used: String,
+    pub recipient_name: String,
 }
 
 #[derive(Insertable)]
@@ -35,6 +36,7 @@ pub struct NewRecipient {
     pub userid: i32,
     pub recipient_user_id: i32,
     pub alias_used: String,
+    pub recipient_name: String,
 }
 
 // Insertable struct for creating a user via contact number (full data upfront)

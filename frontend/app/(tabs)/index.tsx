@@ -1,27 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, RefreshControl } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
 
 // Home screen components
-import { HomeHeader }          from '@/components/home/HomeHeader';
-import { BalanceSection }      from '@/components/home/BalanceSection';
-import { PeopleSection }       from '@/components/home/PeopleSection';
-import { FavouriteSection }    from '@/components/home/FavouriteSection';
-import { AIPayBanner }         from '@/components/home/AIPayBanner';
+import { HomeHeader } from '@/components/home/HomeHeader';
+import { BalanceSection } from '@/components/home/BalanceSection';
+import { PeopleSection } from '@/components/home/PeopleSection';
+import { FavouriteSection } from '@/components/home/FavouriteSection';
+import { AIPayBanner } from '@/components/home/AIPayBanner';
 import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
-import { OnboardingScreen }    from '@/components/home/OnboardingScreen';
-import { userService }         from '@/src/services/api/UserService';
+import { OnboardingScreen } from '@/components/home/OnboardingScreen';
+import { userService } from '@/src/services/api/UserService';
 
 export default function HomeScreen() {
   const { authStep, connect } = useWallet();
-  const [balance, setBalance]     = useState<number | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchBalance = async () => {
     try {
       const usdc = await userService.getUsdcBalance();
       console.log('[Balance] API returned:', usdc, typeof usdc);
-      // usdc may be undefined if service swallows error — guard with ?? null
       setBalance(typeof usdc === 'number' ? usdc : null);
     } catch (e) {
       console.warn('[Balance] fetch failed:', e);
@@ -29,10 +29,18 @@ export default function HomeScreen() {
     }
   };
 
+  // Initial fetch when auth completes
   useEffect(() => {
     if (authStep === 'ready') fetchBalance();
     else setBalance(null);
   }, [authStep]);
+
+  // Re-fetch every time the home tab gains focus (e.g. returning from AI Pay)
+  useFocusEffect(
+    useCallback(() => {
+      if (authStep === 'ready') fetchBalance();
+    }, [authStep]),
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

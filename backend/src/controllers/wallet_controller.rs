@@ -4,7 +4,7 @@ use crate::database::model_functions::user_model_function::{
 };
 use crate::database::model_functions::{
     create_alias, create_wallet_user, find_user_by_wallet, get_aliases_for_user, get_user_info,
-    save_user_usdc_ata, update_wallet_user_profile, 
+    save_user_usdc_ata, update_wallet_user_profile,
 };
 use crate::errors::{AppError, AuthError, DbError, SolanaError, ValidationError};
 use crate::utility::create_unique_alias;
@@ -794,15 +794,15 @@ pub async fn get_wallet_address(
         recipient_name: None,
     })
     .map_err(|e| -> AppError { e })?;
-  
-//print the address 
-    
+
+    //print the address
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "data": match wallet_address {
             UserInfoResponse::Text(addr) => {
-             //print the usdc ata 
-             println!("usdc-ata : {}", addr);   
+             //print the usdc ata
+             println!("usdc-ata : {}", addr);
                 addr
             }
             _ => "".to_string(),
@@ -865,11 +865,10 @@ pub async fn deposit_usdc(
 
 #[get("/wallet/getusdcamount")]
 pub async fn get_usdc_balance(req: HttpRequest) -> actix_web::Result<impl Responder> {
-  
-  //usdc function called 
-    
-   //get the token out of the header
-let token = extract_bearer_token(&req)?;
+    //usdc function called
+
+    //get the token out of the header
+    let token = extract_bearer_token(&req)?;
 
     let claims = validate_session_token(&token)?;
 
@@ -881,8 +880,7 @@ let token = extract_bearer_token(&req)?;
 
     let result = web::block(move || {
         let conn = &mut establish_connection()?;
-        crate::database::model_functions::get_usdc_balance(conn, user_id)
-            .map_err(AppError::from)
+        crate::database::model_functions::get_usdc_balance(conn, user_id).map_err(AppError::from)
     })
     .await
     .map_err(|e| AppError::Internal {
@@ -897,11 +895,11 @@ let token = extract_bearer_token(&req)?;
     })))
 }
 
-
-//--- Add Recipient ---
+/// Add a recipient by Amipay alias with a user-chosen display name.
 #[derive(Debug, Deserialize)]
 pub struct AddRecipientRequest {
     pub recipient_alias: String,
+    pub recipient_name: String,
 }
 
 #[post("/wallet/add-recipient")]
@@ -910,7 +908,6 @@ pub async fn add_recipient(
     data: web::Json<AddRecipientRequest>,
 ) -> actix_web::Result<impl Responder> {
     let token = extract_bearer_token(&req)?;
-
     let claims = validate_session_token(&token)?;
 
     let user_id: i32 = claims.sub.parse().map_err(|_| {
@@ -919,12 +916,19 @@ pub async fn add_recipient(
         })
     })?;
 
-    let alias_str = data.into_inner().recipient_alias;
+    let AddRecipientRequest {
+        recipient_alias,
+        recipient_name,
+    } = data.into_inner();
 
-    //call the add recipient function
     let result = web::block(move || {
         let conn = &mut establish_connection()?;
-        crate::database::model_functions::add_recipient_by_alias(conn, user_id, &alias_str)
+        crate::database::model_functions::add_recipient_by_alias(
+            conn,
+            user_id,
+            &recipient_alias,
+            &recipient_name,
+        )
     })
     .await
     .map_err(|e| AppError::Internal {
@@ -937,7 +941,8 @@ pub async fn add_recipient(
         "status": "success",
         "recipient_id": result.id,
         "recipient_user_id": result.recipient_user_id,
-        "alias_used": result.alias_used
+        "alias_used": result.alias_used,
+        "recipient_name": result.recipient_name
     })))
 }
 

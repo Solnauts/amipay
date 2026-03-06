@@ -24,16 +24,16 @@ import { CONTACTS, Contact } from '@/components/cards/cardsData';
 import { Colors } from '@/constants/theme';
 
 import { ContactDetailSheet } from '@/components/contacts/ContactDetailSheet';
-import { AddContactModal }    from '@/components/contacts/AddContactModal';
+import { AddContactModal } from '@/components/contacts/AddContactModal';
 import { RECENT_CONTACT_IDS } from '@/components/contacts/contactsData';
 
 export default function ContactsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
-  const colors      = Colors[colorScheme];
+  const colors = Colors[colorScheme];
 
-  const [query,           setQuery]           = useState('');
-  const [selected,        setSelected]        = useState<Contact | null>(null);
-  const [addContactOpen,  setAddContactOpen]  = useState(false);
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<Contact | null>(null);
+  const [addContactOpen, setAddContactOpen] = useState(false);
 
   const recentContacts = useMemo(
     () => CONTACTS.filter((c) => RECENT_CONTACT_IDS.includes(c.id)),
@@ -168,6 +168,10 @@ export default function ContactsScreen() {
       <AddContactModal
         isOpen={addContactOpen}
         onClose={() => setAddContactOpen(false)}
+        onAdded={(result) => {
+          console.log('[Contacts] Recipient added:', result);
+          // TODO: refresh contacts list from backend when dynamic loading is implemented
+        }}
         colors={colors}
       />
     </SafeAreaView>

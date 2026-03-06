@@ -434,7 +434,7 @@ async fn get_user_ata(
 //  GET USER ATA BALANCE
 // ═══════════════════════════════════════════════════════════════════════════
 
-pub async fn get_user_ata_balance(
+pub fn get_user_ata_balance(
     unique_id: String,
     amount_claim: u64,
 ) -> std::result::Result<AmountResponse, SolanaError> {

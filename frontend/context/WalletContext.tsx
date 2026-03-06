@@ -28,6 +28,7 @@ type WalletContextState = {
   publicKey: PublicKey | null;
   walletAddress: string | null;   // base58 — useful everywhere
   user: BackendUser | null;        // backend user profile
+  sessionToken: string | null;     // raw JWT for WebSocket & other non-axios uses
   authStep: AuthStep;
   isConnected: boolean;
   connect: () => Promise<void>;
@@ -42,12 +43,13 @@ const WalletContext = createContext<WalletContextState>({
   publicKey: null,
   walletAddress: null,
   user: null,
+  sessionToken: null,
   authStep: 'idle',
   isConnected: false,
-  connect: async () => {},
-  disconnect: () => {},
-  setUser: () => {},
-  completeOnboarding: () => {},
+  connect: async () => { },
+  disconnect: () => { },
+  setUser: () => { },
+  completeOnboarding: () => { },
 });
 
 // ─── App Identity (shown inside the wallet popup) ─────────────────────────────
@@ -64,6 +66,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [user, setUser] = useState<BackendUser | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [authStep, setAuthStep] = useState<AuthStep>('idle');
 
   // ── Full connect + backend login flow ────────────────────────────────────
@@ -115,6 +118,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
         // Store the JWT so all future API calls send Authorization: Bearer <token>
         authService.setToken(loginResponse.token);
+        setSessionToken(loginResponse.token);
 
         // ── 2. Store state ────────────────────────────────────────────────────
         setPublicKey(pk);
@@ -157,6 +161,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setPublicKey(null);
     setWalletAddress(null);
     setUser(null);
+    setSessionToken(null);
     setAuthStep('idle');
     authService.clearToken();
   }, []);
@@ -172,6 +177,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         publicKey,
         walletAddress,
         user,
+        sessionToken,
         authStep,
         isConnected: authStep === 'ready' || authStep === 'onboarding',
         connect,
