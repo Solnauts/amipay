@@ -69,6 +69,13 @@ pub struct UpdateWalletProfile {
     pub user_pin: String,
 }
 
+/// Changeset struct for writing the on-chain USDC ATA pubkey back to the user row.
+#[derive(AsChangeset)]
+#[diesel(table_name = user)]
+pub struct UpdateUserUsdcAta {
+    pub user_usdc_ata: Option<String>,
+}
+
 // ── Ledger Models ───────────────────────────────────────────────────────────
 
 // Queryable struct — field order must match schema.rs column order

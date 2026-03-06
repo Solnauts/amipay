@@ -1,13 +1,14 @@
 use crate::database::{
     establish_connection,
     model::{
-        DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateWalletProfile,
+        DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateUserUsdcAta,
+        UpdateWalletProfile,
     },
 };
 use crate::errors::{AppError, DbError, ValidationError};
 use crate::schema::user;
-use diesel::prelude::*;
 use diesel::PgConnection;
+use diesel::prelude::*;
 
 pub enum UserInfoResponse {
     Text(String),
@@ -95,6 +96,14 @@ pub fn get_user_info(request: UserInfoRequest) -> Result<UserInfoResponse, AppEr
             .into()),
         },
 
+        "usdc_ata" => match user_result.user_usdc_ata {
+            Some(value) => Ok(UserInfoResponse::Text(value)),
+            None => Err(ValidationError::UserNotFound {
+                identifier: format!("usdc_ata for user_id={}", request.user_id),
+            }
+            .into()),
+        },
+
         other => Err(DbError::UnexpectedResult {
             context: format!("unknown intent: {}", other),
         }
@@ -148,10 +157,18 @@ pub fn find_user_by_wallet(conn: &mut PgConnection, addr: &str) -> Result<Option
 }
 
 /// Auto-register a new wallet user with just the wallet address.
+///
+/// NOTE: `unique_id` is capped at 32 characters. Solana PDA seed components must
+/// be ≤ 32 bytes, and a base58 wallet address is 44 ASCII chars (= 44 bytes).
+/// The first 32 chars of a base58 address are unique enough in practice and fit
+/// exactly within the on-chain seed limit.
 pub fn create_wallet_user(conn: &mut PgConnection, addr: &str) -> Result<DbUser, DbError> {
+    // Truncate to 32 chars so the unique_id fits as a Solana PDA seed component.
+    let unique_id = addr.chars().take(32).collect::<String>();
+
     let new_wallet_user = NewWalletUser {
         wallet_address: Some(addr.to_string()),
-        unique_id: addr.to_string(),
+        unique_id,
         method_type: "wallet".to_string(),
         user_pin: String::new(),
     };
@@ -176,6 +193,28 @@ pub fn update_wallet_user_profile(
     let changeset = UpdateWalletProfile {
         name: Some(new_name),
         user_pin: hashed_pin,
+    };
+
+    diesel::update(user.filter(id.eq(target_user_id)))
+        .set(&changeset)
+        .get_result(conn)
+        .map_err(|e| DbError::ProfileUpdateFailed {
+            user_id: target_user_id,
+            reason: e.to_string(),
+        })
+}
+
+/// Persist the on-chain USDC ATA pubkey into `user.user_usdc_ata`.
+/// Called after `create_user_ata` succeeds so the address is always in sync with the DB.
+pub fn save_user_usdc_ata(
+    conn: &mut PgConnection,
+    target_user_id: i32,
+    ata_pubkey: String,
+) -> Result<DbUser, DbError> {
+    use crate::schema::user::dsl::*;
+
+    let changeset = UpdateUserUsdcAta {
+        user_usdc_ata: Some(ata_pubkey),
     };
 
     diesel::update(user.filter(id.eq(target_user_id)))
@@ -308,4 +347,21 @@ pub fn is_amount_valid(
             available: user_amount,
         })
     }
+}
+
+
+pub fn get_usdc_balance(conn: &mut PgConnection, user_id: i32) -> Result<i64, DbError> {
+    use crate::schema::user::dsl::*;
+
+   let user_result =  user.filter(id.eq(&user_id))
+        .get_result::<DbUser>(conn)
+        .map_err(|e| DbError::UserLookupFailed {
+            user_id,
+            reason: e.to_string(),
+        });
+
+        let user_amount = user_result.unwrap().amount.unwrap();
+
+        Ok(user_amount)
+
 }

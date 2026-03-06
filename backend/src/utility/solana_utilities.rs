@@ -76,11 +76,11 @@ pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, SolanaErr
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
 
     let unique_id_ref: &'static String = Box::leak(Box::new(unique_id.clone()));
-    let program = client.program(contract::ID).map_err(|e| {
-        SolanaError::ProgramClientFailed {
+    let program = client
+        .program(contract::ID)
+        .map_err(|e| SolanaError::ProgramClientFailed {
             reason: e.to_string(),
-        }
-    })?;
+        })?;
 
     let required_state_account = get_main_state_accounts()
         .await
@@ -94,7 +94,15 @@ pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, SolanaErr
     let usdc_mint = parse_pubkey(&usdc_mint_str)?;
     let needed_val = token_program_value().to_string();
     let token_program_id = parse_pubkey(&needed_val)?;
-    let user_usdc_ata_seed = [user_usdc_ata_seed_str.as_bytes(), usdc_mint.as_ref()];
+
+    // Derive user_usdc_ata PDA — must include unique_id as a seed component so
+    // the client-side derivation matches what the on-chain program computes.
+    // (Previously unique_id was missing here, producing the wrong PDA address.)
+    let user_usdc_ata_seed = [
+        user_usdc_ata_seed_str.as_bytes(),
+        unique_id_ref.as_bytes(),
+        usdc_mint.as_ref(),
+    ];
     let user_usdc_ata_pubkey =
         anchor_lang::prelude::Pubkey::find_program_address(&user_usdc_ata_seed, &program_id).0;
 
@@ -119,12 +127,12 @@ pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, SolanaErr
             reason: e.to_string(),
         })?;
 
-    let user_usdc_ata = get_user_ata(unique_id_ref.to_string())
-        .await
-        .map_err(|e| SolanaError::AtaCreationFailed {
+    let user_usdc_ata = get_user_ata(unique_id_ref.to_string()).await.map_err(|e| {
+        SolanaError::AtaCreationFailed {
             unique_id: unique_id.clone(),
             reason: format!("post-creation ATA lookup: {}", e),
-        })?;
+        }
+    })?;
 
     Ok(RpcResponse {
         success: true,
@@ -137,10 +145,7 @@ pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, SolanaErr
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[tokio::main]
-pub async fn transfer_to_vault(
-    unique_id: String,
-    amount: u64,
-) -> Result<RpcResponse, SolanaError> {
+pub async fn transfer_to_vault(unique_id: String, amount: u64) -> Result<RpcResponse, SolanaError> {
     dotenv().ok();
 
     let keypair_path = load_env("SOLANA_KEYPAIR_PATH")?;
@@ -155,11 +160,11 @@ pub async fn transfer_to_vault(
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
 
     let unique_id_ref: &'static String = Box::leak(Box::new(unique_id.clone()));
-    let program = client.program(contract::ID).map_err(|e| {
-        SolanaError::ProgramClientFailed {
+    let program = client
+        .program(contract::ID)
+        .map_err(|e| SolanaError::ProgramClientFailed {
             reason: e.to_string(),
-        }
-    })?;
+        })?;
 
     let program_id = parse_pubkey(&program_id_str)?;
     let usdc_mint = parse_pubkey(&usdc_mint_str)?;
@@ -194,8 +199,7 @@ pub async fn transfer_to_vault(
         anchor_lang::prelude::Pubkey::find_program_address(&main_usdc_vault_seed, &program_id).0;
 
     // derive fee_collector_usdc_ata
-    let associated_token_program_id =
-        parse_pubkey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")?;
+    let associated_token_program_id = parse_pubkey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")?;
     let fee_collector_usdc_ata_seeds = [
         main_state_account.as_ref(),
         token_program_id.as_ref(),
@@ -229,13 +233,13 @@ pub async fn transfer_to_vault(
             reason: e.to_string(),
         })?;
 
-    let user_usdc_ata = get_user_ata(unique_id_ref.to_string())
-        .await
-        .map_err(|e| SolanaError::TransferToVaultFailed {
+    let user_usdc_ata = get_user_ata(unique_id_ref.to_string()).await.map_err(|e| {
+        SolanaError::TransferToVaultFailed {
             unique_id: unique_id.clone(),
             amount,
             reason: format!("post-transfer ATA lookup: {}", e),
-        })?;
+        }
+    })?;
 
     Ok(RpcResponse {
         success: true,
@@ -247,8 +251,8 @@ pub async fn transfer_to_vault(
 //  GET MAIN STATE ACCOUNTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-async fn get_main_state_accounts(
-) -> std::result::Result<(solana_sdk::account::Account, pubkey::Pubkey), SolanaError> {
+async fn get_main_state_accounts()
+-> std::result::Result<(solana_sdk::account::Account, pubkey::Pubkey), SolanaError> {
     dotenv().ok();
 
     let rpc_url = load_env("SOLANA_RPC_URL")?;
@@ -289,10 +293,7 @@ async fn get_main_state_accounts(
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[tokio::main]
-pub async fn claim_amount(
-    unique_id: String,
-    amount: u64,
-) -> Result<RpcResponse, SolanaError> {
+pub async fn claim_amount(unique_id: String, amount: u64) -> Result<RpcResponse, SolanaError> {
     dotenv().ok();
 
     let keypair_path = load_env("SOLANA_KEYPAIR_PATH")?;
@@ -307,11 +308,11 @@ pub async fn claim_amount(
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
 
     let unique_id_ref: &'static String = Box::leak(Box::new(unique_id.clone()));
-    let program = client.program(contract::ID).map_err(|e| {
-        SolanaError::ProgramClientFailed {
+    let program = client
+        .program(contract::ID)
+        .map_err(|e| SolanaError::ProgramClientFailed {
             reason: e.to_string(),
-        }
-    })?;
+        })?;
 
     let program_id = parse_pubkey(&program_id_str)?;
     let usdc_mint = parse_pubkey(&usdc_mint_str)?;
@@ -346,8 +347,7 @@ pub async fn claim_amount(
         anchor_lang::prelude::Pubkey::find_program_address(&main_usdc_vault_seed, &program_id).0;
 
     // derive fee_collector_usdc_ata
-    let associated_token_program_id =
-        parse_pubkey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")?;
+    let associated_token_program_id = parse_pubkey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")?;
     let fee_collector_usdc_ata_seeds = [
         main_state_account.as_ref(),
         token_program_id.as_ref(),
@@ -381,13 +381,14 @@ pub async fn claim_amount(
             reason: e.to_string(),
         })?;
 
-    let user_usdc_ata = get_user_ata(unique_id_ref.to_string())
-        .await
-        .map_err(|e| SolanaError::ClaimFailed {
-            unique_id: unique_id.clone(),
-            amount,
-            reason: format!("post-claim ATA lookup: {}", e),
-        })?;
+    let user_usdc_ata =
+        get_user_ata(unique_id_ref.to_string())
+            .await
+            .map_err(|e| SolanaError::ClaimFailed {
+                unique_id: unique_id.clone(),
+                amount,
+                reason: format!("post-claim ATA lookup: {}", e),
+            })?;
 
     Ok(RpcResponse {
         success: true,
@@ -454,12 +455,12 @@ pub async fn get_user_ata_balance(
 
     let user_ata_pda_address = Pubkey::find_program_address(&user_ata_seed, &program_id);
 
-    let balance = client
-        .get_balance(&user_ata_pda_address.0)
-        .map_err(|e| SolanaError::BalanceCheckFailed {
+    let balance = client.get_balance(&user_ata_pda_address.0).map_err(|e| {
+        SolanaError::BalanceCheckFailed {
             unique_id: unique_id.clone(),
             reason: e.to_string(),
-        })?;
+        }
+    })?;
 
     if balance >= amount_claim {
         Ok(AmountResponse {
