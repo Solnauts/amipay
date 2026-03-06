@@ -15,9 +15,8 @@ type Props = {
   connecting: boolean;
 };
 
-const TOKENS = ['SOL', 'USDC', 'App Wallet'];
-// Fake USD balance for display purposes
-const FAKE_USD_BALANCE = 0.00;
+const TOKENS = ['USDC', 'App Wallet'];
+
 
 export function BalanceSection({ balance, connecting }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
@@ -27,11 +26,18 @@ export function BalanceSection({ balance, connecting }: Props) {
   const [withdrawVisible, setWithdrawVisible] = useState(false);
 
 
-  const displayBalance = isConnected && balance !== null
-    ? `$${(balance * FAKE_USD_BALANCE).toFixed(2)}`   
-    : `$${FAKE_USD_BALANCE.toFixed(2)}`;
+  // Real USDC balance from platform API, formatted to 2 dp
+  // Guard against undefined (API may not return 'balance' field yet)
+  const safeBalance = (typeof balance === 'number' && !isNaN(balance)) ? balance : null;
 
-  const [whole, cents] = displayBalance.split('.');
+  const usdcDisplay = safeBalance !== null
+    ? safeBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+
+  const [whole, cents] = usdcDisplay.includes('.')
+    ? usdcDisplay.split('.')
+    : [usdcDisplay, '00'];
+
 
   return (
     <>
@@ -43,7 +49,7 @@ export function BalanceSection({ balance, connecting }: Props) {
           className="flex-row items-center gap-1 px-3 py-1 rounded-full"
           style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
         >
-          <ThemedText variant="secondary" className="text-sm font-medium">$ USD</ThemedText>
+          <ThemedText variant="secondary" className="text-sm font-medium">USDC</ThemedText>
           <IconSymbol name="chevron.down" size={11} color={colors.textMuted} />
         </TouchableOpacity>
       </ThemedView>

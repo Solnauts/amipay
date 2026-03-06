@@ -93,6 +93,23 @@ export interface WalletAddressResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DEPOSIT
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** POST /wallet/deposit */
+export interface DepositRequest {
+  deposit_amount: number;  // human-readable amount (e.g. 10.0)
+  from_account:   string;  // sender's token account address (base58)
+  to_account:     string;  // receiver's token account address (base58)
+}
+
+export interface DepositResponse {
+  status:  string;
+  message: string;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RECIPIENTS (CONTACTS)
 // ─────────────────────────────────────────────────────────────────────────────
 
