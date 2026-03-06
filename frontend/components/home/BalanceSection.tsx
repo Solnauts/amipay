@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ButtonComponent } from '@/components/ui/ButtonComponent';
+import ButtonComponent from "@/components/ui/ButtonComponent"
 import { useWallet } from '@/context/WalletContext';
 import { Colors } from '@/constants/theme';
 import { DepositModal } from '@/components/home/DepositModal';
@@ -17,9 +17,7 @@ type Props = {
 
 const TOKENS = ['SOL', 'USDC', 'App Wallet'];
 // Fake USD balance for display purposes
-const FAKE_USD_BALANCE = 4234.23;
-const FAKE_GAIN_USD    = 2499.22;
-const FAKE_GAIN_PCT    = 2.5;
+const FAKE_USD_BALANCE = 0.00;
 
 export function BalanceSection({ balance, connecting }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
