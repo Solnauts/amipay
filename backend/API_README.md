@@ -16,6 +16,8 @@
    - [POST /wallet/address](#16-post-walletaddress)
    - [POST /wallet/add-recipient](#17-post-walletadd-recipient)
    - [POST /wallet/get_user_alias](#18-post-walletget_user_alias)
+   - [POST /wallet/deposit](#19-post-walletdeposit)
+   - [GET /wallet/getusdcamount](#110-get-walletgetusdcamount)
 2. [Account](#2-account)
    - [POST /createaccount](#21-post-createaccount)
 3. [Ledger / Claiming](#3-ledger--claiming)
@@ -255,6 +257,67 @@ Retrieves all aliases associated with the authenticated user.
   ]
 }
 ```
+
+---
+
+### 1.9 `POST /wallet/deposit`
+
+Records a USDC deposit for the authenticated user. Updates the internal ledger balance. The on-chain transfer is handled by the client before calling this endpoint — the server records the credited amount.
+
+**Auth required:** 🔒 `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "deposit_amount": 100.0,
+  "from_account":   "EVhLcAtbZb8GqozXUroMHTDGbhXJkJ37mJhTmDe43vSj",
+  "to_account":     "AmMd6uDUNchUeHaJKk5syS4tsDvYLru5UP4ZdHz9YdKC"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `deposit_amount` | `number (f64)` | ✅ | Amount of USDC to credit (in whole USDC units, e.g. `100.0` = 100 USDC) |
+| `from_account` | `string` | ✅ | Sender's USDC token account address (reserved for future on-chain verification) |
+| `to_account` | `string` | ✅ | Receiver's USDC token account address (reserved for future on-chain verification) |
+
+**Success Response `200 OK`:**
+```json
+{
+  "status":         "success",
+  "deposit_amount": 100.0,
+  "new_balance":    250.0,
+  "tx_signature":   null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deposit_amount` | `number` | The amount that was deposited |
+| `new_balance` | `number` | The user's USDC balance after the deposit |
+| `tx_signature` | `string \| null` | On-chain transaction signature (currently `null`; will be populated once on-chain verification is added) |
+
+---
+
+### 1.10 `GET /wallet/getusdcamount`
+
+Returns the authenticated user's current USDC balance as recorded in the internal ledger.
+
+**Auth required:** 🔒 `Authorization: Bearer <token>`
+
+**Request:** No body required.
+
+**Success Response `200 OK`:**
+```json
+{
+  "status":       "success",
+  "usdc_balance": 250.0
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `usdc_balance` | `number` | Current USDC balance from the internal ledger |
 
 ---
 

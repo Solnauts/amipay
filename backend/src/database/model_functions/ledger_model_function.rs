@@ -310,13 +310,14 @@ pub fn deposit_usdc(
     // Convert float to integer micro-units (1 USDC = 1_000_000 micro-USDC).
     let deposit_amount: i64 = (deposit_amount_f64 * 1_000_000.0).round() as i64;
 
-    // Sentinel: the vault/system account is the sender for incoming deposits.
-    const VAULT_USER_ID: i32 = 0;
-
+    // For a deposit the user is funding their own account (external on-chain
+    // transfer → user's ATA). Both sender and receiver are therefore the same
+    // user — this keeps the FK constraint satisfied without needing a special
+    // vault row, and the "deposit" status distinguishes it from peer transfers.
     conn.transaction::<DepositResult, DieselError, _>(|txn_conn| {
         // Step 1: Insert the deposit ledger entry.
         let new_entry = NewLedger {
-            sender_id: VAULT_USER_ID,
+            sender_id: user_id,
             receiver_id: user_id,
             amount: deposit_amount,
             currency: "USDC".to_string(),

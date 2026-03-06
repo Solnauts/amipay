@@ -794,11 +794,17 @@ pub async fn get_wallet_address(
         recipient_name: None,
     })
     .map_err(|e| -> AppError { e })?;
-
+  
+//print the address 
+    
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "data": match wallet_address {
-            UserInfoResponse::Text(addr) => addr,
+            UserInfoResponse::Text(addr) => {
+             //print the usdc ata 
+             println!("usdc-ata : {}", addr);   
+                addr
+            }
             _ => "".to_string(),
         }
     })))
@@ -859,6 +865,9 @@ pub async fn deposit_usdc(
 
 #[get("/wallet/getusdcamount")]
 pub async fn get_usdc_balance(req: HttpRequest) -> actix_web::Result<impl Responder> {
+  
+  //usdc function called 
+    
    //get the token out of the header
 let token = extract_bearer_token(&req)?;
 

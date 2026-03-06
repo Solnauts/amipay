@@ -2,9 +2,9 @@ use actix_web::{App, HttpServer, middleware::Logger, web};
 use std::io::Result;
 
 use crate::controllers::{
-    add_recipient, claim_amount, create_user_alias, create_user_handler, get_nonce,
-    get_unique_alias, get_user_alias, get_wallet_address, main_caller, update_profile,
-    wallet_login,
+    add_recipient, claim_amount, create_user_alias, create_user_handler, deposit_usdc, get_nonce,
+    get_unique_alias, get_usdc_balance, get_user_alias, get_wallet_address, main_caller,
+    update_profile, wallet_login,
 };
 use crate::database::establish_connection;
 mod controllers;
@@ -37,6 +37,9 @@ async fn main() -> Result<()> {
             // Wallet account
             .service(get_wallet_address) // POST /wallet/address
             .service(add_recipient) // POST /wallet/add-recipient
+            // Wallet USDC
+            .service(deposit_usdc) // POST /wallet/deposit
+            .service(get_usdc_balance) // GET  /wallet/getusdcamount
             // Ledger / claiming
             .service(claim_amount) // POST /claimamount
     })
