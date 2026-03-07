@@ -1,17 +1,23 @@
 use crate::database::model::{DbAlias, DbUser, Dbrecipient, NewRecipient};
 use crate::errors::{AppError, DbError, ValidationError};
-use diesel::prelude::*;
 use diesel::PgConnection;
+use diesel::prelude::*;
 
+/// Add a new recipient to the user's contact list by resolving an Amipay alias.
+///
+/// Steps:
+///   1. Resolve `alias_str` → target user via the `alias` table
+///   2. Reject self-add and duplicates
+///   3. Insert a new `recipient` row with the display name and alias
 pub fn add_recipient_by_alias(
     conn: &mut PgConnection,
     owner_user_id: i32,
     alias_str: &str,
+    recipient_name: &str,
 ) -> Result<Dbrecipient, AppError> {
     use crate::schema::alias::dsl::{alias, alias_name};
     use crate::schema::recipient::dsl::{recipient, recipient_user_id, userid};
 
-    // Resolve alias → user_id
     let alias_row = alias
         .filter(alias_name.eq(alias_str))
         .first::<DbAlias>(conn)
@@ -31,7 +37,6 @@ pub fn add_recipient_by_alias(
         .into());
     }
 
-    // Duplicate check
     let existing = recipient
         .filter(userid.eq(owner_user_id))
         .filter(recipient_user_id.eq(alias_row.user_id))
@@ -53,6 +58,7 @@ pub fn add_recipient_by_alias(
         userid: owner_user_id,
         recipient_user_id: alias_row.user_id,
         alias_used: alias_str.to_string(),
+        recipient_name: recipient_name.to_string(),
     };
 
     diesel::insert_into(recipient)
@@ -67,6 +73,8 @@ pub fn add_recipient_by_alias(
         })
 }
 
+/// Fetch all recipients for a user, joined with the `user` table to get
+/// the recipient's full profile.
 pub fn get_recipients_for_user(
     conn: &mut PgConnection,
     owner_user_id: i32,
@@ -84,6 +92,7 @@ pub fn get_recipients_for_user(
         })
 }
 
+/// Remove a recipient from the user's contact list.
 pub fn remove_recipient(
     conn: &mut PgConnection,
     owner_user_id: i32,

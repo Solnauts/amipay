@@ -9,7 +9,7 @@ import {
   View,
   TouchableOpacity,
   useColorScheme,
-
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,10 +19,11 @@ import { HomeHeader } from '@/components/home/HomeHeader';
 import { BalanceSection } from '@/components/home/BalanceSection';
 
 // ── Activity-specific components ───────────────────────────────────────────
-// Change these lines (around line 22-24):
-import { TokensSection } from '@/components/wallet/TokensSection';
-import { TransactionGroup } from '@/components/wallet/TransactionGroup';
-import { ACTIVITY_TRANSACTIONS } from '@/components/wallet/activityData';
+import { TokensSection } from '@/components/activity/TokensSection';
+import { TransactionGroup } from '@/components/activity/TransactionGroup';
+import { useTransactions } from '@/hooks/useTransactions';
+import { useBalance } from '@/hooks/useBalance';
+
 import {
   TransactionGroup as TxGroup,
   getFilteredGroups,
@@ -39,12 +40,15 @@ export default function ActivityScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
+  const { transactions, isLoading, refresh } = useTransactions();
+  const { balance, refetch: refetchBalance } = useBalance();
+
   const [refreshing, setRefreshing] = useState(false);
 
   // Grab all groups (no filter/search on overview), then slice to preview
   const allGroups: TxGroup[] = useMemo(
-    () => getFilteredGroups(ACTIVITY_TRANSACTIONS, 'all', ''),
-    [],
+    () => getFilteredGroups(transactions, 'all', ''),
+    [transactions],
   );
 
   // Show only the Today group (first group) for the preview, or first N items
@@ -62,7 +66,7 @@ export default function ActivityScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await new Promise((r) => setTimeout(r, 800));
+    await Promise.all([refresh(), refetchBalance()]);
     setRefreshing(false);
   };
 
@@ -86,8 +90,8 @@ export default function ActivityScreen() {
           {/* ── Header — same as home ── */}
           <HomeHeader />
 
-          {/* ── Balance — $4,234.23, Deposit/Withdraw ── */}
-          <BalanceSection balance={null} connecting={false} />
+          {/* ── Balance — live USDC balance, Deposit/Withdraw ── */}
+          <BalanceSection balance={balance} connecting={false} />
 
           {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
           <TokensSection />
@@ -121,6 +125,23 @@ export default function ActivityScreen() {
           </ThemedView>
 
           {/* ── Preview: most recent 3 transactions grouped by date ── */}
+          {isLoading && !refreshing && (
+            <View style={{ paddingVertical: 40 }}>
+              <ActivityIndicator color={colors.primary} />
+              <ThemedText variant="muted" style={{ textAlign: 'center', marginTop: 12 }}>
+                Fetching latest activity...
+              </ThemedText>
+            </View>
+          )}
+
+          {!isLoading && previewGroups.length === 0 && (
+            <View style={{ paddingVertical: 60, paddingHorizontal: 32 }}>
+              <ThemedText variant="muted" style={{ textAlign: 'center', fontSize: 13 }}>
+                No recent transactions found
+              </ThemedText>
+            </View>
+          )}
+
           {previewGroups.map((group) => (
             <TransactionGroup key={group.label} group={group} />
           ))}

@@ -2,10 +2,10 @@ use crate::database::establish_connection;
 use crate::database::model::{DbLedger, NewLedger};
 use crate::errors::DbError;
 use crate::schema::{ledger, user};
+use diesel::PgConnection;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::sql_types::BigInt;
-use diesel::PgConnection;
 
 // ── Response Types ──────────────────────────────────────────────────────────
 
@@ -36,16 +36,26 @@ pub struct ClaimResult {
 
 // ── Core: calculate balance from ledger ─────────────────────────────────────
 
-/// Helper: run a SUM query with an explicit BIGINT cast.
-fn sum_amount_for(
+/// Helper: sum `amount` for a given user filtered by direction column and
+/// a list of status values (passed as a comma-separated SQL literal inside
+/// an IN clause). Using raw SQL here because Diesel's DSL makes variadic IN
+/// with a dynamic list awkward without extra macros.
+fn sum_amount_for_statuses(
     conn: &mut PgConnection,
     filter_column: &str,
     target_user_id: i32,
-    status_filter: &str,
+    statuses: &[&str],
 ) -> Result<i64, DbError> {
+    // Build a safe SQL IN list from the known-safe status string literals.
+    let placeholders: Vec<String> = statuses
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("${}", i + 2))
+        .collect();
     let query = format!(
-        "SELECT COALESCE(SUM(amount)::BIGINT, 0) FROM ledger WHERE \"{}\" = $1 AND status = $2",
-        filter_column
+        "SELECT COALESCE(SUM(amount)::BIGINT, 0) FROM ledger WHERE \"{}\" = $1 AND status IN ({})",
+        filter_column,
+        placeholders.join(", ")
     );
 
     #[derive(QueryableByName)]
@@ -54,9 +64,27 @@ fn sum_amount_for(
         coalesce: i64,
     }
 
-    let row = diesel::sql_query(query)
+    // Build the query and bind the user_id first, then each status.
+    let mut q = diesel::sql_query(query).bind::<diesel::sql_types::Int4, _>(target_user_id);
+    // We need owned strings so we can bind them — collect first.
+    let status_strings: Vec<String> = statuses.iter().map(|s| s.to_string()).collect();
+    // Diesel's sql_query bind is not variadic; use raw PostgreSQL ANY instead
+    // by falling back to a single-bind array approach via a re-written query.
+    drop(q);
+
+    // Simpler approach: build IN list as a literal and use a single bind for user_id.
+    let in_list = status_strings
+        .iter()
+        .map(|s| format!("'{}'", s.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let safe_query = format!(
+        "SELECT COALESCE(SUM(amount)::BIGINT, 0) AS coalesce FROM ledger WHERE \"{}\" = $1 AND status IN ({})",
+        filter_column, in_list
+    );
+
+    let row = diesel::sql_query(safe_query)
         .bind::<diesel::sql_types::Int4, _>(target_user_id)
-        .bind::<diesel::sql_types::Text, _>(status_filter)
         .get_result::<SumRow>(conn)
         .map_err(|e| DbError::BalanceCalcFailed {
             user_id: target_user_id,
@@ -67,12 +95,24 @@ fn sum_amount_for(
 }
 
 /// Calculate the net balance for `target_user_id` by scanning the ledger.
+///
+/// Incoming (credit) statuses : "confirmed" (received) + "deposit"
+/// Outgoing (debit)  statuses : "confirmed" (sent) + "claimed" (withdrawn)
 pub fn calculate_balance_from_ledger(
     conn: &mut PgConnection,
     target_user_id: i32,
 ) -> Result<BalanceCalcResult, DbError> {
-    let total_in = sum_amount_for(conn, "receiverId", target_user_id, "confirmed")?;
-    let total_out = sum_amount_for(conn, "senderId", target_user_id, "confirmed")?;
+    // Money coming IN to the user: peer transfers that confirmed + external deposits.
+    let total_in = sum_amount_for_statuses(
+        conn,
+        "receiverId",
+        target_user_id,
+        &["confirmed", "deposit"],
+    )?;
+    // Money going OUT from the user: transfers the user sent (status="confirmed")
+    // + amounts they withdrew/claimed (status="claimed").
+    let total_out =
+        sum_amount_for_statuses(conn, "senderId", target_user_id, &["confirmed", "claimed"])?;
     let net = total_in - total_out;
 
     Ok(BalanceCalcResult {
@@ -177,20 +217,32 @@ pub fn record_transfer_and_update_amounts(
 // ── Claim flow ──────────────────────────────────────────────────────────────
 
 /// Get total claimable amount for a user.
+///
+/// claimable = (total received + deposits) - (total sent) - (total claimed)
 pub fn get_claimable_amount(conn: &mut PgConnection, target_user_id: i32) -> Result<i64, DbError> {
-    let total_confirmed_in = sum_amount_for(conn, "receiverId", target_user_id, "confirmed")?;
-    let total_claimed = sum_amount_for(conn, "senderId", target_user_id, "claimed")?;
-    Ok(total_confirmed_in - total_claimed)
+    let total_confirmed_in = sum_amount_for_statuses(
+        conn,
+        "receiverId",
+        target_user_id,
+        &["confirmed", "deposit"],
+    )?;
+    let total_sent = sum_amount_for_statuses(conn, "senderId", target_user_id, &["confirmed"])?;
+    let total_claimed = sum_amount_for_statuses(conn, "senderId", target_user_id, &["claimed"])?;
+    Ok(total_confirmed_in - total_sent - total_claimed)
 }
 
-/// Record a successful claim (vault → recipient on-chain withdrawal).
+/// Record a successful claim (user_usdc_ata → destination on-chain withdrawal).
+///
+/// Both sender and receiver are the same user — the `"claimed"` status
+/// distinguishes these entries from peer transfers. This pattern avoids FK
+/// violations (no "vault user" row needed in the `user` table), and is
+/// consistent with how deposits are recorded.
 pub fn record_claim(
     conn: &mut PgConnection,
     recipient_user_id: i32,
     claim_amount: i64,
     currency_val: String,
     tx_sig: Option<String>,
-    vault_user_id: i32,
 ) -> Result<ClaimResult, DbError> {
     conn.transaction::<ClaimResult, DieselError, _>(|txn_conn| {
         let claimable = get_claimable_amount(txn_conn, recipient_user_id)
@@ -201,7 +253,7 @@ pub fn record_claim(
         }
 
         let claim_entry = NewLedger {
-            sender_id: vault_user_id,
+            sender_id: recipient_user_id,
             receiver_id: recipient_user_id,
             amount: claim_amount,
             currency: currency_val,
@@ -232,10 +284,92 @@ pub fn record_claim(
     })
 }
 
+// ── Deposit flow ─────────────────────────────────────────────────────────────
+
+/// Result returned to the caller after a successful deposit record.
+pub struct DepositResult {
+    /// The amount that was deposited (stored as micro-units, e.g. micro-USDC).
+    pub deposit_amount: i64,
+    /// The user's new cached balance after the deposit is recorded.
+    pub new_balance: i64,
+    /// Optional on-chain transaction signature kept for the response body.
+    pub tx_signature: Option<String>,
+}
+
+/// Record an external USDC deposit for `user_id`.
+///
+/// Flow (as directed in wallet_controller):
+///   1. Insert ONE ledger row  (sender = VAULT/0, receiver = user_id, status = "deposit")
+///   2. Recalculate `user.amount` from the full ledger (in - out) so the
+///      cached balance always reflects the exact ledger state.
+///
+/// Everything runs inside a single transaction — if the balance update fails,
+/// the ledger insert is rolled back as well.
+///
+/// `deposit_amount_f64` is the raw float from the JSON body; we convert to
+/// i64 micro-units (×1_000_000) to stay consistent with the rest of the ledger.
+pub fn deposit_usdc(
+    conn: &mut PgConnection,
+    user_id: i32,
+    deposit_amount_f64: f64,
+    tx_sig: Option<String>,
+) -> Result<DepositResult, DbError> {
+    // Convert float to integer micro-units (1 USDC = 1_000_000 micro-USDC).
+    let deposit_amount: i64 = (deposit_amount_f64 * 1_000_000.0).round() as i64;
+
+    // For a deposit the user is funding their own account (external on-chain
+    // transfer → user's ATA). Both sender and receiver are therefore the same
+    // user — this keeps the FK constraint satisfied without needing a special
+    // vault row, and the "deposit" status distinguishes it from peer transfers.
+    conn.transaction::<DepositResult, DieselError, _>(|txn_conn| {
+        // Step 1: Insert the deposit ledger entry.
+        let new_entry = NewLedger {
+            sender_id: user_id,
+            receiver_id: user_id,
+            amount: deposit_amount,
+            currency: "USDC".to_string(),
+            tx_signature: tx_sig.clone(),
+            status: "deposit".to_string(),
+        };
+
+        diesel::insert_into(ledger::table)
+            .values(&new_entry)
+            .execute(txn_conn)?;
+
+        // Step 2: Recalculate user.amount from the full ledger diff and persist it.
+        let new_balance = update_user_amount_from_ledger(txn_conn, user_id)
+            .map_err(|_| DieselError::RollbackTransaction)?;
+
+        Ok(DepositResult {
+            deposit_amount,
+            new_balance,
+            tx_signature: tx_sig,
+        })
+    })
+    .map_err(|e| DbError::LedgerInsertFailed {
+        reason: e.to_string(),
+    })
+}
+
 // ── Standalone helpers ──────────────────────────────────────────────────────
 
 /// Standalone: recalculate and persist amounts for both sender and receiver.
 pub fn update_amounts_standalone(sender_id: i32, receiver_id: i32) -> Result<(i64, i64), DbError> {
     let conn = &mut establish_connection()?;
     update_both_user_amounts(conn, sender_id, receiver_id)
+}
+
+//function to get all transactions of the user
+pub fn get_transactions_for_user(
+    conn: &mut PgConnection,
+    user_id: i32,
+) -> Result<Vec<DbLedger>, DbError> {
+    let transactions = ledger::table
+        .filter(
+            ledger::senderId
+                .eq(user_id)
+                .or(ledger::receiverId.eq(user_id)),
+        )
+        .load::<DbLedger>(conn)?;
+    Ok(transactions)
 }

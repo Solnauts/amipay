@@ -99,13 +99,32 @@ export interface WalletAddressResponse {
 /** POST /wallet/deposit */
 export interface DepositRequest {
   deposit_amount: number;  // human-readable amount (e.g. 10.0)
-  from_account:   string;  // sender's token account address (base58)
-  to_account:     string;  // receiver's token account address (base58)
+  from_account: string;  // sender's token account address (base58)
+  to_account: string;  // receiver's token account address (base58)
 }
 
 export interface DepositResponse {
-  status:  string;
+  status: string;
   message: string;
+}
+
+/** GET /wallet/all_transactions */
+export interface TransactionRecord {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  amount: number;
+  /** "deposit" | "claimed" | "confirmed" */
+  status: 'deposit' | 'claimed' | 'confirmed' | string;
+  currency: string;           // "USDC" | "USD"
+  tx_signature: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+}
+
+export interface AllTransactionsResponse {
+  status: string;
+  transactions: TransactionRecord[];
 }
 
 
@@ -116,6 +135,7 @@ export interface DepositResponse {
 /** POST /wallet/add-recipient */
 export interface AddRecipientRequest {
   recipient_alias: string;
+  recipient_name: string;
 }
 
 export interface AddRecipientResponse {
@@ -123,6 +143,20 @@ export interface AddRecipientResponse {
   recipient_id: number;
   recipient_user_id: number;
   alias_used: string;
+  recipient_name: string;
+}
+
+/** GET /wallet/get_user_recipients */
+export interface RecipientRecord {
+  id: number;
+  recipient_user_id: number;
+  recipient_name: string;
+  alias_used: string;
+}
+
+export interface GetUserRecipientsResponse {
+  status: string;
+  recipients: RecipientRecord[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,10 +165,10 @@ export interface AddRecipientResponse {
 
 /** POST /claimamount */
 export interface ClaimRequest {
-  amount: number;           // lamports / smallest unit
+  amount: number;                    // u64 — USDC smallest unit (6 decimals)
   method: 'Auto-Claim' | 'Manual-Claim';
-  recipient_pubkey: string | null; // required for Manual-Claim
-  recipient_id: number;
+  destination_usdc_ata: string;      // user's USDC token account (ATA) address
+  recipient_id: number;              // i32 — user DB id
 }
 
 export interface ClaimResponse {

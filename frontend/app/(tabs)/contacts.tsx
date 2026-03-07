@@ -1,6 +1,7 @@
-// Contacts Screen — composer only; all logic lives in components/contacts/
-// Tapping a contact → ContactDetailSheet (Send → /pay)
-// Tapping + → AddContactModal
+// Contacts Screen
+// • Loads contacts from MMKV instantly on mount (no flicker)
+// • Syncs from GET /wallet/get_user_recipients in the background
+// • Adding a contact: optimistic MMKV save → API call → rollback on failure
 
 import React, { useState, useMemo } from 'react';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -12,43 +13,65 @@ import {
   StyleSheet,
   StatusBar,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ContactRow } from '@/components/send/ContactRow';
-import { CONTACTS, Contact } from '@/components/cards/cardsData';
 import { Colors } from '@/constants/theme';
 import { ContactDetailSheet } from '@/components/contacts/ContactDetailSheet';
 import { AddContactModal } from '@/components/contacts/AddContactModal';
-import { RECENT_CONTACT_IDS } from '@/components/contacts/contactsData';
+import { Contact } from '@/components/cards/cardsData';
+import { StoredContact } from '@/src/store/contactsStore';
+import { useContacts } from '@/hooks/useContacts';
+
+// ─── Map StoredContact → Contact (shape expected by ContactRow / DetailSheet) ─
+
+function toContact(sc: StoredContact): Contact {
+  const displayName = sc.name || sc.alias || 'Unknown';
+  return {
+    id: sc.id,
+    name: displayName,
+    emoji: (displayName.charAt(0) ?? '?').toUpperCase(),
+    avatar: sc.avatar,
+    username: sc.alias,
+    shortAddress: '',
+  };
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ContactsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
+  const { contacts, syncing, addContact } = useContacts();
+
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Contact | null>(null);
   const [addContactOpen, setAddContactOpen] = useState(false);
 
-  const recentContacts = useMemo(
-    () => CONTACTS.filter((c) => RECENT_CONTACT_IDS.includes(c.id)),
-    [],
-  );
+  // Most recent 4 contacts for the avatar strip
+  const recentContacts = useMemo(() => {
+    const sorted = [...contacts].sort((a, b) => b.savedAt - a.savedAt);
+    return sorted.slice(0, 4).map(toContact);
+  }, [contacts]);
+
+  const mappedContacts = useMemo(() => contacts.map(toContact), [contacts]);
 
   const searchResults = useMemo(() => {
     if (!query.trim()) return null;
     const q = query.toLowerCase();
-    return CONTACTS.filter(
+    return mappedContacts.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.username.toLowerCase().includes(q) ||
-        c.shortAddress.toLowerCase().includes(q),
+        c.username.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, mappedContacts]);
 
-  const listContacts = searchResults ?? CONTACTS;
+  const listContacts = searchResults ?? mappedContacts;
 
   return (
     <SafeAreaProvider>
@@ -112,7 +135,7 @@ export default function ContactsScreen() {
           contentContainerStyle={{ paddingBottom: 120 }}
         >
           {/* Recent avatars row — hidden while searching */}
-          {!query.trim() && (
+          {!query.trim() && recentContacts.length > 0 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -133,15 +156,18 @@ export default function ContactsScreen() {
             </ScrollView>
           )}
 
-          {/* Section label */}
-          <ThemedText type="defaultSemiBold" className="text-sm px-4 mb-2">
-            {searchResults ? 'Results' : 'Saved Contact'}
-          </ThemedText>
+          {/* Section label + sync spinner */}
+          <ThemedView className="flex-row items-center px-4 mb-2 gap-2">
+            <ThemedText type="defaultSemiBold" className="text-sm">
+              {searchResults ? 'Results' : 'Saved Contact'}
+            </ThemedText>
+            {syncing && <ActivityIndicator size="small" color={colors.primary} />}
+          </ThemedView>
 
           {/* Contact list */}
           {listContacts.length === 0 ? (
             <ThemedText variant="muted" className="px-4 text-sm mt-2">
-              No contacts found.
+              {syncing ? 'Loading contacts…' : 'No contacts yet. Tap + to add one.'}
             </ThemedText>
           ) : (
             listContacts.map((c) => (
@@ -167,6 +193,7 @@ export default function ContactsScreen() {
         <AddContactModal
           isOpen={addContactOpen}
           onClose={() => setAddContactOpen(false)}
+          onAdd={addContact}
           colors={colors}
         />
       </SafeAreaView>

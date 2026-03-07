@@ -2,6 +2,13 @@
 // • "Amypay ID verified" only shows once the ID field has content
 // • "Add Contact" button is disabled (faded) until name is filled AND ID is verified
 // • Button returns to full opacity/color once form is valid
+// Wired to POST /wallet/add-recipient via onAdd callback
+//
+// Flow:
+//  1. User enters a contact name (local label only) and Amipay ID (alias)
+//  2. Press "Add Contact" → hits backend to verify the alias exists & link it
+//  3. On success → shows confirmation, closes modal, notifies parent
+//  4. On error → shows the backend error message inline
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -10,6 +17,7 @@ import {
   View,
   TextInput,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -18,28 +26,66 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { Colors } from '@/constants/theme';
 
-// Simulated async verify: any non-empty id with '@' is "verified"
+// ─── Validation ──────────────────────────────────────────────────────────────
+
+/**
+ * Basic client-side check: alias must be at least 4 chars and contain '@'.
+ * Example valid alias: Ridhi@amypay
+ * Real validation happens on the backend.
+ */
 function isValidAmypayId(id: string) {
   return id.trim().length > 3 && id.includes('@');
 }
 
+// ─── Props ───────────────────────────────────────────────────────────────────
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Called with (name, alias) when the user confirms.
+   * The parent handles MMKV optimistic save + API call + rollback.
+   * Should throw on failure so the modal can display the error.
+   */
+  onAdd: (name: string, alias: string) => Promise<void>;
   colors: (typeof Colors)[keyof typeof Colors];
 };
 
-export function AddContactModal({ isOpen, onClose, colors }: Props) {
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
   const [name, setName] = useState('');
   const [id, setId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isVerified = useMemo(() => isValidAmypayId(id), [id]);
-  const canAdd = name.trim().length > 0 && isVerified;
+  const canAdd = name.trim().length > 0 && isVerified && !loading;
 
+  // ── Reset & close ──────────────────────────────────────────────────────
   const handleClose = () => {
     setName('');
     setId('');
+    setError(null);
+    setLoading(false);
     onClose();
+  };
+
+  // ── Submit ─────────────────────────────────────────────────────────────
+  const handleAdd = async () => {
+    if (!canAdd) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      await onAdd(name.trim(), id.trim());
+      handleClose();
+    } catch (err: any) {
+      const msg = err?.message ?? 'Something went wrong. Please try again.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -85,9 +131,10 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
             >
               <TextInput
                 value={name}
-                onChangeText={setName}
+                onChangeText={(v) => { setName(v); setError(null); }}
                 placeholder="Enter contact name"
                 placeholderTextColor={colors.mutedForeground}
+                editable={!loading}
                 style={[styles.input, { color: colors.text }]}
               />
             </View>
@@ -111,9 +158,10 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
             >
               <TextInput
                 value={id}
-                onChangeText={setId}
+                onChangeText={(v) => { setId(v); setError(null); }}
                 placeholder="e.g. Ridhi@amypay"
                 placeholderTextColor={colors.mutedForeground}
+                editable={!loading}
                 style={[styles.input, { color: colors.text }]}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -135,14 +183,27 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
             )}
           </View>
 
+          {/* ── Error from backend ── */}
+          {error && (
+            <View style={{ marginBottom: 12 }}>
+              <ThemedText style={{ fontSize: 12, color: colors.error, fontFamily: 'Poppins_400Regular' }}>
+                {error}
+              </ThemedText>
+            </View>
+          )}
+
           {/* ── Add Contact button — full color when valid, faded when not ── */}
           <View style={{ marginTop: 8 }}>
-            <GradientButton
-              label="Add Contact"
-              onPress={handleClose}
-              disabled={!canAdd}
-              variant="primary"
-            />
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <GradientButton
+                label="Add Contact"
+                onPress={handleAdd}
+                disabled={!canAdd}
+                variant="primary"
+              />
+            )}
           </View>
 
         </ThemedView>

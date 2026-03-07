@@ -14,4 +14,6 @@ pub use user_model_function::create_user;
 pub use user_model_function::create_wallet_user;
 pub use user_model_function::find_user_by_wallet;
 pub use user_model_function::get_user_info;
+pub use user_model_function::save_user_usdc_ata;
 pub use user_model_function::update_wallet_user_profile;
+pub use user_model_function::get_usdc_balance;

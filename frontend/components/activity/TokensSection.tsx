@@ -26,25 +26,18 @@ function formatAmount(n: number): string {
 }
 
 export function TokensSection() {
-  const colorScheme = useColorScheme() ?? "light";
+  const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
   return (
     <ThemedView className="px-6 mb-5">
       {/* Section header */}
       <ThemedView className="flex-row items-center justify-between mb-3">
-        <ThemedText
-          type="defaultSemiBold"
-          variant="default"
-          className="text-base"
-        >
+        <ThemedText type="defaultSemiBold" variant="default" className="text-base">
           Your Tokens
         </ThemedText>
         <TouchableOpacity activeOpacity={0.7}>
-          <ThemedText
-            className="text-sm font-semibold"
-            style={{ color: colors.primary }}
-          >
+          <ThemedText className="text-sm font-semibold" style={{ color: colors.primary }}>
             See all
           </ThemedText>
         </TouchableOpacity>
@@ -67,29 +60,17 @@ export function TokensSection() {
 
           {/* Symbol + name */}
           <ThemedView className="flex-1">
-            <ThemedText
-              type="defaultSemiBold"
-              variant="default"
-              style={{ fontSize: 16 }}
-            >
+            <ThemedText type="defaultSemiBold" variant="default" className="text-sm">
               {token.symbol}
             </ThemedText>
-            <ThemedText
-              variant="muted"
-              className="mt-0.5"
-              style={{ fontSize: 14 }}
-            >
+            <ThemedText variant="muted" className="text-xs mt-0.5">
               {token.name}
             </ThemedText>
           </ThemedView>
 
           {/* Balance + USD */}
           <ThemedView className="items-end">
-            <ThemedText
-              type="defaultSemiBold"
-              variant="default"
-              className="text-sm"
-            >
+            <ThemedText type="defaultSemiBold" variant="default" className="text-sm">
               {formatAmount(token.amount)}
             </ThemedText>
             <ThemedText variant="muted" className="text-xs mt-0.5">

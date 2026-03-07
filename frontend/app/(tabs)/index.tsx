@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { RefreshControl, ScrollView } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useWallet } from "@/context/WalletContext";
+import React, { useCallback, useEffect, useState } from 'react';
+import { SafeAreaView, ScrollView, RefreshControl } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useWallet } from '@/context/WalletContext';
 
 // Home screen components
 import { HomeHeader } from "@/components/home/HomeHeader";
@@ -22,25 +21,10 @@ export default function HomeScreen() {
   const [showIntro, setShowIntro] = useState(false); // false until storage checked
   const [introChecked, setIntroChecked] = useState(false); // prevents flash
 
-  // ── Check if intro has been seen before ─────────────────────────────────
-  useEffect(() => {
-    AsyncStorage.getItem("intro_seen").then((val) => {
-      setShowIntro(val === null); // null = first time ever
-      setIntroChecked(true);
-    });
-  }, []);
-
-  const handleIntroDone = async () => {
-    await AsyncStorage.setItem("intro_seen", "true");
-    setShowIntro(false);
-  };
-
-  // ── Balance ──────────────────────────────────────────────────────────────
   const fetchBalance = async () => {
     try {
       const usdc = await userService.getUsdcBalance();
       console.log('[Balance] API returned:', usdc, typeof usdc);
-      // usdc may be undefined if service swallows error — guard with ?? null
       setBalance(typeof usdc === 'number' ? usdc : null);
     } catch (e) {
       console.warn('[Balance] fetch failed:', e);
@@ -48,10 +32,18 @@ export default function HomeScreen() {
     }
   };
 
+  // Initial fetch when auth completes
   useEffect(() => {
-    if (authStep === "ready") fetchBalance();
+    if (authStep === 'ready') fetchBalance();
     else setBalance(null);
   }, [authStep]);
+
+  // Re-fetch every time the home tab gains focus (e.g. returning from AI Pay)
+  useFocusEffect(
+    useCallback(() => {
+      if (authStep === 'ready') fetchBalance();
+    }, [authStep]),
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -59,48 +51,53 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // ── Wait until AsyncStorage check is done (prevents intro flash) ────────
-  if (!introChecked) return null;
-
-  // ── Step 1: Intro slides (first launch only) ─────────────────────────────
-  if (showIntro) {
-    return <OnboardingIntro onDone={handleIntroDone} />;
+  // ── Gate 1: Not connected at all ─────────────────────────────────────────
+  if (authStep === 'idle') {
+    return (
+      <WalletConnectScreen
+        onConnect={connect}
+        authStep={authStep}
+      />
+    );
   }
 
-  // ── Step 2: Connect wallet ───────────────────────────────────────────────
-  if (authStep === "idle" || authStep === "connecting" || authStep === "logging_in") {
-    return <WalletConnectScreen onConnect={connect} authStep={authStep} />;
+  // ── Gate 2: MWA connecting / signing / calling backend ───────────────────
+  if (authStep === 'connecting' || authStep === 'logging_in') {
+    return (
+      <WalletConnectScreen
+        onConnect={connect}
+        authStep={authStep}
+      />
+    );
   }
 
-  // ── Step 3: New user — pick alias + PIN ─────────────────────────────────
-  if (authStep === "onboarding") {
+  // ── Gate 3: New user — pick alias + PIN ──────────────────────────────────
+  if (authStep === 'onboarding') {
     return <OnboardingScreen />;
   }
 
-  // ── Step 4: Home (authStep === 'ready') ──────────────────────────────────
+  // ── Home screen (authStep === 'ready') ───────────────────────────────────
   return (
-    <SafeAreaProvider>
-      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#8B5CF6"
-              colors={["#8B5CF6"]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          <HomeHeader />
-          <BalanceSection balance={balance} connecting={false} />
-          <PeopleSection />
-          <FavouriteSection />
-          <AIPayBanner />
-        </ScrollView>
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#8B5CF6"
+            colors={['#8B5CF6']}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <HomeHeader />
+        <BalanceSection balance={balance} connecting={false} />
+        <PeopleSection />
+        <FavouriteSection />
+        <AIPayBanner />
+      </ScrollView>
+    </SafeAreaView>
   );
 }

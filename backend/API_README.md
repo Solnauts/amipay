@@ -16,6 +16,8 @@
    - [POST /wallet/address](#16-post-walletaddress)
    - [POST /wallet/add-recipient](#17-post-walletadd-recipient)
    - [POST /wallet/get_user_alias](#18-post-walletget_user_alias)
+   - [POST /wallet/deposit](#19-post-walletdeposit)
+   - [GET /wallet/getusdcamount](#110-get-walletgetusdcamount)
 2. [Account](#2-account)
 
 3. [Ledger / Claiming](#3-ledger--claiming)
@@ -151,7 +153,7 @@ Returns a list of unique, system-generated alias suggestions the user can pick f
 
 Saves a chosen alias for the authenticated user.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -179,7 +181,7 @@ Saves a chosen alias for the authenticated user.
 
 Returns the authenticated user's on-chain wallet address.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -204,20 +206,22 @@ Returns the authenticated user's on-chain wallet address.
 
 ### 1.7 `POST /wallet/add-recipient`
 
-Adds another user as a recipient for the authenticated user, looked up by their alias.
+Adds another user as a recipient for the authenticated user, looked up by their alias. The user also provides a display name for the recipient.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
 {
-  "recipient_alias": "swift_tiger_42"
+  "recipient_alias": "swift_tiger_42",
+  "recipient_name":  "Mom"
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `recipient_alias` | `string` | ✅ | The alias of the user to add as recipient |
+| `recipient_alias` | `string` | ✅ | The Amipay alias of the user to add as recipient |
+| `recipient_name` | `string` | ✅ | A friendly display name to label this recipient (e.g. `"Mom"`, `"John"`) |
 
 **Success Response `200 OK`:**
 ```json
@@ -225,7 +229,8 @@ Adds another user as a recipient for the authenticated user, looked up by their 
   "status": "success",
   "recipient_id": 17,
   "recipient_user_id": 99,
-  "alias_used": "swift_tiger_42"
+  "alias_used": "swift_tiger_42",
+  "recipient_name": "Mom"
 }
 ```
 
@@ -235,7 +240,7 @@ Adds another user as a recipient for the authenticated user, looked up by their 
 
 Retrieves all aliases associated with the authenticated user.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request:** No body required.
 
@@ -255,6 +260,67 @@ Retrieves all aliases associated with the authenticated user.
   ]
 }
 ```
+
+---
+
+### 1.9 `POST /wallet/deposit`
+
+Records a USDC deposit for the authenticated user. Updates the internal ledger balance. The on-chain transfer is handled by the client before calling this endpoint — the server records the credited amount.
+
+**Auth required:** 🔒 `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "deposit_amount": 100.0,
+  "from_account":   "EVhLcAtbZb8GqozXUroMHTDGbhXJkJ37mJhTmDe43vSj",
+  "to_account":     "AmMd6uDUNchUeHaJKk5syS4tsDvYLru5UP4ZdHz9YdKC"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `deposit_amount` | `number (f64)` | ✅ | Amount of USDC to credit (in whole USDC units, e.g. `100.0` = 100 USDC) |
+| `from_account` | `string` | ✅ | Sender's USDC token account address (reserved for future on-chain verification) |
+| `to_account` | `string` | ✅ | Receiver's USDC token account address (reserved for future on-chain verification) |
+
+**Success Response `200 OK`:**
+```json
+{
+  "status":         "success",
+  "deposit_amount": 100.0,
+  "new_balance":    250.0,
+  "tx_signature":   null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deposit_amount` | `number` | The amount that was deposited |
+| `new_balance` | `number` | The user's USDC balance after the deposit |
+| `tx_signature` | `string \| null` | On-chain transaction signature (currently `null`; will be populated once on-chain verification is added) |
+
+---
+
+### 1.10 `GET /wallet/getusdcamount`
+
+Returns the authenticated user's current USDC balance as recorded in the internal ledger.
+
+**Auth required:** 🔒 `Authorization: Bearer <token>`
+
+**Request:** No body required.
+
+**Success Response `200 OK`:**
+```json
+{
+  "status":       "success",
+  "usdc_balance": 250.0
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `usdc_balance` | `number` | Current USDC balance from the internal ledger |
 
 ---
 
@@ -297,36 +363,35 @@ Creates a new user account using a phone number + PIN flow (non-wallet method). 
 
 ### 3.1 `POST /claimamount`
 
-Initiates a token claim from the vault. Validates the requested amount against the ledger, executes the on-chain Solana claim, then records it in the database.
+Withdraws USDC from the user's program-owned ATA (on-chain) to their external wallet USDC token account. Performs both an on-chain ATA balance check and a ledger claimable-balance check before executing the on-chain transfer.
+
+**On-chain flow:**
+- **Net amount** (amount − fee) → user's external wallet USDC ATA (`destination_usdc_ata`)
+- **Fee** → `main_usdc_vault` (program's fee collection vault)
 
 **Auth required:** No *(uses `recipient_id` in body)*
 
 **Request Body:**
 ```json
 {
-  "amount":           500000,
-  "method":           "Auto-Claim",
-  "recipient_pubkey": null,
-  "recipient_id":     17
+  "amount":               500000,
+  "method":               "Auto-Claim",
+  "destination_usdc_ata": "4Nd1m...base58 USDC token account of the user's external wallet...",
+  "recipient_id":         17
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | `number (u64)` | ✅ | Amount to claim in lamports / smallest unit. Must be > 0 |
+| `amount` | `number (u64)` | ✅ | Amount to withdraw in **micro-USDC** (1 USDC = 1,000,000). Must be > 0 |
 | `method` | `string` | ✅ | Either `"Auto-Claim"` or `"Manual-Claim"` |
-| `recipient_pubkey` | `string \| null` | ⚠️ | **Required** when `method` is `"Manual-Claim"`. The on-chain destination address |
-| `recipient_id` | `number (i32)` | ✅ | Database ID of the recipient record |
+| `destination_usdc_ata` | `string` | ✅ | The user's **external wallet USDC token account** address (base58). This is where the net withdrawn amount lands |
+| `recipient_id` | `number (i32)` | ✅ | Database ID of the recipient/user record initiating the withdrawal |
 
-**Manual-Claim Example:**
-```json
-{
-  "amount":           250000,
-  "method":           "Manual-Claim",
-  "recipient_pubkey": "4Nd1m...base58 destination...",
-  "recipient_id":     17
-}
-```
+> **Balance Checks (server-side):**
+> 1. **DB ledger check** — confirms the requested amount is available in the user's ledger balance
+> 2. **Ledger claimable check** — confirms there is enough claimable balance in the ledger
+> 3. **On-chain ATA check** — calls `get_token_account_balance` on the user's `user_usdc_ata` to confirm actual USDC token balance on-chain before submitting the transaction
 
 **Success Response `200 OK`:**
 ```json
@@ -340,12 +405,33 @@ Initiates a token claim from the vault. Validates the requested amount against t
 }
 ```
 
-**Error Response (example — insufficient balance) `400 Bad Request`:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `string` | `"success"` or `"error"` |
+| `error_code` | `number \| null` | Numeric error code if failed, `null` on success |
+| `message` | `string` | Human-readable result message |
+| `claimed_amount` | `number \| null` | Amount withdrawn in micro-USDC |
+| `new_balance` | `number \| null` | User's ledger balance after withdrawal |
+| `tx_signature` | `string \| null` | On-chain transaction signature (currently `null`) |
+
+**Error Responses:**
+
+| HTTP | `error_code` | Cause |
+|------|-------------|-------|
+| `400` | `2001` | Amount is zero |
+| `400` | `2002` | Invalid method (not Auto/Manual-Claim) |
+| `400` | `2009` | `destination_usdc_ata` is empty |
+| `400` | varies | Insufficient DB ledger balance |
+| `400` | varies | Insufficient on-chain USDC token balance in ATA |
+| `400` | `4202` | Insufficient claimable ledger balance |
+| `500` | `5030` | User's `user_usdc_ata` not initialized yet on-chain |
+
+**Example Error Response (insufficient on-chain balance) `400 Bad Request`:**
 ```json
 {
   "status":         "error",
-  "error_code":     4202,
-  "message":        "Insufficient claimable balance",
+  "error_code":     4201,
+  "message":        "Insufficient balance",
   "claimed_amount": null,
   "new_balance":    null,
   "tx_signature":   null
@@ -383,6 +469,21 @@ Sec-WebSocket-Key: <base64-key>
 Sec-WebSocket-Version: 13
 ```
 
+#### AI-Initiated Transfer Flow (Send Money)
+
+When the user says something like *"Send 10 USDC to Mom"* over the socket:
+
+1. AI detects `intent = transfer`, extracts `amount` and `recipient_name`
+2. Server looks up the recipient from the user's recipient list
+3. Server checks the sender's on-chain USDC ATA balance (`get_token_account_balance`) against the requested amount
+4. Server sends back a `PinVerify` prompt via `AssistanceMessage` — asks user to confirm with their PIN
+5. User submits their PIN via `ActionResponse`
+6. Server verifies PIN against bcrypt hash, then executes on-chain transfer:
+   - **Net amount** (amount − fee) → **receiver's `user_usdc_ata`** (program-owned ATA)
+   - **Fee** → **`main_usdc_vault`** (program's fee collection vault)
+7. Server confirms success via `AssistanceMessage`
+
+
 ---
 
 ### 4.2 Client → Server Messages
@@ -417,16 +518,16 @@ All messages are JSON-encoded text frames wrapped in an outer tagged enum:
 
 ---
 
-#### `ActionResponse` — Confirm or reject a pending action proposed by the AI
+#### `ActionResponse` — Confirm a pending action (PIN entry)
 
-Sent after the server sends an `AssistanceMessage` with a `pending_action_id`.
+Sent after the server sends an `AssistanceMessage` with a `pending_action_id`. For a transfer, this carries the user's PIN to authorize the on-chain send.
 
 ```json
 {
   "ActionResponse": {
     "conversation_id":   15,
     "pending_action_id": 7,
-    "response":          "confirm"
+    "response":          "1234"
   }
 }
 ```
@@ -435,7 +536,7 @@ Sent after the server sends an `AssistanceMessage` with a `pending_action_id`.
 |-------|------|----------|-------------|
 | `conversation_id` | `number` | ✅ | The conversation this action belongs to |
 | `pending_action_id` | `number` | ✅ | ID of the pending action (from the server's `AssistanceMessage`) |
-| `response` | `string` | ✅ | User's decision, e.g. `"confirm"` or `"cancel"` |
+| `response` | `string` | ✅ | The user's PIN (plain-text; verified server-side against bcrypt hash) |
 
 ---
 
@@ -489,12 +590,15 @@ Sent after the server sends an `AssistanceMessage` with a `pending_action_id`.
 
 | Code Range | Category | Examples |
 |------------|----------|---------|
-| `4000–4099` | Auth errors | Missing cookie, invalid token, invalid user ID |
-| `4100–4199` | Validation errors | Missing fields, malformed messages, invalid conversation ID |
-| `4200–4299` | Business / Ledger errors | Invalid amount, invalid claim method, insufficient balance, missing pubkey |
-| `5000–5099` | Internal / DB errors | Blocking task failures, DB query errors |
+| `1000–1099` | Auth errors | Missing/invalid Bearer token, invalid PIN, invalid user ID |
+| `2001–2099` | Validation errors | Invalid amount, invalid claim method, missing fields, malformed messages |
+| `2100–2199` | Business / Ledger errors | Insufficient balance, insufficient claimable balance, missing pubkey |
+| `4000–4099` | WebSocket auth errors | Missing/invalid Bearer token on WS upgrade |
+| `4100–4199` | WebSocket validation errors | Malformed WS messages, invalid intent |
+| `4200–4299` | WebSocket business errors | Insufficient balance, unknown intent |
+| `5000–5099` | Internal / DB errors | Blocking task failures, DB query errors, ATA not initialized |
+| `5100–5110` | Solana errors | Claim failed, transfer failed, invalid pubkey, keypair load failed |
 | `5300–5399` | Security / Crypto errors | JWT secret missing, JWT encode/decode failure, bcrypt failure |
-| `6000–6099` | Solana / On-chain errors | Claim failed, transfer failed |
 
 ---
 
