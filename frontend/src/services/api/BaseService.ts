@@ -25,7 +25,7 @@ abstract class BaseService {
   protected constructor(baseURL: string) {
     this.client = axios.create({
       baseURL,
-      timeout: 15_000,
+      timeout: 45_000,   // 45s — Solana on-chain TX confirmation can take 10-30s
       headers: {
         'Content-Type': 'application/json',
         // Bypass ngrok's browser-warning interstitial page for non-browser clients

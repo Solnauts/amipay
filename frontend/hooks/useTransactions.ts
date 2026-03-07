@@ -1,43 +1,118 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { transactionService } from '../src/services';
-import type { Transaction } from '../src/types/api';
+import { TransactionRecord } from '../src/types/api';
+import { ActivityTransaction, TxType } from '../components/activity/activityData';
+
+// Backend stores amounts in micro-units (6 decimal places)
+// e.g. 10_000_000 → 10.00 USDC
+const DECIMALS = 1_000_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useTransactions — paginated transaction history
-// Does NOT auto-fetch — caller controls when to load pages
+// Direction logic for "confirmed" transfers:
+//   sender_id !== receiver_id  →  money went OUT → negative (sent)
+//   sender_id === receiver_id  →  self / received → positive
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface UseTransactionsReturn {
-  transactions: Transaction[];
-  total: number;
-  isLoading: boolean;
-  error: string | null;
-  fetchPage: (page: number) => Promise<void>;
+function mapToActivity(tr: TransactionRecord): ActivityTransaction {
+  const rawAmount = tr.amount / DECIMALS;
+  const isSelf = tr.sender_id === tr.receiver_id;
+
+  let type: TxType;
+  let amount: number;
+  let color: string;
+  let displayName: string;
+  let description: string;
+
+  switch (tr.status) {
+    case 'deposit':
+      // Always a deposit into your own vault — positive
+      type = 'received';
+      amount = rawAmount;
+      color = '#22c55e';       // green
+      displayName = 'Deposit';
+      description = 'Deposited to vault';
+      break;
+
+    case 'claimed':
+      // Withdrawal from vault to your wallet — negative
+      type = 'sent';
+      amount = -rawAmount;
+      color = '#F97316';       // orange
+      displayName = 'Claimed';
+      description = 'Withdrawn from vault';
+      break;
+
+    case 'confirmed':
+      if (isSelf) {
+        // sender_id === receiver_id → self / received
+        type = 'received';
+        amount = rawAmount;
+        color = '#8b5cf6';     // violet
+        displayName = 'Received';
+        description = 'Transfer received';
+      } else {
+        // sender_id !== receiver_id → sent to someone else
+        type = 'sent';
+        amount = -rawAmount;
+        color = '#ef4444';     // red
+        displayName = 'Sent';
+        description = `Sent to #${tr.receiver_id}`;
+      }
+      break;
+
+    default:
+      type = 'received';
+      amount = rawAmount;
+      color = '#64748b';
+      displayName = tr.status;
+      description = tr.status;
+  }
+
+  return {
+    id: String(tr.id),
+    initials: displayName.charAt(0).toUpperCase(),
+    name: displayName,
+    description,
+    token: tr.currency ?? 'USDC',
+    amount,
+    type,
+    color,
+    date: tr.created_at,
+  };
 }
 
-export const useTransactions = (): UseTransactionsReturn => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [total, setTotal] = useState<number>(0);
+export const useTransactions = () => {
+  const [transactions, setTransactions] = useState<ActivityTransaction[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Fetch Page ─────────────────────────────────────────────────────────────
-  // Replaces current list — caller manages accumulation if infinite scroll needed
-  const fetchPage = useCallback(async (page: number): Promise<void> => {
+  const fetchTransactions = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await transactionService.getHistory(page);
-      setTransactions(response.transactions);
-      setTotal(response.total);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to fetch transactions';
-      setError(message);
+      const resp = await transactionService.getAllTransactions();
+
+      if (resp && resp.transactions) {
+        const mapped = resp.transactions
+          .filter(tr => tr && tr.id)
+          .map(mapToActivity);
+
+        // Most recent first
+        mapped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        setTransactions(mapped);
+      }
+    } catch (err: any) {
+      console.error('[useTransactions] fetch error:', err);
+      setError(err?.message || 'Failed to fetch transactions');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  return { transactions, total, isLoading, error, fetchPage };
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  return { transactions, isLoading, error, refresh: fetchTransactions };
 };
