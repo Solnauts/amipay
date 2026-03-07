@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import ButtonComponent from "@/components/ui/ButtonComponent"
+import { ButtonComponent } from '@/components/ui/ButtonComponent';
 import { useWallet } from '@/context/WalletContext';
 import { Colors } from '@/constants/theme';
 import { DepositModal } from '@/components/home/DepositModal';

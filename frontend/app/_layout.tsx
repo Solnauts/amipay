@@ -1,8 +1,3 @@
-import 'react-native-get-random-values';
-import 'fast-text-encoding';
-import 'react-native-url-polyfill/auto';
-import { Buffer } from 'buffer';
-global.Buffer = global.Buffer || Buffer;
 import "../global.css";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
@@ -21,7 +16,6 @@ import {
 } from "@expo-google-fonts/poppins";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -48,22 +42,19 @@ export default function RootLayout() {
   // Keep splash visible until fonts are ready
   if (!fontsLoaded) return null;
 
-return (
-  <WalletProvider>
-    <SafeAreaProvider>
+  return (
+    <WalletProvider>
       <ThemedView style={{ flex: 1, backgroundColor: themeColors.background }}>
         <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
           <Stack>
-            <Stack.Screen name="(tabs)"           options={{ headerShown: false }} />
-            <Stack.Screen name="modal"            options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="pay"              options={{ presentation: 'modal', headerShown: false }} />
-            <Stack.Screen name="all-transactions" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)"            options={{ headerShown: false }} />
+            <Stack.Screen name="modal"             options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="pay"               options={{ presentation: 'modal', headerShown: false }} />
+            <Stack.Screen name="all-transactions"  options={{ headerShown: false }} />
           </Stack>
           <StatusBar style={isDark ? "light" : "dark"} />
         </ThemeProvider>
       </ThemedView>
-    </SafeAreaProvider>
-  </WalletProvider>
-);
-
+    </WalletProvider>
+  );
 }
