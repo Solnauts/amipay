@@ -2,6 +2,7 @@
 // Full searchable + filterable transaction history
 
 import React, { useState, useMemo } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlatList, ListRenderItem, TouchableOpacity, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -37,14 +38,11 @@ export default function AllTransactionsScreen() {
 
   const keyExtractor = (item: TxGroup) => item.label;
 
-  // ── Header rendered inside FlatList so it scrolls with the list ──────────
+  // Header scrolls with the list
   const ListHeader = (
     <>
-      {/* ── Top bar: back arrow + title + filter icon ── */}
-      <ThemedView
-        className="flex-row items-center justify-between px-6 pt-12 pb-4"
-      >
-        {/* Back button */}
+      {/* ── Top bar: back arrow + centered title ── */}
+      <ThemedView className="flex-row items-center px-4 pt-4 pb-3">
         <TouchableOpacity
           onPress={() => router.back()}
           activeOpacity={0.7}
@@ -54,20 +52,19 @@ export default function AllTransactionsScreen() {
           <MaterialIcons name="arrow-back" size={18} color={colors.text} />
         </TouchableOpacity>
 
-        {/* Title block */}
-        <ThemedView className="flex-1 items-center">
-          <ThemedText type="subtitle" variant="default">
-            All Transactions
-          </ThemedText>
-          <ThemedText variant="muted" className="text-xs mt-0.5">
-            {ACTIVITY_TRANSACTIONS.length} total
+        {/* Centered title — absolute so it truly centers over the full row */}
+        <ThemedView
+          className="absolute inset-x-0 items-center"
+          style={{ pointerEvents: 'none' }}
+        >
+          <ThemedText type="subtitle" variant="default" style={{ fontSize: 18 }}>
+            All Transaction
           </ThemedText>
         </ThemedView>
-
       </ThemedView>
 
       {/* ── Search ── */}
-      <SearchBar value={query} onChangeText={setQuery} />
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search transaction..." />
 
       {/* ── Filter pills ── */}
       <FilterPills active={filter} onChange={setFilter} />
@@ -87,7 +84,7 @@ export default function AllTransactionsScreen() {
   );
 
   return (
-    <ThemedView variant="default" className="flex-1">
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <FlatList
         data={groups}
         keyExtractor={keyExtractor}
@@ -98,6 +95,6 @@ export default function AllTransactionsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       />
-    </ThemedView>
+    </SafeAreaView>
   );
 }

@@ -5,21 +5,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useWallet } from "@/context/WalletContext";
 
 // Home screen components
-import { HomeHeader }          from "@/components/home/HomeHeader";
-import { BalanceSection }      from "@/components/home/BalanceSection";
-import { PeopleSection }       from "@/components/home/PeopleSection";
-import { FavouriteSection }    from "@/components/home/FavouriteSection";
-import { AIPayBanner }         from "@/components/home/AIPayBanner";
+import { HomeHeader } from "@/components/home/HomeHeader";
+import { BalanceSection } from "@/components/home/BalanceSection";
+import { PeopleSection } from "@/components/home/PeopleSection";
+import { FavouriteSection } from "@/components/home/FavouriteSection";
+import { AIPayBanner } from "@/components/home/AIPayBanner";
 import { WalletConnectScreen } from "@/components/home/WalletConnectScreen";
-import { OnboardingIntro }     from "@/components/home/OnboardingIntro";
-import { OnboardingScreen }    from "@/components/home/OnboardingScreen";
-import { userService }         from "@/src/services/api/UserService";
+import { OnboardingIntro } from "@/components/home/OnboardingIntro";
+import { OnboardingScreen } from "@/components/home/OnboardingScreen";
+import { userService } from "@/src/services/api/UserService";
 
 export default function HomeScreen() {
   const { authStep, connect } = useWallet();
-  const [balance, setBalance]           = useState<number | null>(null);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [showIntro, setShowIntro]       = useState(false); // false until storage checked
+  const [balance, setBalance] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showIntro, setShowIntro] = useState(false); // false until storage checked
   const [introChecked, setIntroChecked] = useState(false); // prevents flash
 
   // ── Check if intro has been seen before ─────────────────────────────────

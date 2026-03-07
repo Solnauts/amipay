@@ -11,16 +11,16 @@ import {
   useColorScheme,
 
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 // ── Shared home components ─────────────────────────────────────────────────
-import { HomeHeader }     from '@/components/home/HomeHeader';
+import { HomeHeader } from '@/components/home/HomeHeader';
 import { BalanceSection } from '@/components/home/BalanceSection';
 
 // ── Activity-specific components ───────────────────────────────────────────
 // Change these lines (around line 22-24):
-import { TokensSection }    from '@/components/wallet/TokensSection';
+import { TokensSection } from '@/components/wallet/TokensSection';
 import { TransactionGroup } from '@/components/wallet/TransactionGroup';
 import { ACTIVITY_TRANSACTIONS } from '@/components/wallet/activityData';
 import {
@@ -67,63 +67,65 @@ export default function ActivityScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 48 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
+    <SafeAreaProvider>
+      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 48 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+        >
+          {/* ── Header — same as home ── */}
+          <HomeHeader />
+
+          {/* ── Balance — $4,234.23, Deposit/Withdraw ── */}
+          <BalanceSection balance={null} connecting={false} />
+
+          {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
+          <TokensSection />
+
+          {/* ── Divider ── */}
+          <ThemedView
+            style={{
+              height: 1,
+              backgroundColor: colors.border,
+              marginHorizontal: 24,
+              marginBottom: 8,
+            }}
           />
-        }
-      >
-        {/* ── Header — same as home ── */}
-        <HomeHeader />
 
-        {/* ── Balance — $4,234.23, Deposit/Withdraw ── */}
-        <BalanceSection balance={null} connecting={false} />
-
-        {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
-        <TokensSection />
-
-        {/* ── Divider ── */}
-        <ThemedView
-          style={{
-            height: 1,
-            backgroundColor: colors.border,
-            marginHorizontal: 24,
-            marginBottom: 8,
-          }}
-        />
-
-        {/* ── Recent Transactions header + "View all" link ── */}
-        <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
-          <ThemedText type="defaultSemiBold" variant="default" className="text-base">
-            Recent Transaction
-          </ThemedText>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push('/all-transactions')}
-          >
-            <ThemedText
-              className="text-sm font-semibold"
-              style={{ color: colors.primary }}
-            >
-              View all
+          {/* ── Recent Transactions header + "View all" link ── */}
+          <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
+            <ThemedText type="defaultSemiBold" variant="default" className="text-base">
+              Recent Transaction
             </ThemedText>
-          </TouchableOpacity>
-        </ThemedView>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push('/all-transactions')}
+            >
+              <ThemedText
+                className="text-sm font-semibold"
+                style={{ color: colors.primary }}
+              >
+                View all
+              </ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
 
-        {/* ── Preview: most recent 3 transactions grouped by date ── */}
-        {previewGroups.map((group) => (
-          <TransactionGroup key={group.label} group={group} />
-        ))}
-      </ScrollView>
-    </SafeAreaView>
+          {/* ── Preview: most recent 3 transactions grouped by date ── */}
+          {previewGroups.map((group) => (
+            <TransactionGroup key={group.label} group={group} />
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

@@ -1,9 +1,7 @@
 // TokensSection — "Your Tokens" list on the Activities/Wallet screen
 // Shows each token with icon, balance, and USD value. Reuses theme colors.
 
-import { SOLIcon } from "@/components/icons/SOLIcon";
-import { SeekerIcon } from "@/components/icons/SeekerIcon";
-import { USDCIcon } from "../icons/USDCIcon";
+import { TokenIcon } from "@/components/icons/TokenIcon";
 import { ThemedText } from "@/components/ui/ThemedText";
 import { ThemedView } from "@/components/ui/ThemedView";
 import { Colors } from "@/constants/theme";
@@ -15,31 +13,12 @@ type Token = {
   name: string;
   amount: number;
   usdValue: number;
-  icon: React.ComponentType<{ size?: number }>;
 };
 
 const TOKENS: Token[] = [
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    amount: 2312.45,
-    usdValue: 2487.5,
-    icon: USDCIcon,
-  },
-  {
-    symbol: "SOL",
-    name: "Solana",
-    amount: 12.5,
-    usdValue: 2487.5,
-    icon: SOLIcon,
-  },
-  {
-    symbol: "SEEKER",
-    name: "Seeker Token",
-    amount: 1212.25,
-    usdValue: 2487.5,
-    icon: SeekerIcon,
-  },
+  { symbol: "USDC", name: "USD Coin", amount: 2312.45, usdValue: 2487.5 },
+  { symbol: "SOL", name: "Solana", amount: 12.5, usdValue: 2487.5 },
+  { symbol: "SEEKER", name: "Seeker Token", amount: 1212.25, usdValue: 2487.5 },
 ];
 
 function formatAmount(n: number): string {
@@ -82,9 +61,8 @@ export function TokensSection() {
             borderBottomColor: colors.border,
           }}
         >
-          {/* Token icon — 56px */}
           <View className="mr-3">
-            <token.icon size={56} />
+            <TokenIcon symbol={token.symbol} size={56} />
           </View>
 
           {/* Symbol + name */}

@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, TouchableOpacity, useColorScheme } from 'react-native';
+import { TouchableOpacity, useColorScheme } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconButton } from '@/components/ui/IconButton';
+import { Avatar } from '@/components/ui/Avatar';
 import { useWallet } from '@/context/WalletContext';
 import { Colors } from '@/constants/theme';
 
@@ -28,17 +30,11 @@ export function HomeHeader() {
         activeOpacity={0.75}
         onPress={isConnected ? disconnect : connect}
       >
-        {/* Avatar circle */}
-        <View
-          className="w-9 h-9 rounded-full items-center justify-center"
-          style={{ backgroundColor: isConnected ? colors.violet : colors.mutedForeground }}
-        >
-          <ThemedText style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
-            {walletInitial}
-          </ThemedText>
-        </View>
-
-        {/* Label + chevron */}
+        <Avatar
+          initials={walletInitial}
+          color={isConnected ? colors.violet : colors.mutedForeground}
+          size="sm"
+        />
         <ThemedText variant="default" className="font-semibold text-base">
           Main Account
         </ThemedText>
@@ -47,20 +43,8 @@ export function HomeHeader() {
 
       {/* ── Right: bell + scan icons ── */}
       <ThemedView variant="default" className="flex-row gap-2">
-        <TouchableOpacity
-          className="w-9 h-9 rounded-full items-center justify-center"
-          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol name="clock" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          className="w-9 h-9 rounded-full items-center justify-center"
-          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol name="qrcode.viewfinder" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        <IconButton icon="bell.fill" onPress={() => { }} />
+        <IconButton icon="qrcode.viewfinder" onPress={() => { }} />
       </ThemedView>
     </ThemedView>
   );

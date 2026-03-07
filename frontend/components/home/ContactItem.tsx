@@ -1,7 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { ThemedView } from '@/components/ui/ThemedView';
+import { Avatar } from '@/components/ui/Avatar';
 import type { Contact } from './homeData';
 
 type Props = {
@@ -17,7 +17,6 @@ type Props = {
  */
 export function ContactItem({ contact, size = 'md', onPress }: Props) {
   const dim = 64;
-  const fontSize = 18;
 
   return (
     <TouchableOpacity
@@ -26,17 +25,11 @@ export function ContactItem({ contact, size = 'md', onPress }: Props) {
       className="items-center gap-1.5"
       style={{ width: dim + 8 }}
     >
-      <ThemedView
-        className="rounded-full items-center justify-center"
-        style={{ width: dim, height: dim, backgroundColor: contact.color }}
-      >
-        <ThemedText
-          className="font-bold text-white"
-          style={{ fontSize, color: '#ffffff' }}
-        >
-          {contact.initials}
-        </ThemedText>
-      </ThemedView>
+      <Avatar
+        initials={contact.initials}
+        color={contact.color}
+        size="lg"
+      />
       <ThemedText variant="secondary" className="text-xs text-center" numberOfLines={1}>
         {contact.name}
       </ThemedText>

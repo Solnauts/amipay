@@ -24,10 +24,10 @@ export function TransactionGroup({ group }: Props) {
 
   return (
     <ThemedView className="mb-1">
-      {/* Date label */}
+      {/* Date label — "Today", "Yesterday", "Last Week" */}
       <ThemedText
         variant="muted"
-        className="text-xs font-semibold px-6 mt-4 mb-1"
+        className="text-sm font-medium px-6 mt-5 mb-1"
       >
         {toTitleCase(group.label)}
       </ThemedText>

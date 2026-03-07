@@ -9,12 +9,12 @@ import {
   Image,
   StyleSheet,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
+import { GradientButton } from '@/components/ui/GradientButton';
 import { Contact } from '@/components/cards/cardsData';
 import { Colors } from '@/constants/theme';
 import { MOCK_TXS } from './contactsData';
@@ -67,18 +67,15 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
             </TouchableOpacity>
           </View>
 
-          {/* Send button — violet gradient, identical to Deposit/Withdraw */}
-          <TouchableOpacity onPress={handleSend} activeOpacity={0.88} style={styles.sendBtn}>
-            <LinearGradient
-              colors={['#A78BFA', '#8B5CF6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.sendGradient}
-            >
-              <MaterialIcons name="send" size={18} color="#ffffff" />
-              <ThemedText style={styles.sendBtnText}>Send</ThemedText>
-            </LinearGradient>
-          </TouchableOpacity>
+          {/* Send button — uses GradientButton */}
+          <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+            <GradientButton
+              label="Send"
+              onPress={handleSend}
+              icon="paperplane.fill"
+              variant="primary"
+            />
+          </View>
 
           {/* Total Sent summary card */}
           <ThemedView
@@ -164,36 +161,5 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-  },
-  sendBtn: {
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-    marginBottom: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  sendGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.50)',
-    borderLeftColor:   'transparent',
-    borderRightColor:  'transparent',
-    borderBottomColor: 'transparent',
-  },
-  sendBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    letterSpacing: 0.2,
   },
 });
