@@ -16,6 +16,8 @@
    - [POST /wallet/address](#16-post-walletaddress)
    - [POST /wallet/add-recipient](#17-post-walletadd-recipient)
    - [POST /wallet/get_user_alias](#18-post-walletget_user_alias)
+   - [POST /wallet/deposit](#19-post-walletdeposit)
+   - [GET /wallet/getusdcamount](#110-get-walletgetusdcamount)
 2. [Account](#2-account)
 
 3. [Ledger / Claiming](#3-ledger--claiming)
@@ -151,7 +153,7 @@ Returns a list of unique, system-generated alias suggestions the user can pick f
 
 Saves a chosen alias for the authenticated user.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -179,7 +181,7 @@ Saves a chosen alias for the authenticated user.
 
 Returns the authenticated user's on-chain wallet address.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -206,7 +208,7 @@ Returns the authenticated user's on-chain wallet address.
 
 Adds another user as a recipient for the authenticated user, looked up by their alias.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request Body:**
 ```json
@@ -235,7 +237,7 @@ Adds another user as a recipient for the authenticated user, looked up by their 
 
 Retrieves all aliases associated with the authenticated user.
 
-**Auth required:** 🔒 `session_token` cookie
+**Auth required:** 🔒 `Authorization: Bearer <token>`
 
 **Request:** No body required.
 
@@ -255,6 +257,67 @@ Retrieves all aliases associated with the authenticated user.
   ]
 }
 ```
+
+---
+
+### 1.9 `POST /wallet/deposit`
+
+Records a USDC deposit for the authenticated user. Updates the internal ledger balance. The on-chain transfer is handled by the client before calling this endpoint — the server records the credited amount.
+
+**Auth required:** 🔒 `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "deposit_amount": 100.0,
+  "from_account":   "EVhLcAtbZb8GqozXUroMHTDGbhXJkJ37mJhTmDe43vSj",
+  "to_account":     "AmMd6uDUNchUeHaJKk5syS4tsDvYLru5UP4ZdHz9YdKC"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `deposit_amount` | `number (f64)` | ✅ | Amount of USDC to credit (in whole USDC units, e.g. `100.0` = 100 USDC) |
+| `from_account` | `string` | ✅ | Sender's USDC token account address (reserved for future on-chain verification) |
+| `to_account` | `string` | ✅ | Receiver's USDC token account address (reserved for future on-chain verification) |
+
+**Success Response `200 OK`:**
+```json
+{
+  "status":         "success",
+  "deposit_amount": 100.0,
+  "new_balance":    250.0,
+  "tx_signature":   null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deposit_amount` | `number` | The amount that was deposited |
+| `new_balance` | `number` | The user's USDC balance after the deposit |
+| `tx_signature` | `string \| null` | On-chain transaction signature (currently `null`; will be populated once on-chain verification is added) |
+
+---
+
+### 1.10 `GET /wallet/getusdcamount`
+
+Returns the authenticated user's current USDC balance as recorded in the internal ledger.
+
+**Auth required:** 🔒 `Authorization: Bearer <token>`
+
+**Request:** No body required.
+
+**Success Response `200 OK`:**
+```json
+{
+  "status":       "success",
+  "usdc_balance": 250.0
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `usdc_balance` | `number` | Current USDC balance from the internal ledger |
 
 ---
 
@@ -489,7 +552,7 @@ Sent after the server sends an `AssistanceMessage` with a `pending_action_id`.
 
 | Code Range | Category | Examples |
 |------------|----------|---------|
-| `4000–4099` | Auth errors | Missing cookie, invalid token, invalid user ID |
+| `4000–4099` | Auth errors | Missing/invalid Bearer token, invalid user ID |
 | `4100–4199` | Validation errors | Missing fields, malformed messages, invalid conversation ID |
 | `4200–4299` | Business / Ledger errors | Invalid amount, invalid claim method, insufficient balance, missing pubkey |
 | `5000–5099` | Internal / DB errors | Blocking task failures, DB query errors |

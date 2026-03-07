@@ -150,9 +150,13 @@ class AuthService extends BaseService {
   // ── Add a recipient by alias ──────────────────────────────────────────────
   async addRecipient(
     recipientAlias: string,
+    recipientName: string,
   ): Promise<AddRecipientResponse> {
     try {
-      const payload: AddRecipientRequest = { recipient_alias: recipientAlias };
+      const payload: AddRecipientRequest = {
+        recipient_alias: recipientAlias,
+        recipient_name: recipientName,
+      };
       const res = await this.client.post<AddRecipientResponse>(
         '/wallet/add-recipient',
         payload,

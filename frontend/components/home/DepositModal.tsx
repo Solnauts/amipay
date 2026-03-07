@@ -32,10 +32,10 @@ import { transactionService } from '@/src/services/api/TransactionService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOKEN_MINT     = new PublicKey('USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT');
+const TOKEN_MINT = new PublicKey('USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT');
 const TOKEN_DECIMALS = 6;
 
-const TOKEN_PROGRAM_ID            = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe1bea');
 
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -55,7 +55,7 @@ const APP_IDENTITY = {
  */
 async function findTokenAccount(
   owner: PublicKey,
-  mint:  PublicKey,
+  mint: PublicKey,
 ): Promise<PublicKey | null> {
   const res = await connection.getParsedTokenAccountsByOwner(owner, { mint });
   if (res.value.length === 0) return null;
@@ -86,8 +86,8 @@ function deriveATA(owner: PublicKey, mint: PublicKey): PublicKey {
  */
 function buildTransferInstruction(
   sourceATA: PublicKey,
-  destATA:   PublicKey,
-  owner:     PublicKey,
+  destATA: PublicKey,
+  owner: PublicKey,
   rawAmount: bigint,
 ): TransactionInstruction {
   const data = Buffer.alloc(9);
@@ -98,9 +98,9 @@ function buildTransferInstruction(
   return new TransactionInstruction({
     programId: TOKEN_PROGRAM_ID,
     keys: [
-      { pubkey: sourceATA, isSigner: false, isWritable: true  },
-      { pubkey: destATA,   isSigner: false, isWritable: true  },
-      { pubkey: owner,     isSigner: true,  isWritable: false },
+      { pubkey: sourceATA, isSigner: false, isWritable: true },
+      { pubkey: destATA, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: true, isWritable: false },
     ],
     data,
   });
@@ -126,14 +126,43 @@ export function DepositModal({ visible, onClose }: Props) {
       }
 
       try {
+        // ── 0. Pre-flight: Check SOL balance for gas fees ───────────────────
+        console.log('─────────────────────────────────────');
+        console.log('[Deposit] Pre-flight checks...');
+        console.log('[Deposit] User pubKey:', publicKey.toBase58());
+
+        const solBalance = await connection.getBalance(publicKey);
+        const solBalanceLamports = solBalance;
+        const solBalanceSOL = solBalance / 1e9;
+        console.log('[Deposit] SOL balance:', solBalanceSOL, 'SOL', `(${solBalanceLamports} lamports)`);
+
+        // An SPL token transfer needs ~5000 lamports (0.000005 SOL) for the fee.
+        // We require at least 0.005 SOL to be safe (accounts for rent etc).
+        const MIN_SOL_FOR_FEES = 0.005;
+        if (solBalanceSOL < MIN_SOL_FOR_FEES) {
+          Alert.alert(
+            'Not Enough SOL for Fees',
+            [
+              `Your wallet needs SOL to pay Solana transaction fees.`,
+              ``,
+              `Current SOL balance: ${solBalanceSOL.toFixed(6)} SOL`,
+              `Minimum required:    ~${MIN_SOL_FOR_FEES} SOL`,
+              ``,
+              `To get devnet SOL:`,
+              `1. Visit https://faucet.solana.com`,
+              `2. Paste your wallet address:`,
+              `   ${publicKey.toBase58()}`,
+              `3. Request an airdrop`,
+            ].join('\n'),
+          );
+          return;
+        }
+
         // ── 1. Fetch platform ATA from backend ──────────────────────────────
         const platformATAStr = await authService.getWalletAddress();
         const receiverTokenAccount = new PublicKey(platformATAStr);
 
-        console.log('─────────────────────────────────────');
-        console.log('[Deposit] User pubKey:            ', publicKey.toBase58());
         console.log('[Deposit] Platform ATA (from API):', platformATAStr);
-        console.log('─────────────────────────────────────');
 
         // ── 2. Find sender's real token account on-chain ─────────────────
         const senderTokenAccount = await findTokenAccount(publicKey, TOKEN_MINT);
@@ -141,8 +170,39 @@ export function DepositModal({ visible, onClose }: Props) {
 
         if (!senderTokenAccount) {
           Alert.alert(
-            'No Token Account',
-            `Your wallet has no account for this token.\n\nWallet: ${publicKey.toBase58().slice(0, 16)}…`,
+            'No USDC Token Account',
+            [
+              `Your wallet does not have a USDC token account on devnet.`,
+              ``,
+              `You need to create a USDC token account first and fund it with devnet USDC.`,
+              ``,
+              `Wallet: ${publicKey.toBase58().slice(0, 20)}…`,
+              `Token mint: ${TOKEN_MINT.toBase58().slice(0, 20)}…`,
+            ].join('\n'),
+          );
+          return;
+        }
+
+        // ── 2b. Check USDC token balance ─────────────────────────────────
+        const tokenBalanceRes = await connection.getTokenAccountBalance(senderTokenAccount);
+        const tokenBalanceRaw = Number(tokenBalanceRes.value.amount);
+        const tokenBalanceUI = tokenBalanceRes.value.uiAmount ?? 0;
+        const rawAmount = BigInt(Math.round(numericAmount * 10 ** TOKEN_DECIMALS));
+
+        console.log('[Deposit] USDC balance:', tokenBalanceUI, `(raw: ${tokenBalanceRaw})`);
+        console.log('[Deposit] Deposit amount:', numericAmount, `(raw: ${rawAmount.toString()})`);
+
+        if (tokenBalanceRaw < Number(rawAmount)) {
+          Alert.alert(
+            'Insufficient USDC Balance',
+            [
+              `You don't have enough USDC to deposit.`,
+              ``,
+              `Available: ${tokenBalanceUI.toFixed(2)} USDC`,
+              `Requested: ${numericAmount.toFixed(2)} USDC`,
+              ``,
+              `Please add more USDC to your wallet first.`,
+            ].join('\n'),
           );
           return;
         }
@@ -152,26 +212,22 @@ export function DepositModal({ visible, onClose }: Props) {
         console.log('[Deposit] Sender → Receiver same?', senderTokenAccount.toBase58() === receiverTokenAccount.toBase58());
         console.log('─────────────────────────────────────');
 
-        // ── 4. Convert amount → raw units (6 decimals) ───────────────────
-        const rawAmount = BigInt(Math.round(numericAmount * 10 ** TOKEN_DECIMALS));
-        console.log('[Deposit] Amount:', numericAmount, '→ raw:', rawAmount.toString());
-
-        // ── 5. Open MWA, sign, broadcast, confirm ─────────────────────────
+        // ── 4. Open MWA, sign, broadcast, confirm ─────────────────────────
         await transact(async (wallet: Web3MobileWallet) => {
 
-          console.log('[Deposit] Step 5a: authorizing wallet...');
+          console.log('[Deposit] Step 4a: authorizing wallet...');
           await wallet.authorize({
             cluster: 'devnet',
             identity: APP_IDENTITY,
           });
-          console.log('[Deposit] Step 5a: ✅ authorized');
+          console.log('[Deposit] Step 4a: ✅ authorized');
 
-          console.log('[Deposit] Step 5b: fetching blockhash...');
+          console.log('[Deposit] Step 4b: fetching blockhash...');
           const { blockhash, lastValidBlockHeight } =
             await connection.getLatestBlockhash();
-          console.log('[Deposit] Step 5b: ✅ blockhash:', blockhash);
+          console.log('[Deposit] Step 4b: ✅ blockhash:', blockhash);
 
-          console.log('[Deposit] Step 5c: building transaction...');
+          console.log('[Deposit] Step 4c: building transaction...');
           const tx = new Transaction({
             recentBlockhash: blockhash,
             feePayer: publicKey,
@@ -183,50 +239,49 @@ export function DepositModal({ visible, onClose }: Props) {
               rawAmount,
             ),
           );
-          console.log('[Deposit] Step 5c: ✅ tx built');
+          console.log('[Deposit] Step 4c: ✅ tx built');
 
-          console.log('[Deposit] Step 5d: signing transaction...');
+          console.log('[Deposit] Step 4d: signing transaction...');
           const [signedTx] = await wallet.signTransactions({ transactions: [tx] });
-          console.log('[Deposit] Step 5d: ✅ signed');
+          console.log('[Deposit] Step 4d: ✅ signed');
 
-          console.log('[Deposit] Step 5e: broadcasting...');
+          console.log('[Deposit] Step 4e: broadcasting...');
           const sig = await connection.sendRawTransaction(
             signedTx.serialize(),
             { skipPreflight: false, preflightCommitment: 'confirmed' },
           );
-          console.log('[Deposit] Step 5e: ✅ broadcast sig:', sig);
+          console.log('[Deposit] Step 4e: ✅ broadcast sig:', sig);
 
-          console.log('[Deposit] Step 5f: confirming...');
+          console.log('[Deposit] Step 4f: confirming...');
           await connection.confirmTransaction(
             { signature: sig, blockhash, lastValidBlockHeight },
             'confirmed',
           );
-          console.log('[Deposit] Step 5f: ✅ confirmed!');
+          console.log('[Deposit] Step 4f: ✅ confirmed!');
 
-          // ── 6. Record deposit in backend database ─────────────────────────
-          console.log('[Deposit] Step 6: recording deposit in backend...');
+          // ── 5. Record deposit in backend database ─────────────────────────
+          console.log('[Deposit] Step 5: recording deposit in backend...');
           try {
             const record = await transactionService.recordDeposit({
               deposit_amount: numericAmount,
-              from_account:   senderTokenAccount.toBase58(),
-              to_account:     receiverTokenAccount.toBase58(),
+              from_account: senderTokenAccount.toBase58(),
+              to_account: receiverTokenAccount.toBase58(),
             });
-            console.log('[Deposit] Step 6: ✅ recorded:', record?.status, record?.message);
+            console.log('[Deposit] Step 5: ✅ recorded:', record?.status, record?.message);
           } catch (apiErr: any) {
             // Don't block success — tx is already confirmed on-chain
-            console.warn('[Deposit] Step 6: ⚠️ backend record failed:', apiErr?.message);
+            console.warn('[Deposit] Step 5: ⚠️ backend record failed:', apiErr?.message);
           }
 
           Alert.alert(
             '🎉 Deposit Confirmed!',
             [
-              `Amount:  ${numericAmount.toLocaleString()} tokens`,
+              `Amount:  ${numericAmount.toLocaleString()} USDC`,
               `Status:  ✅ Confirmed on Solana devnet`,
               ``,
               `Tx ID:   ${sig.slice(0, 8)}…${sig.slice(-8)}`,
               ``,
               `Your balance will update shortly.`,
-              `Balance update in the Database`
             ].join('\n'),
             [
               {
@@ -258,12 +313,24 @@ export function DepositModal({ visible, onClose }: Props) {
         console.log('[Deposit] Error logs    :', JSON.stringify(err?.logs ?? []));
         console.log('[Deposit] Full error    :', JSON.stringify(err, Object.getOwnPropertyNames(err)));
         console.log('[Deposit] ❌ ─────────────────────');
-        Alert.alert(
-          'Deposit Failed',
-          `${err?.message ?? 'An unexpected error occurred.'}
 
-(See console for full details)`,
-        );
+        // Give user-friendly messages for common Solana errors
+        const msg = err?.message ?? '';
+        let userMessage = msg;
+
+        if (msg.includes('no record of a prior credit') || msg.includes('insufficient funds')) {
+          userMessage =
+            'Your wallet does not have enough SOL to pay for this transaction.\n\n' +
+            'Visit https://faucet.solana.com to get free devnet SOL, then try again.';
+        } else if (msg.includes('insufficient lamports')) {
+          userMessage =
+            'Not enough SOL for transaction fees.\n\n' +
+            'Visit https://faucet.solana.com to get free devnet SOL.';
+        } else if (msg.includes('User cancelled') || msg.includes('User declined')) {
+          userMessage = 'Transaction was cancelled.';
+        }
+
+        Alert.alert('Deposit Failed', userMessage || 'An unexpected error occurred.');
       }
     },
     [publicKey, onClose],

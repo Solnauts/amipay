@@ -52,6 +52,7 @@ diesel::table! {
         id -> Int4,
         recipient_user_id -> Int4,
         alias_used -> Text,
+        recipient_name -> Text,
     }
 }
 

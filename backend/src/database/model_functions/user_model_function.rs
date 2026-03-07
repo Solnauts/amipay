@@ -1,13 +1,14 @@
 use crate::database::{
     establish_connection,
     model::{
-        DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateWalletProfile,
+        DbLedger, DbUser, Dbrecipient, NewLedger, NewUser, NewWalletUser, UpdateUserUsdcAta,
+        UpdateWalletProfile,
     },
 };
 use crate::errors::{AppError, DbError, ValidationError};
 use crate::schema::user;
-use diesel::prelude::*;
 use diesel::PgConnection;
+use diesel::prelude::*;
 
 pub enum UserInfoResponse {
     Text(String),
@@ -55,18 +56,39 @@ pub fn get_user_info(request: UserInfoRequest) -> Result<UserInfoResponse, AppEr
 
         "recipient" => {
             use crate::schema::recipient::dsl::*;
-            let recipient_name = request.recipient_name.clone().unwrap_or_default();
-            let recpient_result = recipient
-                .filter(userid.eq(&request.user_id))
-                .filter(alias_used.eq(&recipient_name))
-                .get_result::<Dbrecipient>(connection);
+            use diesel::TextExpressionMethods;
+            let lookup_term = request.recipient_name.clone().unwrap_or_default();
 
-            match recpient_result {
-                Ok(value) => Ok(UserInfoResponse::Recipient(value)),
-                Err(_) => Err(ValidationError::RecipientNotFound {
-                    name: recipient_name,
-                }
-                .into()),
+            // Try recipient_name first (user-given label like "Mom"),
+            // then fall back to alias_used (full Amipay ID like "mom@amypay").
+            // Both are case-insensitive via Postgres ILIKE.
+            let result = recipient
+                .filter(userid.eq(&request.user_id))
+                .filter(recipient_name.ilike(&lookup_term))
+                .first::<Dbrecipient>(connection)
+                .optional()
+                .map_err(|e: diesel::result::Error| DbError::QueryFailed {
+                    context: "recipient lookup by name".to_string(),
+                    reason: e.to_string(),
+                })?;
+
+            if let Some(found) = result {
+                return Ok(UserInfoResponse::Recipient(found));
+            }
+
+            let result2 = recipient
+                .filter(userid.eq(&request.user_id))
+                .filter(alias_used.ilike(&lookup_term))
+                .first::<Dbrecipient>(connection)
+                .optional()
+                .map_err(|e: diesel::result::Error| DbError::QueryFailed {
+                    context: "recipient lookup by alias".to_string(),
+                    reason: e.to_string(),
+                })?;
+
+            match result2 {
+                Some(found) => Ok(UserInfoResponse::Recipient(found)),
+                None => Err(ValidationError::RecipientNotFound { name: lookup_term }.into()),
             }
         }
 
@@ -91,6 +113,14 @@ pub fn get_user_info(request: UserInfoRequest) -> Result<UserInfoResponse, AppEr
             Some(value) => Ok(UserInfoResponse::Text(value)),
             None => Err(ValidationError::UserNotFound {
                 identifier: format!("wallet for user_id={}", request.user_id),
+            }
+            .into()),
+        },
+
+        "usdc_ata" => match user_result.user_usdc_ata {
+            Some(value) => Ok(UserInfoResponse::Text(value)),
+            None => Err(ValidationError::UserNotFound {
+                identifier: format!("usdc_ata for user_id={}", request.user_id),
             }
             .into()),
         },
@@ -148,10 +178,18 @@ pub fn find_user_by_wallet(conn: &mut PgConnection, addr: &str) -> Result<Option
 }
 
 /// Auto-register a new wallet user with just the wallet address.
+///
+/// NOTE: `unique_id` is capped at 32 characters. Solana PDA seed components must
+/// be ≤ 32 bytes, and a base58 wallet address is 44 ASCII chars (= 44 bytes).
+/// The first 32 chars of a base58 address are unique enough in practice and fit
+/// exactly within the on-chain seed limit.
 pub fn create_wallet_user(conn: &mut PgConnection, addr: &str) -> Result<DbUser, DbError> {
+    // Truncate to 32 chars so the unique_id fits as a Solana PDA seed component.
+    let unique_id = addr.chars().take(32).collect::<String>();
+
     let new_wallet_user = NewWalletUser {
         wallet_address: Some(addr.to_string()),
-        unique_id: addr.to_string(),
+        unique_id,
         method_type: "wallet".to_string(),
         user_pin: String::new(),
     };
@@ -176,6 +214,28 @@ pub fn update_wallet_user_profile(
     let changeset = UpdateWalletProfile {
         name: Some(new_name),
         user_pin: hashed_pin,
+    };
+
+    diesel::update(user.filter(id.eq(target_user_id)))
+        .set(&changeset)
+        .get_result(conn)
+        .map_err(|e| DbError::ProfileUpdateFailed {
+            user_id: target_user_id,
+            reason: e.to_string(),
+        })
+}
+
+/// Persist the on-chain USDC ATA pubkey into `user.user_usdc_ata`.
+/// Called after `create_user_ata` succeeds so the address is always in sync with the DB.
+pub fn save_user_usdc_ata(
+    conn: &mut PgConnection,
+    target_user_id: i32,
+    ata_pubkey: String,
+) -> Result<DbUser, DbError> {
+    use crate::schema::user::dsl::*;
+
+    let changeset = UpdateUserUsdcAta {
+        user_usdc_ata: Some(ata_pubkey),
     };
 
     diesel::update(user.filter(id.eq(target_user_id)))
@@ -308,4 +368,13 @@ pub fn is_amount_valid(
             available: user_amount,
         })
     }
+}
+
+/// Get the user's USDC balance by computing it live from the ledger.
+/// Returns the net balance in micro-USDC (credits − debits).
+pub fn get_usdc_balance(conn: &mut PgConnection, user_id: i32) -> Result<i64, DbError> {
+    use super::ledger_model_function::calculate_balance_from_ledger;
+
+    let calc = calculate_balance_from_ledger(conn, user_id)?;
+    Ok(calc.net_balance)
 }

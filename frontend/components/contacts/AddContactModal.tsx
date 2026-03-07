@@ -1,6 +1,11 @@
 // AddContactModal — centre modal for adding a new contact
-// • "Amypay ID verified" only shows once the ID field has content
-// • "Add Contact" button is disabled until name is filled AND ID is verified
+// Wired to POST /wallet/add-recipient via authService.addRecipient()
+//
+// Flow:
+//  1. User enters a contact name (local label only) and Amipay ID (alias)
+//  2. Press "Add Contact" → hits backend to verify the alias exists & link it
+//  3. On success → shows confirmation, closes modal, notifies parent
+//  4. On error → shows the backend error message inline
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -9,6 +14,8 @@ import {
   View,
   TextInput,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -16,29 +23,76 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
+import { authService } from '@/src/services/api/AuthService';
 
-// Simulated async verify: any non-empty id with '@' is "verified"
+// ─── Validation ──────────────────────────────────────────────────────────────
+
+/**
+ * Basic client-side check: alias must be at least 4 chars and contain '@'.
+ * Example valid alias: Ridhi@amypay
+ * Real validation happens on the backend.
+ */
 function isValidAmypayId(id: string) {
   return id.trim().length > 3 && id.includes('@');
 }
 
+// ─── Props ───────────────────────────────────────────────────────────────────
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  /** Called after a recipient is successfully added — parent can refresh contacts */
+  onAdded?: (result: { recipientId: number; recipientUserId: number; aliasUsed: string }) => void;
   colors: (typeof Colors)[keyof typeof Colors];
 };
 
-export function AddContactModal({ isOpen, onClose, colors }: Props) {
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export function AddContactModal({ isOpen, onClose, onAdded, colors }: Props) {
   const [name, setName] = useState('');
-  const [id, setId]     = useState('');
+  const [id, setId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const isVerified = useMemo(() => isValidAmypayId(id), [id]);
-  const canAdd     = name.trim().length > 0 && isVerified;
+  const isValidFormat = useMemo(() => isValidAmypayId(id), [id]);
+  const canAdd = name.trim().length > 0 && isValidFormat && !loading;
 
+  // ── Reset & close ──────────────────────────────────────────────────────
   const handleClose = () => {
     setName('');
     setId('');
+    setError(null);
+    setLoading(false);
     onClose();
+  };
+
+  // ── Submit to backend ──────────────────────────────────────────────────
+  const handleAdd = async () => {
+    if (!canAdd) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      const result = await authService.addRecipient(id.trim(), name.trim());
+
+      // Success — notify parent & close
+      onAdded?.({
+        recipientId: result.recipient_id,
+        recipientUserId: result.recipient_user_id,
+        aliasUsed: result.alias_used,
+      });
+
+      Alert.alert(
+        '✅ Contact Added',
+        `${name.trim()} (${result.alias_used}) has been added to your contacts.`,
+      );
+      handleClose();
+    } catch (err: any) {
+      const msg = err?.message ?? 'Something went wrong. Please try again.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -81,9 +135,10 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
             >
               <TextInput
                 value={name}
-                onChangeText={setName}
+                onChangeText={(v) => { setName(v); setError(null); }}
                 placeholder="Enter contact name"
                 placeholderTextColor={colors.mutedForeground}
+                editable={!loading}
                 style={{ color: colors.text, fontSize: 15, fontFamily: 'Poppins_400Regular' }}
               />
             </ThemedView>
@@ -100,14 +155,15 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
               style={{
                 backgroundColor: colors.backgroundSecondary,
                 borderWidth: id.trim().length > 0 ? 1 : 0,
-                borderColor: isVerified ? colors.success : colors.error,
+                borderColor: isValidFormat ? colors.success : colors.error,
               }}
             >
               <TextInput
                 value={id}
-                onChangeText={setId}
+                onChangeText={(v) => { setId(v); setError(null); }}
                 placeholder="Paste amypay id  (e.g. Ridhi@amypay)"
                 placeholderTextColor={colors.mutedForeground}
+                editable={!loading}
                 style={{ color: colors.text, fontSize: 15, fontFamily: 'Poppins_400Regular' }}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -115,31 +171,47 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
             </ThemedView>
           </View>
 
-          {/* ── Verified / Invalid status — only shows when id field has input ── */}
-          <View style={{ height: 22, justifyContent: 'center', marginBottom: 18 }}>
-            {id.trim().length > 0 && (
+          {/* ── Status line: format check + backend error ── */}
+          <View style={{ minHeight: 22, justifyContent: 'center', marginBottom: 18 }}>
+            {/* Backend error takes priority */}
+            {error ? (
+              <ThemedView className="flex-row items-center gap-1">
+                <MaterialIcons name="error-outline" size={14} color={colors.error} />
+                <ThemedText
+                  style={{
+                    fontSize: 12,
+                    color: colors.error,
+                    fontFamily: 'Poppins_400Regular',
+                    flex: 1,
+                  }}
+                  numberOfLines={2}
+                >
+                  {error}
+                </ThemedText>
+              </ThemedView>
+            ) : id.trim().length > 0 ? (
               <ThemedView className="flex-row items-center gap-1">
                 <MaterialIcons
-                  name={isVerified ? 'check-circle' : 'cancel'}
+                  name={isValidFormat ? 'check-circle' : 'cancel'}
                   size={14}
-                  color={isVerified ? colors.success : colors.error}
+                  color={isValidFormat ? colors.success : colors.error}
                 />
                 <ThemedText
                   style={{
                     fontSize: 12,
-                    color: isVerified ? colors.success : colors.error,
+                    color: isValidFormat ? colors.success : colors.error,
                     fontFamily: 'Poppins_400Regular',
                   }}
                 >
-                  {isVerified ? 'Amypay ID verified' : 'Invalid Amypay ID'}
+                  {isValidFormat ? 'Valid Amipay ID format' : 'Invalid Amipay ID (must include @)'}
                 </ThemedText>
               </ThemedView>
-            )}
+            ) : null}
           </View>
 
-          {/* ── Add Contact button — disabled until name filled + ID verified ── */}
+          {/* ── Add Contact button ── */}
           <TouchableOpacity
-            onPress={handleClose}
+            onPress={handleAdd}
             activeOpacity={canAdd ? 0.88 : 1}
             disabled={!canAdd}
             style={[styles.addBtn, { opacity: canAdd ? 1 : 0.45 }]}
@@ -150,7 +222,11 @@ export function AddContactModal({ isOpen, onClose, colors }: Props) {
               end={{ x: 0, y: 1 }}
               style={styles.addGradient}
             >
-              <ThemedText style={styles.addBtnText}>Add Contact</ThemedText>
+              {loading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <ThemedText style={styles.addBtnText}>Add Contact</ThemedText>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         </ThemedView>
@@ -195,8 +271,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.50)',
-    borderLeftColor:   'transparent',
-    borderRightColor:  'transparent',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
     borderBottomColor: 'transparent',
   },
   addBtnText: {

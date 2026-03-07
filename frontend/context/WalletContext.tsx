@@ -26,6 +26,9 @@ type WalletContextState = {
   publicKey: PublicKey | null;
   walletAddress: string | null; // base58 — useful everywhere
   user: BackendUser | null; // backend user profile
+  walletAddress: string | null;   // base58 — useful everywhere
+  user: BackendUser | null;        // backend user profile
+  sessionToken: string | null;     // raw JWT for WebSocket & other non-axios uses
   authStep: AuthStep;
   isConnected: boolean;
   balance: number | null;  
@@ -53,6 +56,13 @@ const WalletContext = createContext<WalletContextState>({
   setUser: () => {},
   setAuthStep: () => {},
   completeOnboarding: () => {},
+  sessionToken: null,
+  authStep: 'idle',
+  isConnected: false,
+  connect: async () => { },
+  disconnect: () => { },
+  setUser: () => { },
+  completeOnboarding: () => { },
 });
 
 // ─── App Identity (shown inside the wallet popup) ─────────────────────────────
@@ -89,6 +99,9 @@ useEffect(() => {
   else setBalance(null);
 }, [authStep, publicKey]);
   
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [authStep, setAuthStep] = useState<AuthStep>('idle');
+
   // ── Full connect + backend login flow ────────────────────────────────────
   const connect = useCallback(async () => {
     if (authStep === "connecting" || authStep === "logging_in") return;
@@ -137,6 +150,7 @@ useEffect(() => {
 
         // Store the JWT so all future API calls send Authorization: Bearer <token>
         authService.setToken(loginResponse.token);
+        setSessionToken(loginResponse.token);
 
         // ── 2. Store state ────────────────────────────────────────────────────
         setPublicKey(pk);
@@ -180,6 +194,8 @@ useEffect(() => {
     setWalletAddress(null);
     setUser(null);
     setAuthStep("idle");
+    setSessionToken(null);
+    setAuthStep('idle');
     authService.clearToken();
   }, []);
 
@@ -194,6 +210,7 @@ useEffect(() => {
         publicKey,
         walletAddress,
         user,
+        sessionToken,
         authStep,
         isConnected:
           authStep === "ready" ||

@@ -6,8 +6,7 @@ use crate::database::model_functions::{
     get_user_info,
     ledger_model_function::record_transfer_and_update_amounts,
     pending_action_model_function::{
-        build_pin_verify_payload, create_pending_action,
-        update_pending_action_status,
+        build_pin_verify_payload, create_pending_action, update_pending_action_status,
     },
     user_model_function::{
         UserInfoRequest, UserInfoResponse, get_transaction_history, match_user_pin,
@@ -20,18 +19,23 @@ use crate::utility::{
 };
 use actix_ws::{CloseCode, CloseReason, Session};
 
-// ── Helper: send a typed error over the WebSocket ───────────────────────
+/// USDC uses 6 decimal places: 1 USDC = 1_000_000 micro-USDC.
+const USDC_DECIMALS: u64 = 1_000_000;
+
+// ── WebSocket helpers ────────────────────────────────────────────────────
+
 async fn send_app_error(
     session: &Session,
     err: AppError,
     conversation_id: i32,
     pending_action_id: Option<i32>,
 ) {
-    // Always log full detail server-side
     eprintln!("{}", err.log_message());
-
-    let payload =
-        ServerMessage::Error(ErrorPayload::from_app_error(&err, conversation_id, pending_action_id));
+    let payload = ServerMessage::Error(ErrorPayload::from_app_error(
+        &err,
+        conversation_id,
+        pending_action_id,
+    ));
     if let Ok(json) = serde_json::to_string(&payload) {
         let _ = session.clone().text(json).await;
     }
@@ -62,16 +66,16 @@ async fn close_with_reason(session: &Session, code: CloseCode, description: &str
     let _ = session.clone().close(Some(reason)).await;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Main handler
-// ──────────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+//  handle_user_message  —  process a free-text user message
+// ══════════════════════════════════════════════════════════════════════════
+
 pub async fn handle_user_message(
     user_message: String,
     user_id: i32,
     stream: &Session,
     conversation_id: i32,
 ) {
-    // Open a mutable DB connection for this request
     let mut db_connection = match establish_connection() {
         Ok(conn) => conn,
         Err(e) => {
@@ -80,7 +84,7 @@ pub async fn handle_user_message(
         }
     };
 
-    // 1. Deserialize incoming message
+    // 1. Deserialize the incoming WS message
     let serialized_message = match serde_json::from_str::<RequestBody>(&user_message) {
         Ok(msg) => msg,
         Err(e) => {
@@ -98,7 +102,7 @@ pub async fn handle_user_message(
         }
     };
 
-    // 2. Fetch user info from DB
+    // 2. Load user profile from DB
     let request_payload = UserInfoRequest {
         intent: "user_info".to_string(),
         user_id,
@@ -126,7 +130,7 @@ pub async fn handle_user_message(
         }
     };
 
-    // 3. Get AI intent
+    // 3. Call AI to parse intent (transfer, check_balance, etc.)
     let intent_response = match get_ai_response(serialized_message).await {
         Ok(resp) => resp,
         Err(e) => {
@@ -135,8 +139,7 @@ pub async fn handle_user_message(
         }
     };
 
-    // NOTE: Box::leak creates a 'static reference – this leaks memory per request.
-    // to match the existing pattern in the codebase.
+    // NOTE: Box::leak creates a 'static reference — matches existing codebase pattern.
     let intent_result = Box::leak(Box::new(intent_response));
     let user_info_ref: &'static DbUser = Box::leak(Box::new(user_info));
 
@@ -144,10 +147,9 @@ pub async fn handle_user_message(
     match intent_result {
         // ── Transfer ─────────────────────────────────────────────────
         response if response.intent == "transfer" => {
-            println!("user wants to send money");
-
-            // 4a. Check balance
-            let amount = match response.amount {
+            // 4a. Extract amount — AI returns human-readable dollars,
+            //     convert to micro-USDC (6 decimals) for on-chain + ledger.
+            let human_amount = match response.amount {
                 Some(amt) => amt,
                 None => {
                     send_app_error(
@@ -163,31 +165,9 @@ pub async fn handle_user_message(
                     return;
                 }
             };
+            let amount = human_amount * USDC_DECIMALS;
 
-            match get_user_ata_balance(user_info_ref.unique_id.to_string(), amount).await {
-                Ok(balance_response) => {
-                    if !balance_response.success {
-                        send_app_error(
-                            stream,
-                            ValidationError::InsufficientBalance {
-                                requested: amount as i64,
-                                available: balance_response.amount as i64,
-                            }
-                            .into(),
-                            conversation_id,
-                            None,
-                        )
-                        .await;
-                        return;
-                    }
-                }
-                Err(e) => {
-                    send_app_error(stream, e.into(), conversation_id, None).await;
-                    return;
-                }
-            }
-
-            // 4b. Look up recipient
+            // 4b. Look up recipient (cheap DB call before hitting Solana RPC)
             let request_payload = UserInfoRequest {
                 intent: "recipient".to_string(),
                 user_id,
@@ -215,13 +195,55 @@ pub async fn handle_user_message(
                 }
             };
 
-            // 4c. Build payload and create pending_action
+            // 4c. Verify on-chain balance via spawn_blocking (Solana RPC is blocking I/O)
+            let unique_id_clone = user_info_ref.unique_id.to_string();
+            let balance_result =
+                tokio::task::spawn_blocking(move || get_user_ata_balance(unique_id_clone, amount))
+                    .await;
+
+            match balance_result {
+                Ok(Ok(balance_response)) => {
+                    if !balance_response.success {
+                        send_app_error(
+                            stream,
+                            ValidationError::InsufficientBalance {
+                                requested: amount as i64,
+                                available: balance_response.amount as i64,
+                            }
+                            .into(),
+                            conversation_id,
+                            None,
+                        )
+                        .await;
+                        return;
+                    }
+                }
+                Ok(Err(e)) => {
+                    send_app_error(stream, e.into(), conversation_id, None).await;
+                    return;
+                }
+                Err(join_err) => {
+                    send_app_error(
+                        stream,
+                        AppError::Internal {
+                            code: 5020,
+                            reason: format!("balance check task failed: {}", join_err),
+                        },
+                        conversation_id,
+                        None,
+                    )
+                    .await;
+                    return;
+                }
+            }
+
+            // 4d. Create pending_action for PIN verification
             let currency = response.currency.clone().unwrap_or("USDC".to_string());
 
             let payload = build_pin_verify_payload(
                 amount as f64,
                 &currency,
-                recipient.id,
+                recipient.recipient_user_id,
                 &recipient.alias_used,
                 &user_info_ref.unique_id,
             );
@@ -234,25 +256,26 @@ pub async fn handle_user_message(
                 payload,
             ) {
                 Ok(pending_action) => {
-                    let msg = "Please enter your PIN to confirm";
-                    send_message(stream, msg, conversation_id, Some(pending_action.id)).await;
+                    send_message(
+                        stream,
+                        "Please enter your PIN to confirm",
+                        conversation_id,
+                        Some(pending_action.id),
+                    )
+                    .await;
                     println!(
-                        "[transfer] pending_action created: id={} for user={}",
+                        "[transfer] pending_action id={} created for user={}",
                         pending_action.id, user_info_ref.id
                     );
-                    return;
                 }
                 Err(e) => {
                     send_app_error(stream, e.into(), conversation_id, None).await;
-                    return;
                 }
             }
         }
 
         // ── Check Balance ────────────────────────────────────────────
         s if s.intent == "check_balance" => {
-            println!("user wants to check the balance");
-
             let request_payload = UserInfoRequest {
                 intent: "amount".to_string(),
                 user_id,
@@ -285,11 +308,9 @@ pub async fn handle_user_message(
 
         // ── Transaction History ──────────────────────────────────────
         s if s.intent == "transaction_history" => {
-            println!("user wants to see the transaction history");
+            let limit = 10;
 
-            let number_of_transaction_limit = 10;
-
-            match get_transaction_history(user_id, number_of_transaction_limit) {
+            match get_transaction_history(user_id, limit) {
                 Ok(value) => match serde_json::to_string(&value) {
                     Ok(json) => {
                         send_message(stream, &json, conversation_id, None).await;
@@ -313,9 +334,8 @@ pub async fn handle_user_message(
             }
         }
 
-        // ── Unknown intent → close the stream ───────────────────────
+        // ── Unknown intent ───────────────────────────────────────────
         _ => {
-            println!("invalid request");
             send_app_error(
                 stream,
                 ValidationError::InvalidIntent {
@@ -332,7 +352,7 @@ pub async fn handle_user_message(
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  handle_action_response
+//  handle_action_response  —  process a user's action (e.g. PIN entry)
 // ══════════════════════════════════════════════════════════════════════════
 
 pub async fn handle_action_response(action_response: ActionResponsePayload, stream: Session) {
@@ -342,7 +362,6 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
         response,
     } = action_response;
 
-    // Create the DB connection
     let mut db_connection = match establish_connection() {
         Ok(conn) => conn,
         Err(e) => {
@@ -351,11 +370,7 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
         }
     };
 
-    // Get the current pending action
-    let pending_action_db_result =
-        get_pending_action_by_id(&mut db_connection, pending_action_id);
-
-    let main_result = match pending_action_db_result {
+    let main_result = match get_pending_action_by_id(&mut db_connection, pending_action_id) {
         Ok(Some(result)) => result,
         Ok(None) => {
             send_app_error(
@@ -380,8 +395,8 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
 
     match task.as_str() {
         "pin_verify" => {
-            // Verify PIN
-            let pin_result = match match_user_pin(main_result.user_id, response) {
+            // Verify the user's PIN
+            let pin_valid = match match_user_pin(main_result.user_id, response) {
                 Ok(is_valid) => is_valid,
                 Err(e) => {
                     send_app_error(&stream, e, conversation_id, Some(pending_action_id)).await;
@@ -389,7 +404,7 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                 }
             };
 
-            if !pin_result {
+            if !pin_valid {
                 send_app_error(
                     &stream,
                     AuthError::InvalidPin.into(),
@@ -400,7 +415,7 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                 return;
             }
 
-            // Get user unique_id
+            // Fetch the sender's unique_id for the on-chain transfer
             let request_payload = UserInfoRequest {
                 user_id: main_result.user_id,
                 intent: "unique_id".to_string(),
@@ -428,7 +443,7 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                 }
             };
 
-            // Parse the pending action payload
+            // Deserialize the pending action payload
             let parsed_payload: PendingActionPayload =
                 match serde_json::from_value(main_result.payload) {
                     Ok(p) => p,
@@ -455,12 +470,17 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                     recipient_name,
                     sender_unique_id: _,
                 } => {
-                    let transfer_result = transfer_to_vault(unique_id, amount as u64);
+                    // Execute on-chain transfer via spawn_blocking
+                    // (transfer_to_vault uses #[tokio::main] internally)
+                    let transfer_result = tokio::task::spawn_blocking(move || {
+                        transfer_to_vault(unique_id, amount as u64)
+                    })
+                    .await;
 
                     match transfer_result {
-                        Ok(value) => {
+                        Ok(Ok(value)) => {
                             if value.success {
-                                // 1. Record in ledger + update balances
+                                // Record in ledger + recalculate balances
                                 let ledger_result = record_transfer_and_update_amounts(
                                     &mut db_connection,
                                     main_result.user_id,
@@ -472,20 +492,23 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
 
                                 match ledger_result {
                                     Ok(transfer_record) => {
-                                        // 2. Mark pending_action as confirmed
                                         let _ = update_pending_action_status(
                                             &mut db_connection,
                                             pending_action_id,
                                             "confirmed",
                                         );
 
-                                        // 3. Send success message
+                                        // Convert micro-USDC → human-readable for display
+                                        let display_amount = amount / USDC_DECIMALS as f64;
+                                        let display_balance = transfer_record.sender_new_balance
+                                            as f64
+                                            / USDC_DECIMALS as f64;
                                         let msg = format!(
                                             "✅ Transfer of {} {} to {} successful! Your new balance: {}",
-                                            amount,
+                                            display_amount,
                                             currency,
                                             recipient_name,
-                                            transfer_record.sender_new_balance
+                                            display_balance
                                         );
                                         send_message(
                                             &stream,
@@ -525,10 +548,22 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                                 .await;
                             }
                         }
-                        Err(solana_err) => {
+                        Ok(Err(solana_err)) => {
                             send_app_error(
                                 &stream,
                                 solana_err.into(),
+                                conversation_id,
+                                Some(pending_action_id),
+                            )
+                            .await;
+                        }
+                        Err(join_err) => {
+                            send_app_error(
+                                &stream,
+                                AppError::Internal {
+                                    code: 5021,
+                                    reason: format!("transfer task failed: {}", join_err),
+                                },
                                 conversation_id,
                                 Some(pending_action_id),
                             )
