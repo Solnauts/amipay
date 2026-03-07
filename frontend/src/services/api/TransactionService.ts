@@ -1,4 +1,4 @@
-import { DepositRequest, DepositResponse } from '../../types/api';
+import { DepositRequest, DepositResponse, ClaimRequest, ClaimResponse } from '../../types/api';
 import BaseService from './BaseService';
 import { authService } from './AuthService';
 
@@ -42,6 +42,29 @@ class TransactionService extends BaseService {
       console.log('[Deposit] Step 6: ✅ recorded:', response.data);
       return response.data;
     } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Claim / Withdraw ─────────────────────────────────────────────────
+  // POST /claimamount
+  // amount: in USDC smallest unit (6 decimals) — e.g. 10 USDC = 10_000_000
+  // method: 'Auto-Claim' (uses user's own wallet) | 'Manual-Claim' (explicit pubkey)
+  async claimAmount(payload: ClaimRequest): Promise<ClaimResponse> {
+    try {
+      console.log('[Withdraw] claimAmount payload:', JSON.stringify(payload, null, 2));
+      const response = await this.client.post<ClaimResponse>(
+        '/claimamount',
+        payload,
+      );
+      console.log('[Withdraw] claimAmount ✅:', response.data);
+      return response.data;
+    } catch (error: any) {
+      // Log the full backend response so we can see the real error
+      console.error('[Withdraw] claimAmount FAILED');
+      console.error('  HTTP status  :', error?.response?.status);
+      console.error('  Response body:', JSON.stringify(error?.response?.data, null, 2));
+      console.error('  Axios message:', error?.message);
       this.handleError(error);
     }
   }

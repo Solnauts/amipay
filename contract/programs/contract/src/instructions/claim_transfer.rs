@@ -49,7 +49,7 @@ impl<'info> ClaimByUser<'info> {
 
         let cpi_accounts = TransferChecked {
             mint: self.usdc_mint.to_account_info(),
-            from: self.main_usdc_vault.to_account_info(),
+            from: self.main_usdc_vault.to_account_info(), // TRANSFER  PROGRAM OWNED ATA
             to: self.user_usdc_ata.to_account_info(),
             authority: self.main_state_account.to_account_info(),
         };
@@ -84,10 +84,10 @@ impl<'info> ClaimByUser<'info> {
         token_interface::transfer_checked(cpi_context, net_amount, decimals)?;
 
         // Transfer the fee to the fee_collector_usdc_ata
-
+//HE WE DO THE DOUBLE TRASFER FOR THE FEE COLLECT
         let cpi_account = TransferChecked {
             mint: self.usdc_mint.to_account_info(),
-            from: self.main_usdc_vault.to_account_info(),
+            from: self.main_usdc_vault.to_account_info(), // PROGRAM USER ATA T
             to: self.fee_collector_usdc_ata.to_account_info(),
             authority: self.main_state_account.to_account_info(),
         };

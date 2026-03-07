@@ -12,6 +12,7 @@ import {
   WalletAddressResponse,
   AddRecipientRequest,
   AddRecipientResponse,
+  GetUserRecipientsResponse,
 } from '../../types/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ class AuthService extends BaseService {
   // ── Step 1: Fetch a one-time nonce to sign ────────────────────────────────
   async getNonce(): Promise<NonceResponse> {
     try {
+      console.log('Fetching nonce from:', this.client.defaults.baseURL);
       const res = await this.client.get<NonceResponse>('/wallet/nonce');
       return res.data;
     } catch (error) {
@@ -141,7 +143,20 @@ class AuthService extends BaseService {
         '/wallet/address',
         { user_id: null },
       );
+      console.log('Wallet address response:', res.data);  
       return res.data.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Get all saved recipients ───────────────────────────────────────────────
+  async getUserRecipients(): Promise<GetUserRecipientsResponse> {
+    try {
+      const res = await this.client.get<GetUserRecipientsResponse>(
+        '/wallet/get_user_recipients',
+      );
+      return res.data;
     } catch (error) {
       this.handleError(error);
     }

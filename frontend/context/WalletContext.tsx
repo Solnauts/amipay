@@ -96,6 +96,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const { message: nonceMessage, nonce } = await authService.getNonce();
         console.log('[Auth] Got nonce:', nonce);
 
+
         // 1c. Sign the nonce message with the wallet
         // signMessages requires Base64EncodedAddress[] — pass the raw MWA address
         const encodedMessage = new TextEncoder().encode(nonceMessage);

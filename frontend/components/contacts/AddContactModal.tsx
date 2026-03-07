@@ -15,7 +15,6 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -23,7 +22,6 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
-import { authService } from '@/src/services/api/AuthService';
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 
@@ -41,14 +39,18 @@ function isValidAmypayId(id: string) {
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  /** Called after a recipient is successfully added — parent can refresh contacts */
-  onAdded?: (result: { recipientId: number; recipientUserId: number; aliasUsed: string }) => void;
+  /**
+   * Called with (name, alias) when the user confirms.
+   * The parent handles MMKV optimistic save + API call + rollback.
+   * Should throw on failure so the modal can display the error.
+   */
+  onAdd: (name: string, alias: string) => Promise<void>;
   colors: (typeof Colors)[keyof typeof Colors];
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function AddContactModal({ isOpen, onClose, onAdded, colors }: Props) {
+export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,26 +68,14 @@ export function AddContactModal({ isOpen, onClose, onAdded, colors }: Props) {
     onClose();
   };
 
-  // ── Submit to backend ──────────────────────────────────────────────────
+  // ── Submit ─────────────────────────────────────────────────────────────
   const handleAdd = async () => {
     if (!canAdd) return;
     setError(null);
     setLoading(true);
 
     try {
-      const result = await authService.addRecipient(id.trim(), name.trim());
-
-      // Success — notify parent & close
-      onAdded?.({
-        recipientId: result.recipient_id,
-        recipientUserId: result.recipient_user_id,
-        aliasUsed: result.alias_used,
-      });
-
-      Alert.alert(
-        '✅ Contact Added',
-        `${name.trim()} (${result.alias_used}) has been added to your contacts.`,
-      );
+      await onAdd(name.trim(), id.trim());
       handleClose();
     } catch (err: any) {
       const msg = err?.message ?? 'Something went wrong. Please try again.';

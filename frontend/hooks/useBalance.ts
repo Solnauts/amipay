@@ -22,7 +22,7 @@ export const useBalance = (): UseBalanceReturn => {
     setIsLoading(true);
     setError(null);
     try {
-      const amount = await userService.getBalance();
+      const amount = await userService.getUsdcBalance();
       setBalance(amount);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch balance';

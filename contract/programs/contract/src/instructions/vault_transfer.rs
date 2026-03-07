@@ -121,7 +121,7 @@ impl<'info> TransferToVault<'info> {
         let cpi_accounts = TransferChecked {
             mint: self.usdc_mint.to_account_info(),
             from: self.user_usdc_ata.to_account_info(),
-            to: self.main_usdc_vault.to_account_info(),
+            to: self.main_usdc_vault.to_account_info(),// next user ata
             authority: self.main_state_account.to_account_info(),
         };
 
@@ -150,7 +150,13 @@ impl<'info> TransferToVault<'info> {
             .ok_or(TransferToVaultError::AmountOverFlow)?
             .checked_div(10000)
             .ok_or(TransferToVaultError::AmountOverFlow)?;
-
+fee collect HERE 
+//   let cpi_accounts = TransferChecked {
+//             mint: self.usdc_mint.to_account_info(),
+//             from: self.user_usdc_ata.to_account_info(),
+//             to: self.main_usdc_vault.to_account_info(),
+//             authority: self.main_state_account.to_account_info(),
+//         };
         //Amount goes after fee cut into the program wallet from user_usdc_ata
         let net_amount = amount - fee_amount;
 

@@ -127,16 +127,29 @@ export interface AddRecipientResponse {
   recipient_name: string;
 }
 
+/** GET /wallet/get_user_recipients */
+export interface RecipientRecord {
+  id: number;
+  recipient_user_id: number;
+  recipient_name: string;
+  alias_used: string;
+}
+
+export interface GetUserRecipientsResponse {
+  status: string;
+  recipients: RecipientRecord[];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CLAIM / TRANSFER
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** POST /claimamount */
 export interface ClaimRequest {
-  amount: number;           // lamports / smallest unit
+  amount: number;                    // u64 — USDC smallest unit (6 decimals)
   method: 'Auto-Claim' | 'Manual-Claim';
-  recipient_pubkey: string | null; // required for Manual-Claim
-  recipient_id: number;
+  destination_usdc_ata: string;      // user's USDC token account (ATA) address
+  recipient_id: number;              // i32 — user DB id
 }
 
 export interface ClaimResponse {
