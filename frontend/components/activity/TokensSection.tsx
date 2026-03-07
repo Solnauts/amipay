@@ -18,7 +18,7 @@ type Token = {
 
 const TOKENS: Token[] = [
   { symbol: 'USDC', name: 'USD Coin',      amount: 2312.45, usdValue: 2487.50, iconBg: '#2775CA', iconText: '$'  },
-  { symbol: 'SOL',  name: 'Solana',        amount: 12.5,    usdValue: 2487.50, iconBg: '#111827', iconText: '◎'  },
+  { symbol: 'SOL',  name: 'Solana',        amount: 10.5,    usdValue: 887.5, iconBg: '#111827', iconText: '◎'  },
   { symbol: 'SEEKER', name: 'Seeker Token',amount: 1212.25, usdValue: 2487.50, iconBg: '#111827', iconText: 'S'  },
 ];
 

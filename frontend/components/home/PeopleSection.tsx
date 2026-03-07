@@ -52,7 +52,7 @@ export function PeopleSection() {
           {/* "More" button — only on the last row */}
           {rowIdx === rows.length - 1 && (
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/rewards' as any)}
+              onPress={() => router.push('/(tabs)/contacts' as any)}
               activeOpacity={0.75}
               className="items-center gap-1.5"
               style={{ width: 64 }}

@@ -101,7 +101,7 @@ export default function ActivityScreen() {
         <BalanceSection balance={balance} connecting={false} />
 
         {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
-        <TokensSection />
+        <TokensSection balance={balance} />
 
         {/* ── Divider ── */}
         <ThemedView
