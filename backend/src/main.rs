@@ -4,7 +4,7 @@ use std::io::Result;
 use crate::controllers::{
     add_recipient, claim_amount, create_user_alias, create_user_handler, deposit_usdc, get_nonce,
     get_unique_alias, get_usdc_balance, get_user_alias, get_wallet_address, main_caller,
-    update_profile, wallet_login,
+    update_profile, wallet_login, get_user_recipients, get_all_transactions
 };
 use crate::database::establish_connection;
 mod controllers;
@@ -42,7 +42,11 @@ async fn main() -> Result<()> {
             .service(get_usdc_balance) // GET  /wallet/getusdcamount
             // Ledger / claiming
             .service(claim_amount) // POST /claimamount
-    })
+            //get recipients 
+            .service(get_user_recipients) // GET /wallet/get_user_recipients
+            //get all transactions 
+            .service(get_all_transactions)
+        })
     .bind(("127.0.0.1", 4000))?
     .run()
     .await

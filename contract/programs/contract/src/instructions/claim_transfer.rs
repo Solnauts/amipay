@@ -5,10 +5,11 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 const USDC_MINT: Pubkey = Pubkey::from_str_const("USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT");
 
-//Transfer from Program own Usdc ata ==> to main vault of the program
+// Withdraw: user_usdc_ata ==> net amount to destination (user's external wallet ATA),
+//           fee to main_usdc_vault
 #[derive(Accounts)]
 pub struct ClaimByUser<'info> {
-    //signer
+    //signer (admin)
     #[account(mut, constraint = signer.key() == main_state_account.admin_signer @InitializeAccountErrors::UnauthorizedSigner)]
     pub signer: Signer<'info>,
 
@@ -26,39 +27,38 @@ pub struct ClaimByUser<'info> {
     #[account(seeds = [b"main_state", usdc_mint.key().as_ref(), signer.key().as_ref()], bump = main_state_account.self_bump)]
     pub main_state_account: Account<'info, MainAccountShape>,
 
-    //Program own fee_collector_usdc_ata
-    #[account(mut,associated_token::mint = usdc_mint, associated_token::authority = main_state_account )]
-    pub fee_collector_usdc_ata: InterfaceAccount<'info, TokenAccount>,
-
-    //user which claim  usdc account ata
+    //user's program-owned usdc ata (source of funds for withdrawal)
     #[account(mut, token::authority = main_state_account, token::mint = usdc_mint)]
     pub user_usdc_ata: InterfaceAccount<'info, TokenAccount>,
 
-    //main vault account
+    //destination: user's external wallet usdc token account (where they receive the withdraw)
+    /// CHECK: This is the user's own USDC token account (not program-owned).
+    /// We only validate that it has the correct mint.
+    #[account(mut, token::mint = usdc_mint)]
+    pub destination_usdc_ata: InterfaceAccount<'info, TokenAccount>,
+
+    //main vault account (fee goes here)
     #[account(mut, token::authority = main_state_account, token::mint = usdc_mint, seeds = [b"main_usdc_vault",usdc_mint.key().as_ref(), signer.key().as_ref()], bump)]
     pub main_usdc_vault: InterfaceAccount<'info, TokenAccount>,
 }
 
 impl<'info> ClaimByUser<'info> {
-    //transfer from user wallet to the mainvault
-    //transfer from user wallet to the mainvault
+    //withdraw from user_usdc_ata: net amount → destination, fee → main vault
     pub fn claim_by_user(&self, amount: u64) -> Result<()> {
-        //main the account is not working fine on this
+        // Validate the withdrawal amount
+        require_gt!(amount, 0, TransferToVaultError::InsufficientAmountError);
+        require_gte!(
+            self.user_usdc_ata.amount,
+            amount,
+            TransferToVaultError::InsufficientAmountError
+        );
 
         let decimals = self.usdc_mint.decimals;
 
-        let cpi_accounts = TransferChecked {
-            mint: self.usdc_mint.to_account_info(),
-            from: self.main_usdc_vault.to_account_info(), // TRANSFER  PROGRAM OWNED ATA
-            to: self.user_usdc_ata.to_account_info(),
-            authority: self.main_state_account.to_account_info(),
-        };
-
-        let cpi_program = self.token_program.to_account_info();
-
         let usdc_mint = self.main_state_account.usdc_mint;
         let admin = self.signer.key();
-        // the seeds is of the account that owns the vault
+
+        // PDA signer seeds for main_state_account (authority over user_usdc_ata)
         let seeds = [
             b"main_state",
             usdc_mint.as_ref(),
@@ -66,8 +66,8 @@ impl<'info> ClaimByUser<'info> {
             &[self.main_state_account.self_bump],
         ];
         let signer_seeds = &[&seeds[..]];
-        let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
 
+        // Calculate fee
         let fee_amount = amount
             .checked_mul(
                 self.main_state_account
@@ -79,33 +79,50 @@ impl<'info> ClaimByUser<'info> {
             .checked_div(10000)
             .ok_or(TransferToVaultError::AmountOverFlow)?;
 
-        let net_amount = amount - fee_amount;
+        let net_amount = amount
+            .checked_sub(fee_amount)
+            .ok_or(TransferToVaultError::AmountOverFlow)?;
 
-        token_interface::transfer_checked(cpi_context, net_amount, decimals)?;
-
-        // Transfer the fee to the fee_collector_usdc_ata
-//HE WE DO THE DOUBLE TRASFER FOR THE FEE COLLECT
-        let cpi_account = TransferChecked {
+        // 1) Transfer net amount: user_usdc_ata -> destination_usdc_ata (user's external wallet)
+        let cpi_accounts_dest = TransferChecked {
             mint: self.usdc_mint.to_account_info(),
-            from: self.main_usdc_vault.to_account_info(), // PROGRAM USER ATA T
-            to: self.fee_collector_usdc_ata.to_account_info(),
+            from: self.user_usdc_ata.to_account_info(),
+            to: self.destination_usdc_ata.to_account_info(),
             authority: self.main_state_account.to_account_info(),
         };
 
-        let seeds = [
+        let cpi_context_dest = CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            cpi_accounts_dest,
+            signer_seeds,
+        );
+
+        token_interface::transfer_checked(cpi_context_dest, net_amount, decimals)?;
+
+        // 2) Transfer fee: user_usdc_ata -> main_usdc_vault
+        let cpi_accounts_fee = TransferChecked {
+            mint: self.usdc_mint.to_account_info(),
+            from: self.user_usdc_ata.to_account_info(),
+            to: self.main_usdc_vault.to_account_info(),
+            authority: self.main_state_account.to_account_info(),
+        };
+
+        // Re-derive signer seeds (borrow checker)
+        let seeds_fee = [
             b"main_state",
             usdc_mint.as_ref(),
             admin.as_ref(),
             &[self.main_state_account.self_bump],
         ];
-        let signer_seeds = &[&seeds[..]];
-        let cpi_context = CpiContext::new_with_signer(
+        let signer_seeds_fee = &[&seeds_fee[..]];
+
+        let cpi_context_fee = CpiContext::new_with_signer(
             self.token_program.to_account_info(),
-            cpi_account,
-            signer_seeds,
+            cpi_accounts_fee,
+            signer_seeds_fee,
         );
 
-        token_interface::transfer_checked(cpi_context, fee_amount, decimals)?;
+        token_interface::transfer_checked(cpi_context_fee, fee_amount, decimals)?;
 
         Ok(())
     }

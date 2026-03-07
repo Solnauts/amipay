@@ -96,8 +96,8 @@ fn sum_amount_for_statuses(
 
 /// Calculate the net balance for `target_user_id` by scanning the ledger.
 ///
-/// Incoming (credit) statuses : "confirmed" + "deposit"
-/// Outgoing (debit)  statuses : "confirmed" (sent) + "claimed"
+/// Incoming (credit) statuses : "confirmed" (received) + "deposit"
+/// Outgoing (debit)  statuses : "confirmed" (sent) + "claimed" (withdrawn)
 pub fn calculate_balance_from_ledger(
     conn: &mut PgConnection,
     target_user_id: i32,
@@ -109,10 +109,10 @@ pub fn calculate_balance_from_ledger(
         target_user_id,
         &["confirmed", "deposit"],
     )?;
-    // Money going OUT from the user: transfers the user sent + amounts they claimed
-    // (claimed rows debit the vault, not the user, so we only count senderId=user here
-    // for status="confirmed" peer sends).
-    let total_out = sum_amount_for_statuses(conn, "senderId", target_user_id, &["confirmed"])?;
+    // Money going OUT from the user: transfers the user sent (status="confirmed")
+    // + amounts they withdrew/claimed (status="claimed").
+    let total_out =
+        sum_amount_for_statuses(conn, "senderId", target_user_id, &["confirmed", "claimed"])?;
     let net = total_in - total_out;
 
     Ok(BalanceCalcResult {
@@ -217,6 +217,8 @@ pub fn record_transfer_and_update_amounts(
 // ── Claim flow ──────────────────────────────────────────────────────────────
 
 /// Get total claimable amount for a user.
+///
+/// claimable = (total received + deposits) - (total sent) - (total claimed)
 pub fn get_claimable_amount(conn: &mut PgConnection, target_user_id: i32) -> Result<i64, DbError> {
     let total_confirmed_in = sum_amount_for_statuses(
         conn,
@@ -224,18 +226,23 @@ pub fn get_claimable_amount(conn: &mut PgConnection, target_user_id: i32) -> Res
         target_user_id,
         &["confirmed", "deposit"],
     )?;
+    let total_sent = sum_amount_for_statuses(conn, "senderId", target_user_id, &["confirmed"])?;
     let total_claimed = sum_amount_for_statuses(conn, "senderId", target_user_id, &["claimed"])?;
-    Ok(total_confirmed_in - total_claimed)
+    Ok(total_confirmed_in - total_sent - total_claimed)
 }
 
-/// Record a successful claim (vault → recipient on-chain withdrawal).
+/// Record a successful claim (user_usdc_ata → destination on-chain withdrawal).
+///
+/// Both sender and receiver are the same user — the `"claimed"` status
+/// distinguishes these entries from peer transfers. This pattern avoids FK
+/// violations (no "vault user" row needed in the `user` table), and is
+/// consistent with how deposits are recorded.
 pub fn record_claim(
     conn: &mut PgConnection,
     recipient_user_id: i32,
     claim_amount: i64,
     currency_val: String,
     tx_sig: Option<String>,
-    vault_user_id: i32,
 ) -> Result<ClaimResult, DbError> {
     conn.transaction::<ClaimResult, DieselError, _>(|txn_conn| {
         let claimable = get_claimable_amount(txn_conn, recipient_user_id)
@@ -246,7 +253,7 @@ pub fn record_claim(
         }
 
         let claim_entry = NewLedger {
-            sender_id: vault_user_id,
+            sender_id: recipient_user_id,
             receiver_id: recipient_user_id,
             amount: claim_amount,
             currency: currency_val,
@@ -350,4 +357,19 @@ pub fn deposit_usdc(
 pub fn update_amounts_standalone(sender_id: i32, receiver_id: i32) -> Result<(i64, i64), DbError> {
     let conn = &mut establish_connection()?;
     update_both_user_amounts(conn, sender_id, receiver_id)
+}
+
+//function to get all transactions of the user
+pub fn get_transactions_for_user(
+    conn: &mut PgConnection,
+    user_id: i32,
+) -> Result<Vec<DbLedger>, DbError> {
+    let transactions = ledger::table
+        .filter(
+            ledger::senderId
+                .eq(user_id)
+                .or(ledger::receiverId.eq(user_id)),
+        )
+        .load::<DbLedger>(conn)?;
+    Ok(transactions)
 }
