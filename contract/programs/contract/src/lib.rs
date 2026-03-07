@@ -43,9 +43,9 @@ pub mod contract {
 
     //transfer to vault
     pub fn transfertovault(ctx: Context<TransferToVault>, amount: u64) -> Result<()> {
-        //return the user public address from this function
+        //validate and transfer: net amount to receiver, fee to main vault
         ctx.accounts.main_transfer(amount)?;
-        ctx.accounts.transfer_to_main_vault(amount)?;
+        ctx.accounts.transfer_to_receiver_and_vault(amount)?;
         Ok(())
     }
     pub fn claim_by_user(ctx: Context<ClaimByUser>, amount: u64) -> Result<()> {

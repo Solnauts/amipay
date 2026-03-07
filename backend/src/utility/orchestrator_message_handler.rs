@@ -196,9 +196,30 @@ pub async fn handle_user_message(
             };
 
             // 4c. Verify on-chain balance via spawn_blocking (Solana RPC is blocking I/O)
-            let unique_id_clone = user_info_ref.unique_id.to_string();
+            // Use the stored ATA pubkey directly from the user table instead of
+            // re-deriving from unique_id. get_user_ata_balance now calls
+            // get_token_account_balance (real USDC amount), not get_balance (SOL lamports).
+            let user_ata_pubkey = match user_info_ref.user_usdc_ata.clone() {
+                Some(ata) => ata,
+                None => {
+                    send_app_error(
+                        stream,
+                        AppError::Internal {
+                            code: 5030,
+                            reason: format!(
+                                "user_usdc_ata not set for user_id={}; ATA may not have been initialized yet",
+                                user_info_ref.id
+                            ),
+                        },
+                        conversation_id,
+                        None,
+                    )
+                    .await;
+                    return;
+                }
+            };
             let balance_result =
-                tokio::task::spawn_blocking(move || get_user_ata_balance(unique_id_clone, amount))
+                tokio::task::spawn_blocking(move || get_user_ata_balance(user_ata_pubkey, amount))
                     .await;
 
             match balance_result {
@@ -470,10 +491,41 @@ pub async fn handle_action_response(action_response: ActionResponsePayload, stre
                     recipient_name,
                     sender_unique_id: _,
                 } => {
+                    // Look up the recipient's unique_id from the user table
+                    let recipient_info_request = UserInfoRequest {
+                        user_id: recipient_id,
+                        intent: "unique_id".to_string(),
+                        recipient_name: None,
+                    };
+
+                    let receiver_unique_id = match get_user_info(recipient_info_request) {
+                        Ok(UserInfoResponse::UniqueId(rid)) => rid,
+                        Ok(_) => {
+                            send_app_error(
+                                &stream,
+                                DbError::UnexpectedResult {
+                                    context:
+                                        "get_user_info returned non-UniqueId variant for recipient"
+                                            .to_string(),
+                                }
+                                .into(),
+                                conversation_id,
+                                Some(pending_action_id),
+                            )
+                            .await;
+                            return;
+                        }
+                        Err(e) => {
+                            send_app_error(&stream, e, conversation_id, Some(pending_action_id))
+                                .await;
+                            return;
+                        }
+                    };
+
                     // Execute on-chain transfer via spawn_blocking
                     // (transfer_to_vault uses #[tokio::main] internally)
                     let transfer_result = tokio::task::spawn_blocking(move || {
-                        transfer_to_vault(unique_id, amount as u64)
+                        transfer_to_vault(unique_id, receiver_unique_id, amount as u64)
                     })
                     .await;
 

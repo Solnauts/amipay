@@ -418,14 +418,15 @@ pub async fn create_user_alias(
     }))
 }
 
-// ─── Claim Amount ───────────────────────────────────────────────────────────
+// ─── Claim Amount (Withdraw) ────────────────────────────────────────────────
 
 /// Body of POST /claimamount
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ClaimAmountRequest {
     pub amount: u64,
     pub method: String,
-    pub recipient_pubkey: Option<String>,
+    /// The user's external wallet USDC token account (destination for withdrawal)
+    pub destination_usdc_ata: String,
     pub recipient_id: i32,
 }
 
@@ -439,9 +440,6 @@ pub struct ClaimAmountResponse {
     pub new_balance: Option<i64>,
     pub tx_signature: Option<String>,
 }
-
-/// Sentinel user ID representing the vault/system in ledger entries.
-const VAULT_USER_ID: i32 = 0;
 
 /// `POST /claimamount`
 #[post("/claimamount")]
@@ -483,8 +481,8 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
         });
     }
 
-    // ── 3. Manual-Claim needs recipient_pubkey ──────────────────────────
-    if payload.method == "Manual-Claim" && payload.recipient_pubkey.is_none() {
+    // ── 3. Validate destination_usdc_ata is provided ────────────────────
+    if payload.destination_usdc_ata.is_empty() {
         let err = AppError::Validation(ValidationError::MissingRecipientPubkey);
         eprintln!("{}", err.log_message());
         return HttpResponse::BadRequest().json(ClaimAmountResponse {
@@ -499,8 +497,9 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
 
     let recipient_id = payload.recipient_id;
     let claim_amount_val = payload.amount as i64;
+    let destination_usdc_ata = payload.destination_usdc_ata.clone();
 
-    // ── 4. Validate balance ─────────────────────────────────────────────
+    // ── 4. Validate DB balance ──────────────────────────────────────────
     let amount_check = web::block(move || {
         let conn = &mut establish_connection()?;
         is_amount_valid(claim_amount_val, recipient_id, conn)
@@ -591,22 +590,22 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
         });
     }
 
-    // ── 6. Get recipient unique_id ──────────────────────────────────────
+    // ── 6. Get user info: unique_id + user_usdc_ata ─────────────────────
     let rid2 = recipient_id;
     let user_info_result = web::block(move || {
         get_user_info(UserInfoRequest {
-            intent: "unique_id".to_string(),
+            intent: "user_info".to_string(),
             user_id: rid2,
             recipient_name: None,
         })
     })
     .await;
 
-    let unique_id = match user_info_result {
-        Ok(Ok(UserInfoResponse::UniqueId(uid))) => uid,
+    let user_info = match user_info_result {
+        Ok(Ok(UserInfoResponse::FullInfo(info))) => info,
         Ok(Ok(_)) => {
             let err: AppError = DbError::UnexpectedResult {
-                context: "get_user_info returned non-UniqueId variant".to_string(),
+                context: "get_user_info returned non-FullInfo variant".to_string(),
             }
             .into();
             eprintln!("{}", err.log_message());
@@ -647,12 +646,92 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
         }
     };
 
-    // ── 7. Call Solana claim_amount on-chain ─────────────────────────────
-    let solana_amount = payload.amount;
-    let uid_clone = unique_id.clone();
+    let unique_id = user_info.unique_id.clone();
 
-    let solana_result =
-        web::block(move || solana_utilities::claim_amount(uid_clone, solana_amount)).await;
+    // ── 6b. Check on-chain USDC balance in user's ATA ───────────────────
+    let user_ata_pubkey = match user_info.user_usdc_ata.clone() {
+        Some(ata) => ata,
+        None => {
+            let err = AppError::Internal {
+                code: 5030,
+                reason: format!(
+                    "user_usdc_ata not set for user_id={}; ATA may not have been initialized yet",
+                    recipient_id
+                ),
+            };
+            eprintln!("{}", err.log_message());
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                error_code: Some(err.error_code()),
+                message: err.client_message(),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+    };
+
+    let solana_amount = payload.amount;
+    let ata_for_balance = user_ata_pubkey.clone();
+    let onchain_balance_check =
+        web::block(move || solana_utilities::get_user_ata_balance(ata_for_balance, solana_amount))
+            .await;
+
+    match onchain_balance_check {
+        Ok(Ok(balance_response)) => {
+            if !balance_response.success {
+                let err = AppError::Validation(ValidationError::InsufficientBalance {
+                    requested: solana_amount as i64,
+                    available: balance_response.amount as i64,
+                });
+                eprintln!("{}", err.log_message());
+                return HttpResponse::BadRequest().json(ClaimAmountResponse {
+                    status: "error".to_string(),
+                    error_code: Some(err.error_code()),
+                    message: err.client_message(),
+                    claimed_amount: None,
+                    new_balance: None,
+                    tx_signature: None,
+                });
+            }
+        }
+        Ok(Err(solana_err)) => {
+            let err: AppError = solana_err.into();
+            eprintln!("{}", err.log_message());
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                error_code: Some(err.error_code()),
+                message: err.client_message(),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+        Err(e) => {
+            let err = AppError::Internal {
+                code: 5020,
+                reason: format!("balance check task failed: {}", e),
+            };
+            eprintln!("{}", err.log_message());
+            return HttpResponse::InternalServerError().json(ClaimAmountResponse {
+                status: "error".to_string(),
+                error_code: Some(err.error_code()),
+                message: err.client_message(),
+                claimed_amount: None,
+                new_balance: None,
+                tx_signature: None,
+            });
+        }
+    }
+
+    // ── 7. Call Solana claim_amount on-chain ─────────────────────────────
+    let uid_clone = unique_id.clone();
+    let dest_ata_clone = destination_usdc_ata.clone();
+
+    let solana_result = web::block(move || {
+        solana_utilities::claim_amount(uid_clone, dest_ata_clone, solana_amount)
+    })
+    .await;
 
     match solana_result {
         Ok(Ok(rpc_response)) => {
@@ -686,7 +765,6 @@ pub async fn claim_amount(data: web::Json<ClaimAmountRequest>) -> impl Responder
                     cav,
                     "USDC".to_string(),
                     Some(rpc_response.value.to_string()),
-                    VAULT_USER_ID,
                 )
                 .map_err(AppError::from)
             })
@@ -973,5 +1051,36 @@ pub async fn get_user_alias(req: HttpRequest) -> actix_web::Result<impl Responde
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "alias": alias.unwrap()
+    })))
+}
+
+//function to get all the recipient of a particular user
+#[get("/wallet/get_user_recipients")]
+pub async fn get_user_recipients(req: HttpRequest) -> actix_web::Result<impl Responder> {
+    let token = extract_bearer_token(&req)?;
+
+    let claims = validate_session_token(&token)?;
+
+    let user_id: i32 = claims.sub.parse().map_err(|_| {
+        AppError::Auth(AuthError::InvalidUserId {
+            raw: claims.sub.clone(),
+        })
+    })?;
+
+    //get the recipient using userid
+    let recipients = web::block(move || {
+        let conn = &mut establish_connection()?;
+        crate::database::model_functions::get_recipients_for_user(conn, user_id)
+    })
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?;
+
+    //send the data back to the user
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status": "success",
+        "recipients": recipients.unwrap()
     })))
 }
