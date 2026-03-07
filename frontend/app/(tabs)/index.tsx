@@ -11,40 +11,24 @@ import { FavouriteSection } from '@/components/home/FavouriteSection';
 import { AIPayBanner } from '@/components/home/AIPayBanner';
 import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
 import { OnboardingScreen } from '@/components/home/OnboardingScreen';
+import { useBalance } from '@/hooks/useBalance';
 import { userService } from '@/src/services/api/UserService';
 
 export default function HomeScreen() {
   const { authStep, connect } = useWallet();
-  const [balance, setBalance] = useState<number | null>(null);
+  const { balance, refetch, isLoading } = useBalance();
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchBalance = async () => {
-    try {
-      const usdc = await userService.getUsdcBalance();
-      console.log('[Balance] API returned:', usdc, typeof usdc);
-      setBalance(typeof usdc === 'number' ? usdc : null);
-    } catch (e) {
-      console.warn('[Balance] fetch failed:', e);
-      setBalance(null);
-    }
-  };
-
-  // Initial fetch when auth completes
-  useEffect(() => {
-    if (authStep === 'ready') fetchBalance();
-    else setBalance(null);
-  }, [authStep]);
-
-  // Re-fetch every time the home tab gains focus (e.g. returning from AI Pay)
+  // Re-fetch every time the home tab gains focus
   useFocusEffect(
     useCallback(() => {
-      if (authStep === 'ready') fetchBalance();
-    }, [authStep]),
+      if (authStep === 'ready') refetch();
+    }, [authStep, refetch]),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchBalance();
+    await refetch();
     setRefreshing(false);
   };
 

@@ -143,9 +143,9 @@ export default function ContactsScreen() {
             contentContainerStyle={{ paddingHorizontal: 16, gap: 16, paddingBottom: 12 }}
             style={{ marginBottom: 4 }}
           >
-            {recentContacts.map((c) => (
+            {recentContacts.map((c, i) => (
               <TouchableOpacity
-                key={c.id}
+                key={i}
                 onPress={() => setSelected(c)}
                 activeOpacity={0.75}
                 className="items-center gap-1.5"
@@ -171,9 +171,9 @@ export default function ContactsScreen() {
             {syncing ? 'Loading contacts…' : 'No contacts yet. Tap + to add one.'}
           </ThemedText>
         ) : (
-          listContacts.map((c) => (
+          listContacts.map((c, i) => (
             <ContactRow
-              key={c.id}
+              key={i}
               contact={c}
               onPress={(contact) => setSelected(contact)}
             />

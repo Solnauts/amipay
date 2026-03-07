@@ -12,7 +12,8 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 
 // ── Shared home components ─────────────────────────────────────────────────
 import { HomeHeader }     from '@/components/home/HomeHeader';
@@ -44,6 +45,13 @@ export default function ActivityScreen() {
   const { balance, refetch: refetchBalance } = useBalance();
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // Sync balance when screen gains focus (matching Home screen behavior)
+  useFocusEffect(
+    useCallback(() => {
+      refetchBalance();
+    }, [refetchBalance])
+  );
 
   // Grab all groups (no filter/search on overview), then slice to preview
   const allGroups: TxGroup[] = useMemo(
