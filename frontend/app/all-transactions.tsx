@@ -8,10 +8,10 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { SearchBar } from '@/components/wallet/SearchBar';
-import { FilterPills } from '@/components/wallet/FilterPills';
-import { TransactionGroup } from '@/components/wallet/TransactionGroup';
-import { ACTIVITY_TRANSACTIONS } from '@/components/wallet/activityData';
+import { SearchBar }        from '@/components/activity/SearchBar';
+import { FilterPills }      from '@/components/activity/FilterPills';
+import { TransactionGroup } from '@/components/activity/TransactionGroup';
+import { ACTIVITY_TRANSACTIONS } from '@/components/activity/activityData';
 import {
   FilterType,
   TransactionGroup as TxGroup,
@@ -42,7 +42,7 @@ export default function AllTransactionsScreen() {
     <>
       {/* ── Top bar: back arrow + title + filter icon ── */}
       <ThemedView
-        className="flex-row items-center justify-between px-6 pt-12 pb-4"
+        className="flex-row items-center justify-between px-6 pt-14 pb-4"
       >
         {/* Back button */}
         <TouchableOpacity

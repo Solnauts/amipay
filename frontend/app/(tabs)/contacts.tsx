@@ -3,9 +3,8 @@
 // Tapping + → AddContactModal
 
 import React, { useState, useMemo } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
- 
+  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   View,
@@ -55,7 +54,7 @@ export default function ContactsScreen() {
   const listContacts = searchResults ?? CONTACTS;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background}}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, marginTop: 40 }}>
       <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
       {/* ── Search bar + action buttons ── */}

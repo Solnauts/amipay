@@ -9,7 +9,7 @@ export const lightColors = {
   violetLight: "#A78BFA",
   violetMuted: "#EDE9FE",
   violetForeground: "#ffffff",
-  background: "#ffffff",
+  background: "#f4f4f8",
   backgroundSecondary: "#ebebf5",
   surface: "#ffffff",
   surfaceElevated: "#ffffff",

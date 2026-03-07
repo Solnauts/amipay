@@ -9,9 +9,8 @@ import {
   View,
   TouchableOpacity,
   useColorScheme,
-
+  SafeAreaView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 // ── Shared home components ─────────────────────────────────────────────────
@@ -19,10 +18,10 @@ import { HomeHeader }     from '@/components/home/HomeHeader';
 import { BalanceSection } from '@/components/home/BalanceSection';
 
 // ── Activity-specific components ───────────────────────────────────────────
-// Change these lines (around line 22-24):
-import { TokensSection }    from '@/components/wallet/TokensSection';
-import { TransactionGroup } from '@/components/wallet/TransactionGroup';
-import { ACTIVITY_TRANSACTIONS } from '@/components/wallet/activityData';
+import { TokensSection }    from '@/components/activity/TokensSection';
+import { TransactionGroup } from '@/components/activity/TransactionGroup';
+import { ACTIVITY_TRANSACTIONS } from '@/components/activity/activityData';
+
 import {
   TransactionGroup as TxGroup,
   getFilteredGroups,
