@@ -1,4 +1,4 @@
-import { DepositRequest, DepositResponse, ClaimRequest, ClaimResponse } from '../../types/api';
+import { DepositRequest, DepositResponse, ClaimRequest, ClaimResponse, AllTransactionsResponse } from '../../types/api';
 import BaseService from './BaseService';
 import { authService } from './AuthService';
 
@@ -65,6 +65,20 @@ class TransactionService extends BaseService {
       console.error('  HTTP status  :', error?.response?.status);
       console.error('  Response body:', JSON.stringify(error?.response?.data, null, 2));
       console.error('  Axios message:', error?.message);
+      this.handleError(error);
+    }
+  }
+
+  // ── Get All Transactions ─────────────────────────────────────────────
+  // GET /wallet/all_transactions
+  async getAllTransactions(): Promise<AllTransactionsResponse> {
+    try {
+      const response = await this.client.get<AllTransactionsResponse>(
+        '/wallet/all_transactions',
+      );
+      console.log('[Transaction] raw response:', JSON.stringify(response.data, null, 2));
+      return response.data;
+    } catch (error) {
       this.handleError(error);
     }
   }

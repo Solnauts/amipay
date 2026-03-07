@@ -1,14 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  ActionResponse,
-  UserMessage,
+  WsActionResponse,
   WsInboundMessage,
+  WsUserMessage,
 } from '../../types/api';
-import { TOKEN_KEY } from '../api/BaseService';
+import { authService } from '../api/AuthService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ChatService — Singleton WebSocket Manager
 // Uses React Native's global WebSocket (no library needed)
+// Token is sourced from authService (JWT stored in axios Authorization header)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ChatService {
@@ -43,14 +43,18 @@ class ChatService {
 
     this.activeConversationId = conversationId;
 
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    // JWT is stored in axios Authorization header by authService.setToken()
+    // Extract just the token part from "Bearer <token>"
+    const authHeader = authService.getAuthHeader();
+    const token = authHeader?.replace('Bearer ', '') ?? null;
+
     const wsBase = process.env.EXPO_PUBLIC_WS_URL!;
     const url = token
       ? `${wsBase}?token=${encodeURIComponent(token)}`
       : wsBase;
 
     return new Promise((resolve, reject) => {
-      // React Native global WebSocket — no import needed
+      // React Native provides WebSocket globally — no import needed
       this.socket = new WebSocket(url);
 
       this.socket.onopen = () => {
@@ -63,7 +67,6 @@ class ChatService {
           const parsed = JSON.parse(event.data) as WsInboundMessage;
           this.messageListeners.forEach((cb) => cb(parsed));
         } catch {
-          // Silently ignore malformed server frames
           console.warn('[ChatService] Failed to parse WS message:', event.data);
         }
       };
@@ -95,16 +98,17 @@ class ChatService {
   }
 
   // ── Send Message ───────────────────────────────────────────────────────────
-  sendMessage(content: string, conversationId: string): void {
+  sendMessage(content: string, conversationId: string | null): void {
     if (!this.isConnected()) {
       console.warn('[ChatService] Cannot send — socket not connected');
       return;
     }
 
-    const message: UserMessage = {
-      type: 'user_message',
-      conversationId,
-      content,
+    const message: WsUserMessage = {
+      UserMessage: {
+        conversation_id: conversationId,
+        content,
+      },
     };
 
     this.socket!.send(JSON.stringify(message));
@@ -112,20 +116,21 @@ class ChatService {
 
   // ── Confirm Action ─────────────────────────────────────────────────────────
   confirmAction(
-    pendingActionId: string,
-    conversationId: string,
-    response: string,
+    pendingActionId: number,
+    conversationId: number,
+    response: 'confirm' | 'cancel' | string,
   ): void {
     if (!this.isConnected()) {
       console.warn('[ChatService] Cannot confirm action — socket not connected');
       return;
     }
 
-    const message: ActionResponse = {
-      type: 'action_response',
-      conversationId,
-      pendingActionId,
-      response,
+    const message: WsActionResponse = {
+      ActionResponse: {
+        conversation_id: conversationId,
+        pending_action_id: pendingActionId,
+        response,
+      },
     };
 
     this.socket!.send(JSON.stringify(message));

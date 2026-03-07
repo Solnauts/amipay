@@ -108,6 +108,25 @@ export interface DepositResponse {
   message: string;
 }
 
+/** GET /wallet/all_transactions */
+export interface TransactionRecord {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  amount: number;
+  /** "deposit" | "claimed" | "confirmed" */
+  status: 'deposit' | 'claimed' | 'confirmed' | string;
+  currency: string;           // "USDC" | "USD"
+  tx_signature: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+}
+
+export interface AllTransactionsResponse {
+  status: string;
+  transactions: TransactionRecord[];
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RECIPIENTS (CONTACTS)
