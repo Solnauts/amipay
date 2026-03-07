@@ -20,7 +20,7 @@ export function HomeHeader() {
   return (
     <ThemedView
       variant="default"
-      className="flex-row items-center justify-between px-6 pt-12 pb-4"
+      className="flex-row items-center justify-between px-6 pt-4 pb-4"
     >
       {/* ── Left: wallet avatar + account label ── */}
       <TouchableOpacity

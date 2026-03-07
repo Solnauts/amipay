@@ -7,7 +7,7 @@ import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
-import { ActivityTransaction } from '@/components/activity/activityData';
+import { ActivityTransaction } from './activityData';
 import { formatTime } from '@/utils/activityUtils';
 
 type Props = {

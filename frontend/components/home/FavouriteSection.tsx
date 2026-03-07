@@ -21,7 +21,7 @@ export function FavouriteSection() {
         Favourite
       </ThemedText>
 
-      <View className="flex-row gap-4">
+      <View className="flex-row justify-between">
         {FAVOURITES.map((contact) => (
           <ContactItem
             key={contact.name}
@@ -32,44 +32,44 @@ export function FavouriteSection() {
         ))}
 
         {/* Add button */}
-      <TouchableOpacity
-              onPress={() => router.push('/(tabs)/rewards' as any)}
-              activeOpacity={0.75}
-              className="items-center gap-1.5"
-              style={{ width: 64 }}
-            >
-              {/* Outer container — must NOT clip so the absolute SVG is visible */}
-              <View style={{ width: 56, height: 56, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+<TouchableOpacity
+  onPress={() => router.push('/(tabs)/rewards' as any)}
+  activeOpacity={0.75}
+  className="items-center gap-1.5"
+  style={{ width: 64 }} // Updated width
+>
+  {/* Outer container — 64x64 */}
+  <View style={{ width: 64, height: 64, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
 
-                {/* Dashed ring drawn by SVG — sits below the inner circle */}
-                <Svg width={56} height={56} style={{ position: 'absolute', top: 0, left: 0 }}>
-                  <Circle
-                    cx={28}
-                    cy={28}
-                    r={26}
-                    stroke={colors.textMuted}
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    fill="none"
-                  />
-                </Svg>
+    {/* Dashed ring SVG — 64x64 */}
+    <Svg width={64} height={64} style={{ position: 'absolute', top: 0, left: 0 }}>
+      <Circle
+        cx={32} // Center X is half of 64
+        cy={32} // Center Y is half of 64
+        r={30}  // Radius is 32 minus a little padding for the stroke
+        stroke={colors.textMuted}
+        strokeWidth={1.5}
+        strokeDasharray="4 4"
+        fill="none"
+      />
+    </Svg>
 
-                {/* Inner circle — NO solid border so the SVG dashes show through */}
-                <ThemedView
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Feather name="plus" size={18} color={colors.textMuted} />
-                </ThemedView>
-              </View>
+    {/* Inner circle — Scaled up from 44 to 52 to match the new proportions */}
+    <ThemedView
+      style={{
+        width: 52,
+        height: 52,
+        borderRadius: 26, // Half of 52
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Feather name="plus" size={20} color={colors.textMuted} />
+    </ThemedView>
+  </View>
 
-              <ThemedText variant="muted" className="text-xs">Add</ThemedText>
-            </TouchableOpacity>
+  <ThemedText variant="muted" className="text-xs">Add</ThemedText>
+</TouchableOpacity>
       </View>
     </ThemedView>
   );
