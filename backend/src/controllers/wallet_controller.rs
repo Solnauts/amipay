@@ -1084,3 +1084,39 @@ pub async fn get_user_recipients(req: HttpRequest) -> actix_web::Result<impl Res
         "recipients": recipients.unwrap()
     })))
 }
+
+//function to get all transactions of the user 
+#[get("/wallet/all_transactions")]
+pub async fn get_all_transactions(req: HttpRequest) -> actix_web::Result<impl Responder> {
+    let token = extract_bearer_token(&req)?;
+
+    let claims = validate_session_token(&token)?;
+
+    let user_id: i32 = claims.sub.parse().map_err(|_| {
+        AppError::Auth(AuthError::InvalidUserId {
+            raw: claims.sub.clone(),
+        })
+    })?;
+
+    //get the transactions using userid
+    let transactions = web::block(move || {
+        let conn = &mut establish_connection()?;
+      crate::database::model_functions::get_transactions_for_user(conn, user_id)
+    })
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?;
+
+    //send the data back to the user
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status": "success",
+        "transactions": transactions.unwrap()
+    })))
+}
+
+
+
+
+

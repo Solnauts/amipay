@@ -358,3 +358,18 @@ pub fn update_amounts_standalone(sender_id: i32, receiver_id: i32) -> Result<(i6
     let conn = &mut establish_connection()?;
     update_both_user_amounts(conn, sender_id, receiver_id)
 }
+
+//function to get all transactions of the user
+pub fn get_transactions_for_user(
+    conn: &mut PgConnection,
+    user_id: i32,
+) -> Result<Vec<DbLedger>, DbError> {
+    let transactions = ledger::table
+        .filter(
+            ledger::senderId
+                .eq(user_id)
+                .or(ledger::receiverId.eq(user_id)),
+        )
+        .load::<DbLedger>(conn)?;
+    Ok(transactions)
+}
