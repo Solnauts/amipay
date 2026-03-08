@@ -83,7 +83,7 @@ export function GradientButton({
 
 const styles = StyleSheet.create({
     actionBtn: {
-        flex: 1,
+        width: '100%',
         borderRadius: 50,
         borderWidth: 1,
         shadowColor: '#000',

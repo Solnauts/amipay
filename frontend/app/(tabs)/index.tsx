@@ -4,22 +4,19 @@ import { useFocusEffect } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
 
 // Home screen components
-import { HomeHeader } from "@/components/home/HomeHeader";
-import { BalanceSection } from "@/components/home/BalanceSection";
-import { PeopleSection } from "@/components/home/PeopleSection";
-import { FavouriteSection } from "@/components/home/FavouriteSection";
-import { AIPayBanner } from "@/components/home/AIPayBanner";
-import { WalletConnectScreen } from "@/components/home/WalletConnectScreen";
-import { OnboardingIntro } from "@/components/home/OnboardingIntro";
-import { OnboardingScreen } from "@/components/home/OnboardingScreen";
-import { userService } from "@/src/services/api/UserService";
+import { HomeHeader } from '@/components/home/HomeHeader';
+import { BalanceSection } from '@/components/home/BalanceSection';
+import { PeopleSection } from '@/components/home/PeopleSection';
+import { FavouriteSection } from '@/components/home/FavouriteSection';
+import { AIPayBanner } from '@/components/home/AIPayBanner';
+import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
+import { OnboardingScreen } from '@/components/home/OnboardingScreen';
+import { userService } from '@/src/services/api/UserService';
 
 export default function HomeScreen() {
   const { authStep, connect } = useWallet();
   const [balance, setBalance] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [showIntro, setShowIntro] = useState(false); // false until storage checked
-  const [introChecked, setIntroChecked] = useState(false); // prevents flash
 
   const fetchBalance = async () => {
     try {
@@ -38,7 +35,7 @@ export default function HomeScreen() {
     else setBalance(null);
   }, [authStep]);
 
-  // Re-fetch every time the home tab gains focus (e.g. returning from AI Pay)
+  // Re-fetch when screen gains focus
   useFocusEffect(
     useCallback(() => {
       if (authStep === 'ready') fetchBalance();
@@ -51,32 +48,22 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // ── Gate 1: Not connected at all ─────────────────────────────────────────
+  // ── Gate 1: Not connected ─────────────────────────────────────────
   if (authStep === 'idle') {
-    return (
-      <WalletConnectScreen
-        onConnect={connect}
-        authStep={authStep}
-      />
-    );
+    return <WalletConnectScreen onConnect={connect} authStep={authStep} />;
   }
 
-  // ── Gate 2: MWA connecting / signing / calling backend ───────────────────
+  // ── Gate 2: Connecting / logging in ───────────────────────────────
   if (authStep === 'connecting' || authStep === 'logging_in') {
-    return (
-      <WalletConnectScreen
-        onConnect={connect}
-        authStep={authStep}
-      />
-    );
+    return <WalletConnectScreen onConnect={connect} authStep={authStep} />;
   }
 
-  // ── Gate 3: New user — pick alias + PIN ──────────────────────────────────
+  // ── Gate 3: New user onboarding ───────────────────────────────────
   if (authStep === 'onboarding') {
     return <OnboardingScreen />;
   }
 
-  // ── Home screen (authStep === 'ready') ───────────────────────────────────
+  // ── Home screen ───────────────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <ScrollView

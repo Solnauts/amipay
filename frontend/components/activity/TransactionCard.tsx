@@ -1,9 +1,9 @@
 // TransactionCard — single transaction row
-// Now delegates to shared/TransactionRow
+// Delegates UI to shared TransactionRow
 
 import React from 'react';
 import { TransactionRow } from '@/components/shared/TransactionRow';
-import { ActivityTransaction } from './activityData';
+import { ActivityTransaction } from '@/components/activity/activityData';
 import { formatTime } from '@/utils/activityUtils';
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
 
 export function TransactionCard({ transaction }: Props) {
   const isSent = transaction.type === 'sent';
+
   const amountStr = `${isSent ? '-' : '+'}${Math.abs(transaction.amount)} ${transaction.token}`;
   const usdStr = `$${Math.abs(transaction.amount).toFixed(2)}`;
   const timeStr = formatTime(transaction.date);
@@ -25,7 +26,7 @@ export function TransactionCard({ transaction }: Props) {
       amount={amountStr}
       amountSub={usdStr}
       time={timeStr}
-      showBadge={true}
+      showBadge
     />
   );
 }

@@ -1,14 +1,6 @@
 // AddContactModal — centre modal for adding a new contact
-// • "Amypay ID verified" only shows once the ID field has content
-// • "Add Contact" button is disabled (faded) until name is filled AND ID is verified
-// • Button returns to full opacity/color once form is valid
-// Wired to POST /wallet/add-recipient via onAdd callback
-//
-// Flow:
-//  1. User enters a contact name (local label only) and Amipay ID (alias)
-//  2. Press "Add Contact" → hits backend to verify the alias exists & link it
-//  3. On success → shows confirmation, closes modal, notifies parent
-//  4. On error → shows the backend error message inline
+// Wired to POST /wallet/add-recipient via parent onAdd()
+// Shows validation + backend errors.
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -26,32 +18,22 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { Colors } from '@/constants/theme';
 
-// ─── Validation ──────────────────────────────────────────────────────────────
+// ─── Validation ─────────────────────────────────────────────
 
-/**
- * Basic client-side check: alias must be at least 4 chars and contain '@'.
- * Example valid alias: Ridhi@amypay
- * Real validation happens on the backend.
- */
 function isValidAmypayId(id: string) {
   return id.trim().length > 3 && id.includes('@');
 }
 
-// ─── Props ───────────────────────────────────────────────────────────────────
+// ─── Props ──────────────────────────────────────────────────
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  /**
-   * Called with (name, alias) when the user confirms.
-   * The parent handles MMKV optimistic save + API call + rollback.
-   * Should throw on failure so the modal can display the error.
-   */
   onAdd: (name: string, alias: string) => Promise<void>;
   colors: (typeof Colors)[keyof typeof Colors];
 };
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ──────────────────────────────────────────────
 
 export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
   const [name, setName] = useState('');
@@ -59,10 +41,9 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isVerified = useMemo(() => isValidAmypayId(id), [id]);
-  const canAdd = name.trim().length > 0 && isVerified && !loading;
+  const isValidFormat = useMemo(() => isValidAmypayId(id), [id]);
+  const canAdd = name.trim().length > 0 && isValidFormat && !loading;
 
-  // ── Reset & close ──────────────────────────────────────────────────────
   const handleClose = () => {
     setName('');
     setId('');
@@ -71,9 +52,9 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
     onClose();
   };
 
-  // ── Submit ─────────────────────────────────────────────────────────────
   const handleAdd = async () => {
     if (!canAdd) return;
+
     setError(null);
     setLoading(true);
 
@@ -81,8 +62,7 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
       await onAdd(name.trim(), id.trim());
       handleClose();
     } catch (err: any) {
-      const msg = err?.message ?? 'Something went wrong. Please try again.';
-      setError(msg);
+      setError(err?.message ?? 'Something went wrong.');
     } finally {
       setLoading(false);
     }
@@ -90,48 +70,52 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
 
   return (
     <Modal transparent visible={isOpen} animationType="fade" onRequestClose={handleClose}>
-      {/* Dimmed backdrop — tap to dismiss */}
+      
+      {/* Backdrop */}
       <TouchableOpacity
         activeOpacity={1}
         onPress={handleClose}
         style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
       />
 
-      {/* Card centred on screen */}
+      {/* Modal Card */}
       <View style={styles.centeredView} pointerEvents="box-none">
         <ThemedView variant="surface" style={styles.card}>
 
-          {/* ── Header ── */}
+          {/* Header */}
           <View style={styles.headerRow}>
-            <ThemedText type="subtitle" style={{ fontSize: 18 }}>Add New Contact</ThemedText>
-            <TouchableOpacity
-              onPress={handleClose}
-              activeOpacity={0.7}
-              style={styles.closeBtn}
-            >
+            <ThemedText type="subtitle" style={{ fontSize: 18 }}>
+              Add New Contact
+            </ThemedText>
+
+            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <MaterialIcons name="close" size={20} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          {/* ── Contact Name ── */}
+          {/* Name */}
           <View style={styles.fieldGroup}>
             <View style={styles.fieldLabel}>
               <MaterialIcons name="person-outline" size={15} color={colors.textMuted} />
-              <ThemedText variant="muted" style={styles.labelText}>Contact Name</ThemedText>
+              <ThemedText variant="muted">Contact Name</ThemedText>
             </View>
+
             <View
               style={[
                 styles.inputBox,
                 {
                   backgroundColor: colors.backgroundSecondary,
-                  borderWidth: name.trim().length > 0 ? 1 : 0,
+                  borderWidth: name.trim() ? 1 : 0,
                   borderColor: colors.border,
                 },
               ]}
             >
               <TextInput
                 value={name}
-                onChangeText={(v) => { setName(v); setError(null); }}
+                onChangeText={(v) => {
+                  setName(v);
+                  setError(null);
+                }}
                 placeholder="Enter contact name"
                 placeholderTextColor={colors.mutedForeground}
                 editable={!loading}
@@ -140,70 +124,74 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
             </View>
           </View>
 
-          {/* ── Amypay ID ── */}
+          {/* Amypay ID */}
           <View style={styles.fieldGroup}>
             <View style={styles.fieldLabel}>
               <MaterialIcons name="alternate-email" size={15} color={colors.textMuted} />
-              <ThemedText variant="muted" style={styles.labelText}>Amypay ID</ThemedText>
+              <ThemedText variant="muted">Amypay ID</ThemedText>
             </View>
+
             <View
               style={[
                 styles.inputBox,
                 {
                   backgroundColor: colors.backgroundSecondary,
-                  borderWidth: id.trim().length > 0 ? 1 : 0,
-                  borderColor: isVerified ? colors.success : colors.error,
+                  borderWidth: id.trim() ? 1 : 0,
+                  borderColor: isValidFormat ? colors.success : colors.error,
                 },
               ]}
             >
               <TextInput
                 value={id}
-                onChangeText={(v) => { setId(v); setError(null); }}
+                onChangeText={(v) => {
+                  setId(v);
+                  setError(null);
+                }}
                 placeholder="e.g. Ridhi@amypay"
                 placeholderTextColor={colors.mutedForeground}
                 editable={!loading}
-                style={[styles.input, { color: colors.text }]}
                 autoCapitalize="none"
                 autoCorrect={false}
+                style={[styles.input, { color: colors.text }]}
               />
             </View>
 
-            {/* Verified / Invalid — only shows when field has input */}
-            {id.trim().length > 0 && (
-              <View style={styles.statusRow}>
-                <MaterialIcons
-                  name={isVerified ? 'check-circle' : 'cancel'}
-                  size={14}
-                  color={isVerified ? colors.success : colors.error}
-                />
-                <ThemedText style={[styles.statusText, { color: isVerified ? colors.success : colors.error }]}>
-                  {isVerified ? 'Amypay ID verified' : 'Invalid Amypay ID'}
+            {/* Validation / Error */}
+            <View style={{ minHeight: 22, marginTop: 6 }}>
+              {error ? (
+                <ThemedText style={{ fontSize: 12, color: colors.error }}>
+                  {error}
                 </ThemedText>
-              </View>
-            )}
+              ) : id.trim() ? (
+                <View style={styles.statusRow}>
+                  <MaterialIcons
+                    name={isValidFormat ? 'check-circle' : 'cancel'}
+                    size={14}
+                    color={isValidFormat ? colors.success : colors.error}
+                  />
+                  <ThemedText
+                    style={{
+                      fontSize: 12,
+                      color: isValidFormat ? colors.success : colors.error,
+                    }}
+                  >
+                    {isValidFormat
+                      ? 'Valid Amypay ID format'
+                      : 'Invalid Amypay ID (must include @)'}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
           </View>
 
-          {/* ── Error from backend ── */}
-          {error && (
-            <View style={{ marginBottom: 12 }}>
-              <ThemedText style={{ fontSize: 12, color: colors.error, fontFamily: 'Poppins_400Regular' }}>
-                {error}
-              </ThemedText>
-            </View>
-          )}
-
-          {/* ── Add Contact button — full color when valid, faded when not ── */}
-          <View style={{ marginTop: 8 }}>
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <GradientButton
-                label="Add Contact"
-                onPress={handleAdd}
-                disabled={!canAdd}
-                variant="primary"
-              />
-            )}
+          {/* Button */}
+          <View style={{ marginTop: 10 }}>
+            <GradientButton
+              label={loading ? 'Adding...' : 'Add Contact'}
+              onPress={handleAdd}
+              disabled={!canAdd}
+              variant="primary"
+            />
           </View>
 
         </ThemedView>
@@ -225,14 +213,9 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 24,
     elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 24,
   },
@@ -252,9 +235,6 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 8,
   },
-  labelText: {
-    fontSize: 13,
-  },
   inputBox: {
     borderRadius: 16,
     paddingHorizontal: 16,
@@ -269,11 +249,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 6,
-    paddingHorizontal: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
   },
 });

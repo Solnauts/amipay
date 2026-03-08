@@ -1,12 +1,13 @@
 // TokensSection — "Your Tokens" list on the Activities/Wallet screen
 // Shows each token with icon, balance, and USD value. Reuses theme colors.
 
+import React from "react";
+import { TouchableOpacity, useColorScheme, View } from "react-native";
+
 import { TokenIcon } from "@/components/icons/TokenIcon";
 import { ThemedText } from "@/components/ui/ThemedText";
 import { ThemedView } from "@/components/ui/ThemedView";
 import { Colors } from "@/constants/theme";
-import React from "react";
-import { TouchableOpacity, useColorScheme, View } from "react-native";
 
 type Token = {
   symbol: string;
@@ -26,7 +27,7 @@ function formatAmount(n: number): string {
 }
 
 export function TokensSection() {
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
   return (
@@ -36,8 +37,12 @@ export function TokensSection() {
         <ThemedText type="defaultSemiBold" variant="default" className="text-base">
           Your Tokens
         </ThemedText>
+
         <TouchableOpacity activeOpacity={0.7}>
-          <ThemedText className="text-sm font-semibold" style={{ color: colors.primary }}>
+          <ThemedText
+            className="text-sm font-semibold"
+            style={{ color: colors.primary }}
+          >
             See all
           </ThemedText>
         </TouchableOpacity>
@@ -54,15 +59,21 @@ export function TokensSection() {
             borderBottomColor: colors.border,
           }}
         >
+          {/* Token icon */}
           <View className="mr-3">
             <TokenIcon symbol={token.symbol} size={56} />
           </View>
 
           {/* Symbol + name */}
           <ThemedView className="flex-1">
-            <ThemedText type="defaultSemiBold" variant="default" className="text-sm">
+            <ThemedText
+              type="defaultSemiBold"
+              variant="default"
+              className="text-sm"
+            >
               {token.symbol}
             </ThemedText>
+
             <ThemedText variant="muted" className="text-xs mt-0.5">
               {token.name}
             </ThemedText>
@@ -70,9 +81,14 @@ export function TokensSection() {
 
           {/* Balance + USD */}
           <ThemedView className="items-end">
-            <ThemedText type="defaultSemiBold" variant="default" className="text-sm">
+            <ThemedText
+              type="defaultSemiBold"
+              variant="default"
+              className="text-sm"
+            >
               {formatAmount(token.amount)}
             </ThemedText>
+
             <ThemedText variant="muted" className="text-xs mt-0.5">
               ${token.usdValue.toFixed(2)}
             </ThemedText>
