@@ -36,7 +36,7 @@
           "backgroundColor": "#ffffff",
           "dark": {
             "image": "./assets/images/amypay-logo.png",
-            "backgroundColor": "#000000"
+            "backgroundColor": "#161616"
           }
         }
       ]

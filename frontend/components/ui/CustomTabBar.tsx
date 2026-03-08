@@ -104,7 +104,7 @@ export function CustomTabBar() {
           borderRadius: 50,
           overflow: 'hidden',
           borderWidth: 1,
-          borderColor: '#1e293b',
+          borderColor: colorScheme === 'dark' ? '#ffffff' : '#1e293b',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
@@ -112,45 +112,72 @@ export function CustomTabBar() {
           elevation: 4,
         }}
       >
-        <LinearGradient
-          colors={['#030712', '#09090b']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            paddingHorizontal: 16,
-          }}
-        >
-          {/* Inset white top highlight */}
+        {colorScheme === 'dark' ? (
           <View
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 2,
-              backgroundColor: 'rgba(255,255,255,0.5)',
-              borderTopLeftRadius: 50,
-              borderTopRightRadius: 50,
-            }}
-          />
-          <AIPayIcon size={16} />
-          <Text
-            style={{
-              color: '#ffffff',
-              fontSize: 16,
-              fontWeight: '500',
-              fontFamily: 'Inter',
-              textTransform: 'capitalize',
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingHorizontal: 16,
+              backgroundColor: '#ffffff',
             }}
           >
-            pay
-          </Text>
-        </LinearGradient>
+            <AIPayIcon size={16} />
+            <Text
+              style={{
+                color: '#09090b',
+                fontSize: 16,
+                fontWeight: '500',
+                fontFamily: 'Inter',
+                textTransform: 'capitalize',
+              }}
+            >
+              pay
+            </Text>
+          </View>
+        ) : (
+          <LinearGradient
+            colors={['#030712', '#09090b']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingHorizontal: 16,
+            }}
+          >
+            {/* Inset white top highlight */}
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 2,
+                backgroundColor: 'rgba(255,255,255,0.5)',
+                borderTopLeftRadius: 50,
+                borderTopRightRadius: 50,
+              }}
+            />
+            <AIPayIcon size={16} />
+            <Text
+              style={{
+                color: '#ffffff',
+                fontSize: 16,
+                fontWeight: '500',
+                fontFamily: 'Inter',
+                textTransform: 'capitalize',
+              }}
+            >
+              pay
+            </Text>
+          </LinearGradient>
+        )}
       </TouchableOpacity>
     </View>
   );
