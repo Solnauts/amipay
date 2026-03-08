@@ -78,15 +78,10 @@ pub fn add_recipient_by_alias(
 pub fn get_recipients_for_user(
     conn: &mut PgConnection,
     owner_user_id: i32,
-) -> Result<Vec<(Dbrecipient, DbUser)>, DbError> {
+) -> Result<Vec< Dbrecipient>, DbError> {
     use crate::schema::recipient::dsl::*;
-    use crate::schema::user;
-
-    recipient
-        .inner_join(user::table.on(user::id.eq(recipient_user_id)))
-        .filter(userid.eq(owner_user_id))
-        .load::<(Dbrecipient, DbUser)>(conn)
-        .map_err(|e| DbError::QueryFailed {
+        //load all the recipients for a particular user 
+        recipient.filter(userid.eq(owner_user_id)).load::<Dbrecipient>(conn).map_err(|e| DbError::QueryFailed {
             context: format!("get recipients for user {}", owner_user_id),
             reason: e.to_string(),
         })
