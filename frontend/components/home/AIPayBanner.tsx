@@ -1,9 +1,12 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Linking, useColorScheme } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const AIRDROP_URL =
   'https://raydium.io/swap/?inputMint=sol&outputMint=USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT';
 
 export function AIPayBanner({ onLearnMore }: { onLearnMore?: () => void }) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
   return (
     // Outer wrapper — overflow visible so coin can "hover" outside card
     <View style={styles.wrapper}>
@@ -32,7 +35,21 @@ export function AIPayBanner({ onLearnMore }: { onLearnMore?: () => void }) {
             activeOpacity={0.8}
             style={styles.learnMoreBtn}
           >
-            <Text style={styles.learnMoreText}>Airdrop USDC ✦</Text>
+            {isDark ? (
+              <View style={styles.learnMoreBtnInnerLight}>
+                <Text style={[styles.learnMoreText, { color: '#000000' }]}>Airdrop USDC ✦</Text>
+              </View>
+            ) : (
+              <LinearGradient
+                colors={['#030712', '#09090b']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.learnMoreBtnInner}
+              >
+                <View style={styles.learnMoreHighlight} />
+                <Text style={[styles.learnMoreText, { color: '#ffffff' }]}>Airdrop USDC ✦</Text>
+              </LinearGradient>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -121,10 +138,32 @@ const styles = StyleSheet.create({
 
   learnMoreBtn: {
     alignSelf: 'flex-start',
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+  learnMoreBtnInner: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  learnMoreBtnInnerLight: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: '#ffffff',
     borderRadius: 999,
+  },
+  learnMoreHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderTopLeftRadius: 999,
+    borderTopRightRadius: 999,
   },
 
   learnMoreText: {
