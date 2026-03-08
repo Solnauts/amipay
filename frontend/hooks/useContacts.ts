@@ -109,10 +109,16 @@ export function useContacts() {
     }
   }, []);
 
+  const toggleFavorite = useCallback((id: string) => {
+    contactsStore.toggleFavorite(id);
+    setContacts(contactsStore.getAll());
+  }, []);
+
   return {
     contacts,
     syncing,
     addContact,
+    toggleFavorite,
     refresh: syncFromApi,
   };
 }

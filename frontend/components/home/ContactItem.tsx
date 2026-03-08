@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View, Image } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import type { Contact } from './homeData';
@@ -27,15 +27,23 @@ export function ContactItem({ contact, size = 'md', onPress }: Props) {
       style={{ width: dim + 8 }}
     >
       <ThemedView
-        className="rounded-full items-center justify-center"
+        className="rounded-full items-center justify-center overflow-hidden"
         style={{ width: dim, height: dim, backgroundColor: contact.color }}
       >
-        <ThemedText
-          className="font-bold text-white"
-          style={{ fontSize, color: '#ffffff' }}
-        >
-          {contact.initials}
-        </ThemedText>
+        {contact.imageUri ? (
+          <Image
+            source={{ uri: contact.imageUri }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+        ) : (
+          <ThemedText
+            className="font-bold text-white"
+            style={{ fontSize, color: '#ffffff' }}
+          >
+            {contact.initials}
+          </ThemedText>
+        )}
       </ThemedView>
       <ThemedText variant="secondary" className="text-xs text-center" numberOfLines={1}>
         {contact.name}
