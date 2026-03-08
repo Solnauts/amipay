@@ -1,8 +1,9 @@
 import React from 'react';
-import { TouchableOpacity, View, Image } from 'react-native';
+import { TouchableOpacity, Image } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { ThemedView } from '@/components/ui/ThemedView';
+import { Avatar } from '@/components/ui/Avatar';
 import type { Contact } from './homeData';
+import { getAvatarSource } from '@/src/store/contactsStore';
 
 type Props = {
   contact: Contact;
@@ -12,12 +13,11 @@ type Props = {
 
 /**
  * Reusable circular avatar for a contact.
- * size="md"  → 56px (People grid)
- * size="sm"  → 48px (Favourite grid)
+ * size="md" → 64px (People grid)
+ * size="sm" → 48px (Favourite grid)
  */
 export function ContactItem({ contact, size = 'md', onPress }: Props) {
-  const dim = size === 'md' ? 56 : 48;
-  const fontSize = size === 'md' ? 15 : 13;
+  const dim = 64
 
   return (
     <TouchableOpacity
@@ -26,26 +26,25 @@ export function ContactItem({ contact, size = 'md', onPress }: Props) {
       className="items-center gap-1.5"
       style={{ width: dim + 8 }}
     >
-      <ThemedView
-        className="rounded-full items-center justify-center overflow-hidden"
-        style={{ width: dim, height: dim, backgroundColor: contact.color }}
+      {contact.imageUri ? (
+        <Image
+          source={getAvatarSource(contact.imageUri)}
+          style={{ width: dim, height: dim, borderRadius: dim / 2 }}
+          resizeMode="cover"
+        />
+      ) : (
+        <Avatar
+          initials={contact.initials}
+          color={contact.color}
+          size="lg"
+        />
+      )}
+
+      <ThemedText
+        variant="secondary"
+        className="text-xs text-center"
+        numberOfLines={1}
       >
-        {contact.imageUri ? (
-          <Image
-            source={{ uri: contact.imageUri }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-          />
-        ) : (
-          <ThemedText
-            className="font-bold text-white"
-            style={{ fontSize, color: '#ffffff' }}
-          >
-            {contact.initials}
-          </ThemedText>
-        )}
-      </ThemedView>
-      <ThemedText variant="secondary" className="text-xs text-center" numberOfLines={1}>
         {contact.name}
       </ThemedText>
     </TouchableOpacity>

@@ -9,8 +9,8 @@ export const lightColors = {
   violetLight: "#A78BFA",
   violetMuted: "#EDE9FE",
   violetForeground: "#ffffff",
-  background: "#f4f4f8",
-  backgroundSecondary: "#ebebf5",
+  background: "#ffffff",
+  backgroundSecondary: "#f4f4f8",
   surface: "#ffffff",
   surfaceElevated: "#ffffff",
   text: "#111827",
@@ -31,7 +31,7 @@ export const darkColors = {
   primary: "#A78BFA",
   primaryForeground: "#ffffff",
   // Violet - action buttons (Deposit / Withdraw)
- violet: "#8B5CF6",
+  violet: "#8B5CF6",
   violetLight: "#A78BFA",
   violetMuted: "#4C1D95",
   violetForeground: "#ffffff",
@@ -61,8 +61,8 @@ export const Colors = {
 export type Colors = typeof lightColors;
 
 export const Fonts = {
-  regular:    'Poppins_400Regular',
-  medium:     'Poppins_500Medium',
-  semiBold:   'Poppins_600SemiBold',
-  bold:       'Poppins_700Bold',
+  regular: 'Poppins_400Regular',
+  medium: 'Poppins_500Medium',
+  semiBold: 'Poppins_600SemiBold',
+  bold: 'Poppins_700Bold',
 } as const;

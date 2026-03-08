@@ -2,21 +2,31 @@
 // Full searchable + filterable transaction history
 
 import React, { useState, useMemo } from 'react';
-import { FlatList, ListRenderItem, TouchableOpacity, useColorScheme, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  FlatList,
+  ListRenderItem,
+  TouchableOpacity,
+  useColorScheme,
+  RefreshControl,
+} from 'react-native';
+
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { SearchBar }        from '@/components/activity/SearchBar';
-import { FilterPills }      from '@/components/activity/FilterPills';
+import { SearchBar } from '@/components/activity/SearchBar';
+import { FilterPills } from '@/components/activity/FilterPills';
 import { TransactionGroup } from '@/components/activity/TransactionGroup';
-import { useTransactions }  from '@/hooks/useTransactions';
+import { useTransactions } from '@/hooks/useTransactions';
+
 import {
   FilterType,
   TransactionGroup as TxGroup,
   getFilteredGroups,
 } from '@/utils/activityUtils';
+
 import { Colors } from '@/constants/theme';
 
 export default function AllTransactionsScreen() {
@@ -46,39 +56,45 @@ export default function AllTransactionsScreen() {
 
   const keyExtractor = (item: TxGroup) => item.label;
 
-  // ── Header rendered inside FlatList so it scrolls with the list ──────────
   const ListHeader = (
     <>
-      {/* ── Top bar: back arrow + title + filter icon ── */}
-      <ThemedView
-        className="flex-row items-center justify-between px-6 pt-14 pb-4"
-      >
-        {/* Back button */}
+      {/* Top bar */}
+      <ThemedView className="flex-row items-center justify-between px-6 pt-14 pb-4">
         <TouchableOpacity
           onPress={() => router.back()}
           activeOpacity={0.7}
           className="w-9 h-9 rounded-full items-center justify-center"
-          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+          style={{
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
         >
           <MaterialIcons name="arrow-back" size={18} color={colors.text} />
         </TouchableOpacity>
 
-        {/* Title block */}
         <ThemedView className="flex-1 items-center">
           <ThemedText type="subtitle" variant="default">
-            All Transactions
+            Transaction History
           </ThemedText>
+
           <ThemedText variant="muted" className="text-xs mt-0.5">
             {transactions.length} total
           </ThemedText>
         </ThemedView>
 
+        {/* Spacer for alignment */}
+        <ThemedView style={{ width: 36 }} />
       </ThemedView>
 
-      {/* ── Search ── */}
-      <SearchBar value={query} onChangeText={setQuery} />
+      {/* Search */}
+      <SearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search transaction..."
+      />
 
-      {/* ── Filter pills ── */}
+      {/* Filter */}
       <FilterPills active={filter} onChange={setFilter} />
     </>
   );
@@ -86,9 +102,15 @@ export default function AllTransactionsScreen() {
   const EmptyState = (
     <ThemedView className="items-center justify-center py-20 px-8">
       <ThemedText className="text-4xl mb-3">🔍</ThemedText>
-      <ThemedText type="defaultSemiBold" variant="default" className="text-base mb-1">
+
+      <ThemedText
+        type="defaultSemiBold"
+        variant="default"
+        className="text-base mb-1"
+      >
         No transactions found
       </ThemedText>
+
       <ThemedText variant="muted" className="text-sm text-center">
         Try a different search or change the filter.
       </ThemedText>
@@ -96,17 +118,23 @@ export default function AllTransactionsScreen() {
   );
 
   return (
-    <ThemedView variant="default" className="flex-1">
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <FlatList
         data={groups}
         keyExtractor={keyExtractor}
         renderItem={renderGroup}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={isLoading && !refreshing ? (
-          <ThemedView className="py-20 italic">
-            <ThemedText className="text-center" variant="muted">Refreshing transactions...</ThemedText>
-          </ThemedView>
-        ) : EmptyState}
+        ListEmptyComponent={
+          isLoading && !refreshing ? (
+            <ThemedView className="py-20">
+              <ThemedText className="text-center" variant="muted">
+                Refreshing transactions...
+              </ThemedText>
+            </ThemedView>
+          ) : (
+            EmptyState
+          )
+        }
         contentContainerStyle={{ paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -118,6 +146,6 @@ export default function AllTransactionsScreen() {
           />
         }
       />
-    </ThemedView>
+    </SafeAreaView>
   );
 }

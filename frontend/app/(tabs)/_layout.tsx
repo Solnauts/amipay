@@ -15,16 +15,16 @@ export default function TabLayout() {
         options={{ title: 'Home' }}
       />
       <Tabs.Screen
+        name="contacts"
+        options={{ title: 'Contacts' }}
+      />
+      <Tabs.Screen
         name="activities"
         options={{ title: 'Activities' }}
       />
       <Tabs.Screen
         name="cards"
         options={{ title: 'Payment' }}
-      />
-      <Tabs.Screen
-        name="rewards"
-        options={{ title: 'Recipient' }}
       />
     </Tabs>
   );

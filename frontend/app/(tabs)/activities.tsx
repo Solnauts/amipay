@@ -1,29 +1,26 @@
-// Activities Screen — wallet overview + recent transaction preview
-// Reuses HomeHeader + BalanceSection from the home screen.
-// "View all" navigates to /all-transactions for the full list.
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   ScrollView,
   RefreshControl,
   View,
   TouchableOpacity,
   useColorScheme,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
 
 // ── Shared home components ─────────────────────────────────────────────────
-import { HomeHeader }     from '@/components/home/HomeHeader';
+import { HomeHeader } from '@/components/home/HomeHeader';
 import { BalanceSection } from '@/components/home/BalanceSection';
 
 // ── Activity-specific components ───────────────────────────────────────────
-import { TokensSection }    from '@/components/activity/TokensSection';
+import { TokensSection } from '@/components/activity/TokensSection';
 import { TransactionGroup } from '@/components/activity/TransactionGroup';
-import { useTransactions }  from '@/hooks/useTransactions';
-import { useBalance }       from '@/hooks/useBalance';
+
+import { useTransactions } from '@/hooks/useTransactions';
+import { useBalance } from '@/hooks/useBalance';
 
 import {
   TransactionGroup as TxGroup,
@@ -34,7 +31,6 @@ import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
 
-// Only show a preview of the most recent 3 transactions on the overview
 const PREVIEW_COUNT = 3;
 
 export default function ActivityScreen() {
@@ -46,29 +42,31 @@ export default function ActivityScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  // Sync balance when screen gains focus (matching Home screen behavior)
+  // Sync balance when screen gains focus
   useFocusEffect(
     useCallback(() => {
       refetchBalance();
-    }, [refetchBalance])
+    }, [refetchBalance]),
   );
 
-  // Grab all groups (no filter/search on overview), then slice to preview
   const allGroups: TxGroup[] = useMemo(
     () => getFilteredGroups(transactions, 'all', ''),
     [transactions],
   );
 
-  // Show only the Today group (first group) for the preview, or first N items
   const previewGroups: TxGroup[] = useMemo(() => {
     let count = 0;
     const result: TxGroup[] = [];
+
     for (const group of allGroups) {
       if (count >= PREVIEW_COUNT) break;
+
       const sliced = group.data.slice(0, PREVIEW_COUNT - count);
       result.push({ label: group.label, data: sliced });
+
       count += sliced.length;
     }
+
     return result;
   }, [allGroups]);
 
@@ -79,7 +77,7 @@ export default function ActivityScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+    <SafeAreaView edges={['top']} className="flex-1 bg-background dark:bg-background-dark">
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 48 }}
@@ -94,30 +92,21 @@ export default function ActivityScreen() {
           />
         }
       >
-        {/* ── Header — same as home ── */}
+        {/* Header */}
         <HomeHeader />
 
-        {/* ── Balance — live USDC balance, Deposit/Withdraw ── */}
+        {/* Balance */}
         <BalanceSection balance={balance} connecting={false} />
 
         {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
-        <TokensSection balance={balance} />
+        <TokensSection />
 
-        {/* ── Divider ── */}
-        <ThemedView
-          style={{
-            height: 1,
-            backgroundColor: colors.border,
-            marginHorizontal: 24,
-            marginBottom: 8,
-          }}
-        />
-
-        {/* ── Recent Transactions header + "View all" link ── */}
-        <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
+        {/* Recent Transactions header */}
+        <ThemedView className="flex-row items-center justify-between px-6 mb-4 mt-6">
           <ThemedText type="defaultSemiBold" variant="default" className="text-base">
-            Recent Transaction
+            Recent Transactions
           </ThemedText>
+
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => router.push('/all-transactions')}
@@ -131,24 +120,32 @@ export default function ActivityScreen() {
           </TouchableOpacity>
         </ThemedView>
 
-        {/* ── Preview: most recent 3 transactions grouped by date ── */}
+        {/* Loading */}
         {isLoading && !refreshing && (
           <View style={{ paddingVertical: 40 }}>
             <ActivityIndicator color={colors.primary} />
-            <ThemedText variant="muted" style={{ textAlign: 'center', marginTop: 12 }}>
+            <ThemedText
+              variant="muted"
+              style={{ textAlign: 'center', marginTop: 12 }}
+            >
               Fetching latest activity...
             </ThemedText>
           </View>
         )}
 
+        {/* Empty state */}
         {!isLoading && previewGroups.length === 0 && (
           <View style={{ paddingVertical: 60, paddingHorizontal: 32 }}>
-            <ThemedText variant="muted" style={{ textAlign: 'center', fontSize: 13 }}>
+            <ThemedText
+              variant="muted"
+              style={{ textAlign: 'center', fontSize: 13 }}
+            >
               No recent transactions found
             </ThemedText>
           </View>
         )}
 
+        {/* Transactions preview */}
         {previewGroups.map((group) => (
           <TransactionGroup key={group.label} group={group} />
         ))}

@@ -1,5 +1,6 @@
 {
   "name": "frontend",
+  "packageManager": "npm@11.9.0",
   "main": "./index.js",
   "version": "1.0.0",
   "scripts": {

@@ -8,6 +8,7 @@
 import React, { useState, useCallback } from 'react';
 import { router } from 'expo-router';
 import { ScrollView, TouchableOpacity, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { GroupPaymentHeader } from '@/components/cards/GroupPaymentHeader';
@@ -24,9 +25,9 @@ import { Colors } from '@/constants/theme';
 type Step = 'groups' | 'members' | 'amount' | 'confirm';
 
 const STEP_SUBTITLES: Record<Step, string> = {
-  groups:  'Select or create a group',
+  groups: 'Select or create a group',
   members: 'Select group members',
-  amount:  'Enter amounts',
+  amount: 'Enter amounts',
   confirm: 'Confirm transaction',
 };
 
@@ -34,17 +35,17 @@ export default function CardsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
-  const [step, setStep]         = useState<Step>('groups');
+  const [step, setStep] = useState<Step>('groups');
   const [selected, setSelected] = useState<Contact[]>([]);
-  const [total, setTotal]       = useState(0);
-  const [amounts, setAmounts]   = useState<MemberAmounts>({});
+  const [total, setTotal] = useState(0);
+  const [amounts, setAmounts] = useState<MemberAmounts>({});
 
   // ── Navigation helpers ────────────────────────────────────────────
   const goBack = useCallback(() => {
-    if (step === 'groups')  { router.replace('/'); return; }
-    if (step === 'members') { setStep('groups');  setSelected([]); }
-    if (step === 'amount')  { setStep('members'); }
-    if (step === 'confirm') { setStep('amount');  }
+    if (step === 'groups') { router.replace('/'); return; }
+    if (step === 'members') { setStep('groups'); setSelected([]); }
+    if (step === 'amount') { setStep('members'); }
+    if (step === 'confirm') { setStep('amount'); }
   }, [step]);
 
   const handleGroupPress = (_group: Group) => {
@@ -82,97 +83,99 @@ export default function CardsScreen() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <ThemedView variant="default" className="flex-1">
-      <GroupPaymentHeader
-        subtitle={STEP_SUBTITLES[step]}
-        showBack={true}
-        onBack={goBack}
-      />
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+      <ThemedView variant="default" className="flex-1">
+        <GroupPaymentHeader
+          subtitle={STEP_SUBTITLES[step]}
+          showBack={true}
+          onBack={goBack}
+        />
 
-      {/* ── Step 1: Groups list ── */}
-      {step === 'groups' && (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <CreateGroupButton onPress={handleCreateGroup} />
-          <ThemedText variant="muted" className="px-6 text-xs font-semibold tracking-widest mb-3">
-            Your Groups
-          </ThemedText>
-          {GROUPS.map((group) => (
-            <GroupCard key={group.id} group={group} onPress={handleGroupPress} />
-          ))}
-        </ScrollView>
-      )}
-
-      {/* ── Step 2: Member selection ── */}
-      {step === 'members' && (
-        <>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
-            keyboardShouldPersistTaps="handled"
-          >
-            <SelectedMembersBar selected={selected} onRemove={handleMemberRemove} />
+        {/* ── Step 1: Groups list ── */}
+        {step === 'groups' && (
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <CreateGroupButton onPress={handleCreateGroup} />
             <ThemedText variant="muted" className="px-6 text-xs font-semibold tracking-widest mb-3">
-              Select Members
+              Your Groups
             </ThemedText>
-            {CONTACTS.map((contact) => (
-              <MemberRow
-                key={contact.id}
-                contact={contact}
-                isSelected={isMemberSelected(selected, contact)}
-                onPress={handleMemberToggle}
-              />
+            {GROUPS.map((group) => (
+              <GroupCard key={group.id} group={group} onPress={handleGroupPress} />
             ))}
           </ScrollView>
+        )}
 
-          {/* Sticky Continue */}
-          <ThemedView
-            variant="default"
-            className="absolute bottom-0 left-0 right-0 px-6 pb-6 pt-3"
-            style={{ borderTopWidth: 1, borderTopColor: colors.border }}
-          >
-            <TouchableOpacity
-              onPress={handleMemberContinue}
-              activeOpacity={selected.length > 0 ? 0.85 : 1}
-              className="rounded-2xl py-4 items-center"
-              style={{ backgroundColor: selected.length > 0 ? colors.text : colors.muted }}
+        {/* ── Step 2: Member selection ── */}
+        {step === 'members' && (
+          <>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 100 }}
+              keyboardShouldPersistTaps="handled"
             >
-              <ThemedText
-                type="defaultSemiBold"
-                className="text-base"
-                style={{ color: selected.length > 0 ? colors.background : colors.mutedForeground }}
-              >
-                Continue ({selected.length} selected)
+              <SelectedMembersBar selected={selected} onRemove={handleMemberRemove} />
+              <ThemedText variant="muted" className="px-6 text-xs font-semibold tracking-widest mb-3">
+                Select Members
               </ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-        </>
-      )}
+              {CONTACTS.map((contact) => (
+                <MemberRow
+                  key={contact.id}
+                  contact={contact}
+                  isSelected={isMemberSelected(selected, contact)}
+                  onPress={handleMemberToggle}
+                />
+              ))}
+            </ScrollView>
 
-      {/* ── Step 3: Split amount ── */}
-      {step === 'amount' && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 32 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <SplitAmountStep members={selected} onContinue={handleAmountContinue} />
-        </ScrollView>
-      )}
+            {/* Sticky Continue */}
+            <ThemedView
+              variant="default"
+              className="absolute bottom-0 left-0 right-0 px-6 pb-6 pt-3"
+              style={{ borderTopWidth: 1, borderTopColor: colors.border }}
+            >
+              <TouchableOpacity
+                onPress={handleMemberContinue}
+                activeOpacity={selected.length > 0 ? 0.85 : 1}
+                className="rounded-2xl py-4 items-center"
+                style={{ backgroundColor: selected.length > 0 ? colors.text : colors.muted }}
+              >
+                <ThemedText
+                  type="defaultSemiBold"
+                  className="text-base"
+                  style={{ color: selected.length > 0 ? colors.background : colors.mutedForeground }}
+                >
+                  Continue ({selected.length} selected)
+                </ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          </>
+        )}
 
-      {/* ── Step 4: Confirm & send ── */}
-      {step === 'confirm' && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 32 }}
-        >
-          <ConfirmationStep
-            members={selected}
-            amounts={amounts}
-            total={total}
-            onSend={handleSend}
-          />
-        </ScrollView>
-      )}
-    </ThemedView>
+        {/* ── Step 3: Split amount ── */}
+        {step === 'amount' && (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 32 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <SplitAmountStep members={selected} onContinue={handleAmountContinue} />
+          </ScrollView>
+        )}
+
+        {/* ── Step 4: Confirm & send ── */}
+        {step === 'confirm' && (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 32 }}
+          >
+            <ConfirmationStep
+              members={selected}
+              amounts={amounts}
+              total={total}
+              onSend={handleSend}
+            />
+          </ScrollView>
+        )}
+      </ThemedView>
+    </SafeAreaView>
   );
 }

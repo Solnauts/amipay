@@ -3,20 +3,23 @@ import { transactionService } from '../src/services';
 import { TransactionRecord } from '../src/types/api';
 import { ActivityTransaction, TxType } from '../components/activity/activityData';
 import { transactionsStore } from '../src/store/transactionsStore';
+import { useWallet } from '../context/WalletContext';
 
 // Backend stores amounts in micro-units (6 decimal places)
 // e.g. 10_000_000 → 10.00 USDC
 const DECIMALS = 1_000_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Direction logic for "confirmed" transfers:
-//   sender_id !== receiver_id  →  money went OUT → negative (sent)
-//   sender_id === receiver_id  →  self / received → positive
+// Direction logic:
+//   status === 'deposit'          → always received (money coming into vault)
+//   status === 'claimed'          → always sent (withdrawn from vault)
+//   status === 'confirmed'
+//     receiver_id === userId      → YOU received money from someone else
+//     sender_id   === userId      → YOU sent money to someone else
 // ─────────────────────────────────────────────────────────────────────────────
 
-function mapToActivity(tr: TransactionRecord): ActivityTransaction {
+function mapToActivity(tr: TransactionRecord, userId: number): ActivityTransaction {
   const rawAmount = tr.amount / DECIMALS;
-  const isSelf = tr.sender_id === tr.receiver_id;
 
   let type: TxType;
   let amount: number;
@@ -44,15 +47,15 @@ function mapToActivity(tr: TransactionRecord): ActivityTransaction {
       break;
 
     case 'confirmed':
-      if (isSelf) {
-        // sender_id === receiver_id → self / received
+      if (tr.receiver_id === userId) {
+        // YOU are the receiver — money came IN
         type = 'received';
         amount = rawAmount;
-        color = '#8b5cf6';     // violet
+        color = '#22c55e';     // green
         displayName = 'Received';
-        description = 'Transfer received';
+        description = `Received from #${tr.sender_id}`;
       } else {
-        // sender_id !== receiver_id → sent to someone else
+        // YOU are the sender (or a neutral observer — treat as sent)
         type = 'sent';
         amount = -rawAmount;
         color = '#ef4444';     // red
@@ -82,7 +85,18 @@ function mapToActivity(tr: TransactionRecord): ActivityTransaction {
   };
 }
 
-export const useTransactions = () => {
+export interface UseTransactionsReturn {
+  transactions: ActivityTransaction[];
+  rawRecords: TransactionRecord[];
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export const useTransactions = (): UseTransactionsReturn => {
+  const { user } = useWallet();
+  const userId = user?.id ?? 0;
+
   // 1. Boot from local cache immediately (no flicker / no spinner on re-visit)
   const [rawRecords, setRawRecords] = useState<TransactionRecord[]>(() =>
     transactionsStore.getAll(),
@@ -91,9 +105,10 @@ export const useTransactions = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Derive the mapped list from the raw records so both are always in sync
+  // Pass userId so direction is computed correctly for the current user
   const transactions: ActivityTransaction[] = rawRecords
     .filter((tr) => tr && tr.id)
-    .map(mapToActivity)
+    .map((tr) => mapToActivity(tr, userId))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // 2. Fetch from API, update cache, update state
@@ -131,3 +146,4 @@ export const useTransactions = () => {
     refresh: fetchTransactions,
   };
 };
+

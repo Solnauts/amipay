@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedText } from '@/components/ui/ThemedText';
@@ -66,6 +67,7 @@ export function TransactionModal({
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
 
   const { walletAddress } = useWallet();
 
@@ -141,6 +143,7 @@ export function TransactionModal({
             {
               borderTopColor: colors.border,
               shadowColor: isDark ? '#8B5CF6' : '#000',
+              paddingBottom: (insets.bottom || 24) + 110, // Ensure visibility above tab bar
             },
           ]}
         >

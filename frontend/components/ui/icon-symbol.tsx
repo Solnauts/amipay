@@ -15,29 +15,30 @@ type IconSymbolName = keyof typeof MAPPING;
  */
 const MAPPING = {
   // Navigation / general
-  'house.fill':                          'home',
-  'paperplane.fill':                     'send',
+  'house.fill': 'home',
+  'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
-  'chevron.right':                       'chevron-right',
-  'chevron.down':                        'expand-more',
-  'chevron.up':                          'expand-less',
+  'chevron.right': 'chevron-right',
+  'chevron.down': 'expand-more',
+  'chevron.up': 'expand-less',
 
   // Home screen
-  'clock':                               'access-time',
-  'qrcode.viewfinder':                   'qr-code-scanner',
-  'arrow.up.right':                      'north-east',
-  'person.fill':                         'person',
-  'lock.fill':                           'lock',
-  'plus':                                'add',
-  'star':                                'star',
-  'wallet.pass.fill':                    'account-balance-wallet',
+  'clock': 'access-time',
+  'qrcode.viewfinder': 'qr-code-scanner',
+  'arrow.up': 'arrow-upward',
+  'arrow.up.right': 'north-east',
+  'person.fill': 'person',
+  'lock.fill': 'lock',
+  'plus': 'add',
+  'star': 'star',
+  'wallet.pass.fill': 'account-balance-wallet',
 
   // Tab bar & misc
-  'xmark':                               'close',
-  'magnifyingglass':                     'search',
-  'bell.fill':                           'notifications',
-  'gear':                                'settings',
-  'creditcard.fill':                     'credit-card',
+  'xmark': 'close',
+  'magnifyingglass': 'search',
+  'bell.fill': 'notifications',
+  'gear': 'settings',
+  'creditcard.fill': 'credit-card',
 } as IconMapping;
 
 /**

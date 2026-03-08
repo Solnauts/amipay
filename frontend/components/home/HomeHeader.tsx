@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
+  Image,
   TouchableOpacity,
   useColorScheme,
   Modal,
@@ -14,6 +15,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useWallet } from '@/context/WalletContext';
 import { Colors } from '@/constants/theme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { userAvatarStore } from '@/src/store/userAvatarStore';
+import { AVATARS } from '@/assets/avatars';
+import { AvatarPickerModal } from '@/components/home/AvatarPickerModal';
 
 export function HomeHeader() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -21,17 +25,18 @@ export function HomeHeader() {
   const { publicKey, user, isConnected, connect, disconnect } = useWallet();
 
   const [dropdownVisible, setDropdownVisible] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const walletInitial = user?.name
-    ? user.name[0].toUpperCase()
-    : publicKey
-    ? publicKey.toBase58()[0].toUpperCase()
-    : '?';
+  // Reactive avatar index — re-reads on every render so it stays in sync
+  const [avatarIndex, setAvatarIndex] = useState(() => userAvatarStore.getIndex());
+
+  const handleSelectAvatar = useCallback((index: number) => {
+    userAvatarStore.setIndex(index);
+    setAvatarIndex(index);
+  }, []);
 
   const displayName = user?.name ?? 'Main Account';
-
-  // The AmiPay ID is the user's chosen username (e.g. "crustymfs@amipay")
   const amiPayId = user?.name ? `${user.name}@amipay` : null;
 
   const walletShort = publicKey
@@ -50,11 +55,15 @@ export function HomeHeader() {
     disconnect();
   };
 
+  // Use local avatar if available, otherwise fall back to letter initial
+  const hasLocalAvatars = AVATARS.length > 0;
+  const avatarSource = hasLocalAvatars ? AVATARS[avatarIndex] : null;
+
   return (
     <>
       <ThemedView
         variant="default"
-        className="flex-row items-center justify-between px-6 pt-12 pb-4"
+        className="flex-row items-center justify-between px-6 pt-4 pb-4"
       >
         {/* ── Left: avatar + account label + chevron ── */}
         <TouchableOpacity
@@ -62,15 +71,22 @@ export function HomeHeader() {
           activeOpacity={0.75}
           onPress={() => isConnected ? setDropdownVisible(true) : connect()}
         >
-          {/* Avatar circle */}
-          <View
-            className="w-9 h-9 rounded-full items-center justify-center"
-            style={{ backgroundColor: isConnected ? colors.violet : colors.mutedForeground }}
-          >
-            <ThemedText style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
-              {walletInitial}
-            </ThemedText>
-          </View>
+          {/* Avatar */}
+          {avatarSource ? (
+            <Image
+              source={avatarSource}
+              style={styles.headerAvatar}
+            />
+          ) : (
+            <View
+              className="w-9 h-9 rounded-full items-center justify-center"
+              style={{ backgroundColor: isConnected ? colors.violet : colors.mutedForeground }}
+            >
+              <ThemedText style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+                {user?.name?.[0]?.toUpperCase() ?? publicKey?.toBase58()[0]?.toUpperCase() ?? '?'}
+              </ThemedText>
+            </View>
+          )}
 
           {/* Label + chevron */}
           <ThemedText variant="default" className="font-semibold text-base">
@@ -80,20 +96,20 @@ export function HomeHeader() {
         </TouchableOpacity>
 
         {/* ── Right: bell + scan icons ── */}
-        <ThemedView variant="default" className="flex-row gap-2">
+        <ThemedView variant="default" className="flex-row items-center gap-2">
           <TouchableOpacity
-            className="w-9 h-9 rounded-full items-center justify-center"
+            className="w-8 h-8 rounded-full items-center justify-center"
             style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
             activeOpacity={0.7}
           >
-            <IconSymbol name="clock" size={16} color={colors.textMuted} />
+            <IconSymbol name="bell.fill" size={14} color={'#000'} />
           </TouchableOpacity>
           <TouchableOpacity
-            className="w-9 h-9 rounded-full items-center justify-center"
+            className="w-8 h-8 rounded-full items-center justify-center"
             style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
             activeOpacity={0.7}
           >
-            <IconSymbol name="qrcode.viewfinder" size={16} color={colors.textMuted} />
+            <IconSymbol name="qrcode.viewfinder" size={14} color={'#000'} />
           </TouchableOpacity>
         </ThemedView>
       </ThemedView>
@@ -125,13 +141,31 @@ export function HomeHeader() {
         >
           {/* ── Avatar + name row ── */}
           <View style={styles.profileRow}>
-            <View
-              style={[styles.avatar, { backgroundColor: colors.violet }]}
+            {/* Tappable avatar — opens picker */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                if (!hasLocalAvatars) return;
+                setDropdownVisible(false);
+                setTimeout(() => setPickerVisible(true), 200);
+              }}
+              style={{ position: 'relative' }}
             >
-              <ThemedText style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-                {walletInitial}
-              </ThemedText>
-            </View>
+              {avatarSource ? (
+                <Image source={avatarSource} style={styles.avatarImg} />
+              ) : (
+                <View style={[styles.avatarFallback, { backgroundColor: colors.violet }]}>
+                  <ThemedText style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
+                    {user?.name?.[0]?.toUpperCase() ?? '?'}
+                  </ThemedText>
+                </View>
+              )}
+              {hasLocalAvatars && (
+                <View style={styles.editBadge}>
+                  <MaterialIcons name="edit" size={9} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <ThemedText variant="default" style={styles.nameText}>
                 {displayName}
@@ -188,11 +222,25 @@ export function HomeHeader() {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* ── Avatar Picker Modal ── */}
+      <AvatarPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        selectedIndex={avatarIndex}
+        onSelect={handleSelectAvatar}
+        colorScheme={colorScheme}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
   backdrop: {
     flex: 1,
   },
@@ -200,7 +248,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 88,
     left: 20,
-    width: 280,
+    width: 290,
     borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 8,
@@ -217,7 +265,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  avatar: {
+  avatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatarFallback: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -268,6 +321,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#22c55e',
     fontWeight: '600',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#8B5CF6',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
   logoutBtn: {
     flexDirection: 'row',

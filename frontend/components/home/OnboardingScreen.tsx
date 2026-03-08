@@ -26,6 +26,7 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
 import { authService } from '@/src/services/api/AuthService';
 import { useWallet } from '@/context/WalletContext';
+import { GradientButton } from '@/components/ui/GradientButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -266,28 +267,12 @@ export function OnboardingScreen() {
               )}
             </View>
 
-            <TouchableOpacity
+            <GradientButton
+              label="Continue"
               onPress={handleContinueAlias}
-              disabled={loading || handle.trim().length < 2}
-              activeOpacity={0.85}
-              style={[
-                styles.continueBtn,
-                { opacity: loading || handle.trim().length < 2 ? 0.5 : 1 },
-              ]}
-            >
-              <LinearGradient
-                colors={['#A78BFA', '#7C3AED']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.continueBtnInner}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <ThemedText style={styles.continueBtnText}>Continue</ThemedText>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+              loading={loading}
+              disabled={handle.trim().length < 2}
+            />
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -341,20 +326,12 @@ export function OnboardingScreen() {
       )}
 
       {/* Done button */}
-      <TouchableOpacity
+      <GradientButton
+        label="Done"
         onPress={isPinStep ? handleDonePin : handleDoneConfirm}
-        disabled={!pinFull || loading}
-        activeOpacity={0.85}
-        style={[styles.doneBtn, { opacity: !pinFull || loading ? 0.65 : 1 }]}
-      >
-        <View style={styles.doneBtnInner}>
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <ThemedText style={styles.doneBtnText}>Done</ThemedText>
-          )}
-        </View>
-      </TouchableOpacity>
+        loading={loading}
+        disabled={!pinFull}
+      />
 
       {/* Custom numeric keypad */}
       <NumericKeypad onPress={handleKeyPress} />
