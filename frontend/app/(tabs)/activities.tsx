@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 
 // ── Shared home components ─────────────────────────────────────────────────
@@ -77,91 +77,89 @@ export default function ActivityScreen() {
   };
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 48 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }
-        >
-          {/* Header */}
-          <HomeHeader />
-
-          {/* Balance */}
-          <BalanceSection balance={balance} connecting={false} />
-
-          {/* Tokens */}
-          <TokensSection />
-
-          {/* Divider */}
-          <ThemedView
-            style={{
-              height: 1,
-              backgroundColor: colors.border,
-              marginHorizontal: 24,
-              marginBottom: 8,
-            }}
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
+        }
+      >
+        {/* Header */}
+        <HomeHeader />
 
-          {/* Recent Transactions header */}
-          <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
-            <ThemedText type="defaultSemiBold" variant="default" className="text-base">
-              Recent Transaction
-            </ThemedText>
+        {/* Balance */}
+        <BalanceSection balance={balance} connecting={false} />
 
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => router.push('/all-transactions')}
+        {/* Tokens */}
+        <TokensSection />
+
+        {/* Divider */}
+        <ThemedView
+          style={{
+            height: 1,
+            backgroundColor: colors.border,
+            marginHorizontal: 24,
+            marginBottom: 8,
+          }}
+        />
+
+        {/* Recent Transactions header */}
+        <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
+          <ThemedText type="defaultSemiBold" variant="default" className="text-base">
+            Recent Transaction
+          </ThemedText>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/all-transactions')}
+          >
+            <ThemedText
+              className="text-sm font-semibold"
+              style={{ color: colors.primary }}
             >
-              <ThemedText
-                className="text-sm font-semibold"
-                style={{ color: colors.primary }}
-              >
-                View all
-              </ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
+              View all
+            </ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
 
-          {/* Loading */}
-          {isLoading && !refreshing && (
-            <View style={{ paddingVertical: 40 }}>
-              <ActivityIndicator color={colors.primary} />
-              <ThemedText
-                variant="muted"
-                style={{ textAlign: 'center', marginTop: 12 }}
-              >
-                Fetching latest activity...
-              </ThemedText>
-            </View>
-          )}
+        {/* Loading */}
+        {isLoading && !refreshing && (
+          <View style={{ paddingVertical: 40 }}>
+            <ActivityIndicator color={colors.primary} />
+            <ThemedText
+              variant="muted"
+              style={{ textAlign: 'center', marginTop: 12 }}
+            >
+              Fetching latest activity...
+            </ThemedText>
+          </View>
+        )}
 
-          {/* Empty state */}
-          {!isLoading && previewGroups.length === 0 && (
-            <View style={{ paddingVertical: 60, paddingHorizontal: 32 }}>
-              <ThemedText
-                variant="muted"
-                style={{ textAlign: 'center', fontSize: 13 }}
-              >
-                No recent transactions found
-              </ThemedText>
-            </View>
-          )}
+        {/* Empty state */}
+        {!isLoading && previewGroups.length === 0 && (
+          <View style={{ paddingVertical: 60, paddingHorizontal: 32 }}>
+            <ThemedText
+              variant="muted"
+              style={{ textAlign: 'center', fontSize: 13 }}
+            >
+              No recent transactions found
+            </ThemedText>
+          </View>
+        )}
 
-          {/* Transactions preview */}
-          {previewGroups.map((group) => (
-            <TransactionGroup key={group.label} group={group} />
-          ))}
-        </ScrollView>
-      </SafeAreaView>
-    </SafeAreaProvider>
+        {/* Transactions preview */}
+        {previewGroups.map((group) => (
+          <TransactionGroup key={group.label} group={group} />
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 }

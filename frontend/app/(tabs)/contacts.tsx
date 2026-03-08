@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ScrollView,
   TouchableOpacity,
@@ -74,134 +74,132 @@ export default function ContactsScreen() {
   const listContacts = searchResults ?? mappedContacts;
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-        <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-        {/* Search */}
-        <ThemedView className="flex-row items-center gap-2 px-4 py-3">
-          <ThemedView
-            className="flex-1 flex-row items-center rounded-full px-3.5 h-14 gap-2"
+      {/* Search */}
+      <ThemedView className="flex-row items-center gap-2 px-4 py-3">
+        <ThemedView
+          className="flex-1 flex-row items-center rounded-full px-3.5 h-14 gap-2"
+          style={{
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <MaterialIcons name="search" size={20} color={colors.mutedForeground} />
+
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Name or amypayid"
+            placeholderTextColor={colors.mutedForeground}
             style={{
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
+              flex: 1,
+              color: colors.textMuted,
+              fontSize: 15,
+              fontFamily: 'Poppins_400Regular',
             }}
-          >
-            <MaterialIcons name="search" size={20} color={colors.mutedForeground} />
-
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Name or amypayid"
-              placeholderTextColor={colors.mutedForeground}
-              style={{
-                flex: 1,
-                color: colors.textMuted,
-                fontSize: 15,
-                fontFamily: 'Poppins_400Regular',
-              }}
-            />
-          </ThemedView>
-
-          {/* QR */}
-          <TouchableOpacity style={styles.iconBtn}>
-            <LinearGradient colors={['#A78BFA', '#8B5CF6']} style={styles.iconBtnGrad}>
-              <MaterialIcons name="qr-code-scanner" size={20} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Add */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => setAddContactOpen(true)}
-          >
-            <LinearGradient colors={['#A78BFA', '#8B5CF6']} style={styles.iconBtnGrad}>
-              <MaterialIcons name="add" size={22} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
+          />
         </ThemedView>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 120 }}
-        >
-          {/* Recent */}
-          {!query.trim() && recentContacts.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingHorizontal: 16,
-                gap: 16,
-                paddingBottom: 12,
-              }}
-            >
-              {recentContacts.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  onPress={() => setSelected(c)}
-                  className="items-center gap-1.5"
-                >
-                  <Image source={{ uri: c.avatar }} style={styles.recentAvatar} />
-                  <ThemedText className="text-xs font-medium">{c.name}</ThemedText>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
+        {/* QR */}
+        <TouchableOpacity style={styles.iconBtn}>
+          <LinearGradient colors={['#A78BFA', '#8B5CF6']} style={styles.iconBtnGrad}>
+            <MaterialIcons name="qr-code-scanner" size={20} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
 
-          {/* Section label */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
+        {/* Add */}
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => setAddContactOpen(true)}
+        >
+          <LinearGradient colors={['#A78BFA', '#8B5CF6']} style={styles.iconBtnGrad}>
+            <MaterialIcons name="add" size={22} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </ThemedView>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
+        {/* Recent */}
+        {!query.trim() && recentContacts.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
               paddingHorizontal: 16,
-              marginBottom: 8,
-              gap: 8,
+              gap: 16,
+              paddingBottom: 12,
             }}
           >
-            <ThemedText type="defaultSemiBold" style={{ fontSize: 14 }}>
-              {searchResults ? 'Results' : 'Saved Contacts'}
-            </ThemedText>
-
-            {syncing && <ActivityIndicator size="small" color={colors.primary} />}
-          </View>
-
-          {/* Contact list */}
-          {listContacts.length === 0 ? (
-            <ThemedText variant="muted" className="px-4 text-sm mt-2">
-              {syncing ? 'Loading contacts…' : 'No contacts yet. Tap + to add one.'}
-            </ThemedText>
-          ) : (
-            listContacts.map((c) => (
-              <ContactRow
-                key={c.id}
-                contact={c}
-                onPress={(contact) => setSelected(contact)}
-              />
-            ))
-          )}
-        </ScrollView>
-
-        {/* Contact detail */}
-        {selected && (
-          <ContactDetailSheet
-            contact={selected}
-            colors={colors}
-            onClose={() => setSelected(null)}
-          />
+            {recentContacts.map((c, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => setSelected(c)}
+                className="items-center gap-1.5"
+              >
+                <Image source={{ uri: c.avatar }} style={styles.recentAvatar} />
+                <ThemedText className="text-xs font-medium">{c.name}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         )}
 
-        {/* Add contact modal */}
-        <AddContactModal
-          isOpen={addContactOpen}
-          onClose={() => setAddContactOpen(false)}
-          onAdd={addContact}
+        {/* Section label */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            gap: 8,
+          }}
+        >
+          <ThemedText type="defaultSemiBold" style={{ fontSize: 14 }}>
+            {searchResults ? 'Results' : 'Saved Contacts'}
+          </ThemedText>
+
+          {syncing && <ActivityIndicator size="small" color={colors.primary} />}
+        </View>
+
+        {/* Contact list */}
+        {listContacts.length === 0 ? (
+          <ThemedText variant="muted" className="px-4 text-sm mt-2">
+            {syncing ? 'Loading contacts…' : 'No contacts yet. Tap + to add one.'}
+          </ThemedText>
+        ) : (
+          listContacts.map((c, i) => (
+            <ContactRow
+              key={i}
+              contact={c}
+              onPress={(contact) => setSelected(contact)}
+            />
+          ))
+        )}
+      </ScrollView>
+
+      {/* Contact detail */}
+      {selected && (
+        <ContactDetailSheet
+          contact={selected}
           colors={colors}
+          onClose={() => setSelected(null)}
         />
-      </SafeAreaView>
-    </SafeAreaProvider>
+      )}
+
+      {/* Add contact modal */}
+      <AddContactModal
+        isOpen={addContactOpen}
+        onClose={() => setAddContactOpen(false)}
+        onAdd={addContact}
+        colors={colors}
+      />
+    </SafeAreaView>
   );
 }
 
