@@ -14,14 +14,16 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { Contact } from '@/components/cards/cardsData';
 import { Colors } from '@/constants/theme';
+import { getAvatarSource } from '@/src/store/contactsStore';
 import { transactionsStore } from '@/src/store/transactionsStore';
 import { TransactionRecord } from '@/src/types/api';
 
@@ -33,7 +35,7 @@ type Props = {
   onClose: () => void;
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────
 
 function formatAmount(raw: number, sent: boolean): string {
   const human = Math.abs(raw / DECIMALS).toFixed(2);
@@ -42,33 +44,37 @@ function formatAmount(raw: number, sent: boolean): string {
 
 function timeAgo(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime();
-  const mins  = Math.floor(diff / 60_000);
+  const mins = Math.floor(diff / 60_000);
   const hours = Math.floor(diff / 3_600_000);
-  const days  = Math.floor(diff / 86_400_000);
-  if (days > 0)  return days  === 1 ? '1 day ago'   : `${days} days ago`;
-  if (hours > 0) return hours === 1 ? '1 hour ago'  : `${hours} hours ago`;
-  if (mins > 0)  return mins  === 1 ? '1 min ago'   : `${mins} mins ago`;
+  const days = Math.floor(diff / 86_400_000);
+
+  if (days > 0) return days === 1 ? '1 day ago' : `${days} days ago`;
+  if (hours > 0) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  if (mins > 0) return mins === 1 ? '1 min ago' : `${mins} mins ago`;
+
   return 'Just now';
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────
 
 export function ContactDetailSheet({ contact, colors, onClose }: Props) {
+  const insets = useSafeAreaInsets();
+
   const handleSend = () => {
     onClose();
-    // Pass the saved display name (e.g. "Mom") so the chat input reads naturally.
-    // The alias is intentionally omitted here — the AI resolves recipients by name.
-    router.push({ pathname: '/pay', params: { to: contact.name } });
+    router.push({
+      pathname: '/pay',
+      params: { to: contact.name },
+    });
   };
 
-  // ── Read all raw records from local MMKV cache ────────────────────────────
+  // ── Read cached transactions ─────────────────────────────────────
   const allRaw: TransactionRecord[] = transactionsStore.getAll();
 
-  // ── Filter: only transactions that involve this contact ───────────────────
-  // A transaction belongs to this contact if:
-  //  • status === 'confirmed' AND (sender_id OR receiver_id) === recipientUserId
+  // ── Filter transactions for this contact ─────────────────────────
   const contactTxs: TransactionRecord[] = useMemo(() => {
     const uid = contact.recipientUserId;
+
     if (!uid || allRaw.length === 0) return [];
 
     return allRaw
@@ -76,87 +82,129 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
         if (tx.status !== 'confirmed') return false;
         return tx.sender_id === uid || tx.receiver_id === uid;
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() -
+          new Date(a.created_at).getTime()
+      );
   }, [contact.recipientUserId, allRaw.length]);
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  // ── Stats ────────────────────────────────────────────────────────
+
   const totalSentRaw = contactTxs
-    .filter((tx) => tx.receiver_id === contact.recipientUserId)   // you sent TO them
+    .filter((tx) => tx.receiver_id === contact.recipientUserId)
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   const totalSent = (totalSentRaw / DECIMALS).toFixed(2);
+
   const lastTx = contactTxs[0];
   const lastTxLabel = lastTx ? timeAgo(lastTx.created_at) : '—';
+
   const hasHistory = contactTxs.length > 0;
 
   return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
-      {/* Frosted backdrop — tap to dismiss */}
+    <Modal
+      transparent
+      visible
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      {/* Backdrop */}
       <TouchableOpacity
         activeOpacity={1}
         onPress={onClose}
-        style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+        style={[
+          StyleSheet.absoluteFillObject,
+          { backgroundColor: 'rgba(0,0,0,0.45)' },
+        ]}
       />
 
-      {/* Sheet anchored to bottom */}
+      {/* Sheet */}
       <View style={styles.sheetWrapper} pointerEvents="box-none">
-        <ThemedView variant="surface" style={styles.sheet}>
-          {/* Handle bar */}
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
+        <ThemedView
+          variant="surface"
+          style={[
+            styles.sheet,
+            { paddingBottom: (insets.bottom || 24) + 100 } // Ensure Send button is visible
+          ]}
+        >
 
-          {/* Avatar + Name + Close */}
+          {/* Handle */}
+          <View
+            style={[styles.handle, { backgroundColor: colors.border }]}
+          />
+
+          {/* Header */}
           <View className="flex-row items-center gap-3 mb-5">
-            <Image source={{ uri: contact.avatar }} style={styles.avatar} />
+            <Image source={getAvatarSource(contact.avatar)} style={styles.avatar} />
+
             <View className="flex-1">
               <ThemedText type="defaultSemiBold" className="text-base">
                 {contact.name}
               </ThemedText>
+
               <ThemedText variant="muted" className="text-xs mt-0.5">
                 {contact.username}
               </ThemedText>
             </View>
+
             <TouchableOpacity
               onPress={onClose}
               activeOpacity={0.7}
               className="w-8 h-8 rounded-full items-center justify-center"
-              style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+              style={{
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
             >
               <MaterialIcons name="close" size={16} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          {/* Send button — violet gradient */}
-          <TouchableOpacity onPress={handleSend} activeOpacity={0.88} style={styles.sendBtn}>
-            <LinearGradient
-              colors={['#A78BFA', '#8B5CF6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.sendGradient}
-            >
-              <MaterialIcons name="send" size={18} color="#ffffff" />
-              <ThemedText style={styles.sendBtnText}>Send</ThemedText>
-            </LinearGradient>
-          </TouchableOpacity>
+          {/* Send Button */}
+          <View style={{ marginBottom: 20 }}>
+            <ActionButton
+              label="Send"
+              onPress={handleSend}
+              icon="paperplane.fill"
+            />
+          </View>
 
-          {/* Total Sent summary card */}
+          {/* Stats Card */}
           <ThemedView
             variant="elevated"
             className="rounded-2xl p-3.5 mb-5"
             style={{ borderWidth: 1, borderColor: colors.border }}
           >
             <View className="flex-row justify-between mb-1">
-              <ThemedText type="defaultSemiBold" className="text-sm">Total Sent</ThemedText>
-              <ThemedText style={{ fontWeight: '700', fontSize: 14, color: colors.primary }}>
+              <ThemedText type="defaultSemiBold" className="text-sm">
+                Total Sent
+              </ThemedText>
+
+              <ThemedText
+                style={{
+                  fontWeight: '700',
+                  fontSize: 14,
+                  color: colors.primary,
+                }}
+              >
                 {hasHistory ? `$${totalSent}` : '—'}
               </ThemedText>
             </View>
+
             <View className="flex-row justify-between">
-              <ThemedText variant="muted" className="text-xs">Last Transaction</ThemedText>
-              <ThemedText variant="muted" className="text-xs">{lastTxLabel}</ThemedText>
+              <ThemedText variant="muted" className="text-xs">
+                Last Transaction
+              </ThemedText>
+
+              <ThemedText variant="muted" className="text-xs">
+                {lastTxLabel}
+              </ThemedText>
             </View>
           </ThemedView>
 
-          {/* Transaction History */}
+          {/* History */}
           <ThemedText type="defaultSemiBold" className="text-sm mb-3">
             Transaction History
           </ThemedText>
@@ -170,19 +218,33 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
               <ThemedView
                 variant="elevated"
                 className="rounded-2xl p-4 items-center"
-                style={{ borderWidth: 1, borderColor: colors.border }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
               >
-                <MaterialIcons name="receipt-long" size={28} color={colors.mutedForeground} />
-                <ThemedText variant="muted" className="text-xs mt-2 text-center">
+                <MaterialIcons
+                  name="receipt-long"
+                  size={28}
+                  color={colors.mutedForeground}
+                />
+
+                <ThemedText
+                  variant="muted"
+                  className="text-xs mt-2 text-center"
+                >
                   {contact.recipientUserId
                     ? 'No transactions with this contact yet.'
-                    : 'Transaction history unavailable — contact was not synced from the server yet.'}
+                    : 'Transaction history unavailable.'}
                 </ThemedText>
               </ThemedView>
             ) : (
               contactTxs.map((tx, i) => {
-                const isSent = tx.receiver_id === contact.recipientUserId;
+                const isSent =
+                  tx.receiver_id === contact.recipientUserId;
+
                 const amtStr = formatAmount(tx.amount, isSent);
+
                 return (
                   <ThemedView
                     key={tx.id ?? i}
@@ -191,28 +253,45 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
                   >
                     <View
                       className="w-10 h-10 rounded-full items-center justify-center"
-                      style={{ backgroundColor: isSent ? '#ede9fe' : '#dcfce7' }}
+                      style={{
+                        backgroundColor: isSent
+                          ? '#ede9fe'
+                          : '#dcfce7',
+                      }}
                     >
                       <MaterialIcons
                         name="send"
                         size={16}
                         color={isSent ? '#8b5cf6' : '#16a34a'}
-                        style={{ transform: [{ rotate: isSent ? '0deg' : '230deg' }] }}
+                        style={{
+                          transform: [
+                            { rotate: isSent ? '0deg' : '230deg' },
+                          ],
+                        }}
                       />
                     </View>
+
                     <View className="flex-1">
-                      <ThemedText type="defaultSemiBold" className="text-sm">
+                      <ThemedText
+                        type="defaultSemiBold"
+                        className="text-sm"
+                      >
                         {isSent ? 'Sent' : 'Received'}
                       </ThemedText>
-                      <ThemedText variant="muted" className="text-xs mt-0.5">
+
+                      <ThemedText
+                        variant="muted"
+                        className="text-xs mt-0.5"
+                      >
                         {timeAgo(tx.created_at)}
                       </ThemedText>
                     </View>
+
                     <ThemedText
                       style={{
                         fontWeight: '600',
                         fontSize: 13,
-                        color: isSent ? colors.text : '#16a34a',
+                        color: isSent ? colors.error : '#16a34a',
                       }}
                     >
                       {amtStr}
@@ -233,6 +312,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
+
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -240,6 +320,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 12,
   },
+
   handle: {
     alignSelf: 'center',
     width: 40,
@@ -247,40 +328,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: 20,
   },
+
   avatar: {
     width: 52,
     height: 52,
     borderRadius: 26,
-  },
-  sendBtn: {
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-    marginBottom: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  sendGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.50)',
-    borderLeftColor:   'transparent',
-    borderRightColor:  'transparent',
-    borderBottomColor: 'transparent',
-  },
-  sendBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    letterSpacing: 0.2,
   },
 });

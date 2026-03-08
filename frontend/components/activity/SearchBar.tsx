@@ -13,7 +13,7 @@ type Props = {
   placeholder?: string;
 };
 
-export function SearchBar({ value, onChangeText, placeholder = 'Search transactions...' }: Props) {
+export function SearchBar({ value, onChangeText, placeholder = 'Search transaction...' }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
@@ -21,8 +21,8 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search transacti
     <ThemedView className="mx-6 mb-4">
       <ThemedView
         variant="surface"
-        className="flex-row items-center rounded-2xl px-4 gap-3"
-        style={{ height: 48, borderWidth: 1, borderColor: colors.border }}
+        className="flex-row items-center rounded-full px-4 gap-3"
+        style={{ height: 52, borderWidth: 1, borderColor: colors.border }}
       >
         <MaterialIcons name="search" size={20} color={colors.mutedForeground} />
         <TextInput

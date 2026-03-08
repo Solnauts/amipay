@@ -32,23 +32,9 @@ export function PeopleSection() {
   const { contacts: allStored } = useContacts();
   const people = allStored.map(toLegacyContact);
 
-  // Split people into rows of COLUMNS, making room for the "More" button in the last row
-  const rows: (Contact | null)[][] = [];
-  const limit = 7; // Show 7 contacts + 1 "More" button
+  // Show up to 7 contacts + 1 "More" button
+  const limit = 7;
   const displayPeople = people.slice(0, limit);
-
-  for (let i = 0; i < displayPeople.length; i += COLUMNS) {
-    rows.push(displayPeople.slice(i, i + COLUMNS));
-  }
-
-  // Handle row filling for the last row (where the "More" button should be)
-  if (rows.length === 0) {
-    rows.push([null, null, null]); // Just an empty slots row for the button
-  }
-  const lastRow = rows[rows.length - 1];
-  while (lastRow.length < COLUMNS - 1) {
-    lastRow.push(null);
-  }
 
   return (
     <ThemedView className="px-6 mb-6">
@@ -56,64 +42,71 @@ export function PeopleSection() {
         People
       </ThemedText>
 
-      {rows.map((row, rowIdx) => (
-        <ThemedView key={rowIdx} className="flex-row justify-between mb-3">
-          {row.map((contact, colIdx) =>
-            contact ? (
-              <ContactItem
-                key={`${rowIdx}-${colIdx}`}
-                contact={contact}
-                size="md"
-                onPress={() => router.push(`/(tabs)/contacts?contactId=${contact.id}` as any)}
-              />
-            ) : (
-              <ThemedView key={`empty-${rowIdx}-${colIdx}`} style={{ width: 64 }} />
-            )
-          )}
-
-          {/* "More" button — only on the last row */}
-          {rowIdx === rows.length - 1 && (
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/contacts' as any)}
-              activeOpacity={0.75}
-              className="items-center gap-1.5"
-              style={{ width: 64 }}
-            >
-              {/* Outer container — must NOT clip so the absolute SVG is visible */}
-              <View style={{ width: 56, height: 56, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
-
-                {/* Dashed ring drawn by SVG — sits below the inner circle */}
-                <Svg width={56} height={56} style={{ position: 'absolute', top: 0, left: 0 }}>
-                  <Circle
-                    cx={28}
-                    cy={28}
-                    r={26}
-                    stroke={colors.textMuted}
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    fill="none"
-                  />
-                </Svg>
-
-                {/* Inner circle — NO solid border so the SVG dashes show through */}
-                <ThemedView
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Feather name="chevron-down" size={18} color={colors.textMuted} />
-                </ThemedView>
-              </View>
-
-              <ThemedText variant="muted" className="text-xs">More</ThemedText>
-            </TouchableOpacity>
-          )}
+      {people.length === 0 ? (
+        <ThemedView
+          className="items-center py-6 rounded-2xl"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Feather name="users" size={28} color={colors.textMuted} />
+          <ThemedText variant="muted" style={{ marginTop: 8, fontSize: 13 }}>
+            No contacts yet
+          </ThemedText>
+          <ThemedText variant="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            Add contacts to see them here
+          </ThemedText>
         </ThemedView>
-      ))}
+      ) : (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+          {displayPeople.map((contact, idx) => (
+            <ContactItem
+              key={contact.id}
+              contact={contact}
+              size="md"
+              onPress={() => router.push(`/(tabs)/contacts?contactId=${contact.id}` as any)}
+            />
+          ))}
+
+          {/* "More" button */}
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/contacts' as any)}
+            activeOpacity={0.75}
+            className="items-center gap-1.5"
+            style={{ width: 72 }}
+          >
+            {/* Outer container — must NOT clip so the absolute SVG is visible */}
+            <View style={{ width: 56, height: 56, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+
+              {/* Dashed ring drawn by SVG — sits below the inner circle */}
+              <Svg width={56} height={56} style={{ position: 'absolute', top: 0, left: 0 }}>
+                <Circle
+                  cx={28}
+                  cy={28}
+                  r={26}
+                  stroke={colors.textMuted}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  fill="none"
+                />
+              </Svg>
+
+              {/* Inner circle — NO solid border so the SVG dashes show through */}
+              <ThemedView
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Feather name="chevron-down" size={18} color={colors.textMuted} />
+              </ThemedView>
+            </View>
+
+            <ThemedText variant="muted" className="text-xs">More</ThemedText>
+          </TouchableOpacity>
+        </View>
+      )}
     </ThemedView>
   );
 }

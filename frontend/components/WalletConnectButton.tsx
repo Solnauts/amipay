@@ -1,8 +1,9 @@
-import { ButtonComponent } from '@/components/ui/ButtonComponent';
+import ButtonComponent from '@/components/ui/ButtonComponent';
 import { useWallet } from '@/context/WalletContext';
 
 export default function WalletConnectButton() {
-  const { publicKey, isConnected, connecting, connect, disconnect } = useWallet();
+  const { publicKey, isConnected, authStep, connect, disconnect } = useWallet();
+  const connecting = authStep === 'connecting' || authStep === 'logging_in';
 
   const displayKey = publicKey
     ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`

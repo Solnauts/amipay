@@ -85,7 +85,15 @@ function mapToActivity(tr: TransactionRecord, userId: number): ActivityTransacti
   };
 }
 
-export const useTransactions = () => {
+export interface UseTransactionsReturn {
+  transactions: ActivityTransaction[];
+  rawRecords: TransactionRecord[];
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export const useTransactions = (): UseTransactionsReturn => {
   const { user } = useWallet();
   const userId = user?.id ?? 0;
 

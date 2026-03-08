@@ -8,6 +8,8 @@
 // Key: 'contacts_v1'  (bump version if the shape changes)
 
 import { createMMKV } from 'react-native-mmkv';
+import { AVATARS } from '@/assets/avatars';
+import { ImageSourcePropType } from 'react-native';
 
 // ─── Storage instance ─────────────────────────────────────────────────────────
 
@@ -21,15 +23,43 @@ export type StoredContact = {
   recipientUserId: number;
   name: string;           // Display / label name  (set by the user who added)
   alias: string;          // e.g. "Ridhi@amypay"
-  avatar: string;         // Deterministic dicebear URL (generated from alias)
+  avatar: string;         // 'local:N' for bundled avatars, or a dicebear URL as fallback
   savedAt: number;        // Unix ms — used to sort newest-first
   isFavorite?: boolean;   // Local-only flag for homescreen pinning
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function avatarUrl(seed: string): string {
-  return `https://api.dicebear.com/7.x/adventurer/png?seed=${encodeURIComponent(seed)}&size=128`;
+/**
+ * Returns a local avatar reference ("local:N") if avatars are available,
+ * otherwise falls back to DiceBear glass API.
+ */
+function avatarRef(seed: string): string {
+  if (AVATARS.length > 0) {
+    // Deterministic hash to pick from local list
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    return `local:${hash % AVATARS.length}`;
+  }
+  // Fallback: DiceBear glass style
+  return `https://api.dicebear.com/7.x/glass/png?seed=${encodeURIComponent(seed)}&size=128`;
+}
+
+/**
+ * Resolves an avatar string to an ImageSource.
+ * - "local:N"  → returns the Nth bundled avatar (require(...))
+ * - URL string → returns { uri: string }
+ */
+export function getAvatarSource(avatar: string): ImageSourcePropType {
+  if (avatar.startsWith('local:')) {
+    const idx = parseInt(avatar.split(':')[1], 10);
+    if (idx >= 0 && idx < AVATARS.length) {
+      return AVATARS[idx];
+    }
+  }
+  return { uri: avatar };
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -57,7 +87,7 @@ export const contactsStore = {
   add(contact: Omit<StoredContact, 'avatar' | 'savedAt'>): StoredContact {
     const full: StoredContact = {
       ...contact,
-      avatar: avatarUrl(contact.alias),
+      avatar: avatarRef(contact.alias),
       savedAt: Date.now(),
     };
     const current = this.getAll();
