@@ -56,7 +56,9 @@ function timeAgo(isoDate: string): string {
 export function ContactDetailSheet({ contact, colors, onClose }: Props) {
   const handleSend = () => {
     onClose();
-    router.push({ pathname: '/pay', params: { to: contact.username } });
+    // Pass the saved display name (e.g. "Mom") so the chat input reads naturally.
+    // The alias is intentionally omitted here — the AI resolves recipients by name.
+    router.push({ pathname: '/pay', params: { to: contact.name } });
   };
 
   // ── Read all raw records from local MMKV cache ────────────────────────────
