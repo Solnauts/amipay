@@ -1,11 +1,7 @@
 use crate::errors::SolanaError;
 use anchor_client::{
     Client, Cluster,
-    solana_sdk::{
-        signature::{Keypair, read_keypair_file},
-        signer::Signer,
-        system_program,
-    },
+    solana_sdk::{signature::Keypair, signer::Signer, system_program},
 };
 use contract::{accounts, instruction};
 use dotenv::dotenv;
@@ -36,10 +32,16 @@ fn load_env(var_name: &str) -> Result<String, SolanaError> {
     })
 }
 
-fn load_keypair(path: &str) -> Result<Keypair, SolanaError> {
-    read_keypair_file(path).map_err(|e| SolanaError::KeypairLoadFailed {
-        path: path.to_string(),
-        reason: e.to_string(),
+fn load_keypair_from_env() -> Result<Keypair, SolanaError> {
+    let keypair_str = load_env("SOLANA_KEYPAIR_PATH")?;
+    let bytes: Vec<u8> =
+        serde_json::from_str(&keypair_str).map_err(|e| SolanaError::KeypairLoadFailed {
+            path: "SOLANA_KEYPAIR_PATH (env)".to_string(),
+            reason: format!("failed to parse keypair JSON array: {}", e),
+        })?;
+    Keypair::from_bytes(&bytes).map_err(|e| SolanaError::KeypairLoadFailed {
+        path: "SOLANA_KEYPAIR_PATH (env)".to_string(),
+        reason: format!("invalid keypair bytes: {}", e),
     })
 }
 
@@ -65,12 +67,11 @@ fn parse_solana_pubkey(input: &str) -> Result<Pubkey, SolanaError> {
 pub async fn create_user_ata(unique_id: String) -> Result<RpcResponse, SolanaError> {
     dotenv().ok();
 
-    let keypair_path = load_env("SOLANA_KEYPAIR_PATH")?;
     let program_id_str = load_env("SOLANA_PROGRAM_ID")?;
     let usdc_mint_str = load_env("SOLANA_USDC_MINT")?;
     let user_usdc_ata_seed_str = load_env("SOLANA_SEED_USER_USDC_ATA")?;
 
-    let payer = load_keypair(&keypair_path)?;
+    let payer = load_keypair_from_env()?;
     let payer_pubkey = payer.pubkey();
     let payer_ref: &'static Keypair = Box::leak(Box::new(payer));
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
@@ -154,13 +155,12 @@ pub async fn transfer_to_vault(
 ) -> Result<RpcResponse, SolanaError> {
     dotenv().ok();
 
-    let keypair_path = load_env("SOLANA_KEYPAIR_PATH")?;
     let program_id_str = load_env("SOLANA_PROGRAM_ID")?;
     let usdc_mint_str = load_env("SOLANA_USDC_MINT")?;
     let user_usdc_ata_seed_str = load_env("SOLANA_SEED_USER_USDC_ATA")?;
     let main_state_seed_str = load_env("SOLANA_SEED_MAIN_STATE")?;
 
-    let payer = load_keypair(&keypair_path)?;
+    let payer = load_keypair_from_env()?;
     let payer_pubkey = payer.pubkey();
     let payer_ref: &'static Keypair = Box::leak(Box::new(payer));
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
@@ -261,13 +261,12 @@ async fn get_main_state_accounts()
     let rpc_url = load_env("SOLANA_RPC_URL")?;
     let usdc_mint_str = load_env("SOLANA_USDC_MINT")?;
     let program_id_str = load_env("SOLANA_PROGRAM_ID")?;
-    let keypair_path = load_env("SOLANA_KEYPAIR_PATH")?;
     let main_state_seed = load_env("SOLANA_SEED_MAIN_STATE")?;
 
     let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
 
     let usdc_mint = parse_solana_pubkey(&usdc_mint_str)?;
-    let signer = load_keypair(&keypair_path)?.pubkey();
+    let signer = load_keypair_from_env()?.pubkey();
     let account_seed = [
         main_state_seed.as_bytes(),
         usdc_mint.as_ref(),
@@ -305,13 +304,12 @@ pub async fn claim_amount(
 ) -> Result<RpcResponse, SolanaError> {
     dotenv().ok();
 
-    let keypair_path = load_env("SOLANA_KEYPAIR_PATH")?;
     let program_id_str = load_env("SOLANA_PROGRAM_ID")?;
     let usdc_mint_str = load_env("SOLANA_USDC_MINT")?;
     let user_usdc_ata_seed_str = load_env("SOLANA_SEED_USER_USDC_ATA")?;
     let main_state_seed_str = load_env("SOLANA_SEED_MAIN_STATE")?;
 
-    let payer = load_keypair(&keypair_path)?;
+    let payer = load_keypair_from_env()?;
     let payer_pubkey = payer.pubkey();
     let payer_ref: &'static Keypair = Box::leak(Box::new(payer));
     let client = Client::new(Cluster::Devnet, Rc::new(payer_ref));
