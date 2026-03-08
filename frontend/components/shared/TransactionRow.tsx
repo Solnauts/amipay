@@ -14,6 +14,7 @@ import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Colors } from '@/constants/theme';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type Props = {
     /** Contact/sender name */
@@ -44,6 +45,10 @@ type Props = {
      * Used by wallet/TransactionCard. Defaults to false.
      */
     showBadge?: boolean;
+    /**
+     * When true, replaces the Avatar with a Sent/Received icon (MaterialIcons).
+     */
+    useIconInsteadOfAvatar?: boolean;
 };
 
 export function TransactionRow({
@@ -56,13 +61,14 @@ export function TransactionRow({
     subtitle,
     time,
     showBadge = false,
+    useIconInsteadOfAvatar = false,
 }: Props) {
     const colorScheme = useColorScheme() ?? 'light';
     const colors = Colors[colorScheme];
 
     const isSent = type === 'sent';
-    // Figma: received = green, sent = dark text (not red)
-    const amountColor = isSent ? colors.text : colors.success;
+    // Figma: received = green, sent = red
+    const amountColor = isSent ? colors.error : colors.success;
 
     // Badge props only passed when showBadge is on
     const badgeIcon = showBadge
@@ -74,13 +80,29 @@ export function TransactionRow({
 
     const subtitleText = subtitle ?? (time ? time : undefined);
 
-    return (
-        <ThemedView
-            variant={showBadge ? 'default' : 'surface'}
-            className={`flex-row items-center ${showBadge ? 'px-6 py-3' : 'rounded-2xl p-4'}`}
-            style={showBadge ? undefined : { borderWidth: 1, borderColor: colors.border }}
-        >
-            {/* Avatar */}
+    const renderLeading = () => {
+        if (useIconInsteadOfAvatar) {
+            return (
+                <ThemedView
+                    variant="default"
+                    className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                    style={{
+                        backgroundColor: isSent ? '#ede9fe' : '#dcfce7',
+                    }}
+                >
+                    <MaterialIcons
+                        name="send"
+                        size={16}
+                        color={isSent ? '#8b5cf6' : '#16a34a'}
+                        style={{
+                            transform: [{ rotate: isSent ? '0deg' : '230deg' }],
+                        }}
+                    />
+                </ThemedView>
+            );
+        }
+
+        return (
             <ThemedView
                 variant={showBadge ? 'default' : 'surface'}
                 className="mr-3"
@@ -94,6 +116,17 @@ export function TransactionRow({
                     badgeColor={badgeColor}
                 />
             </ThemedView>
+        );
+    };
+
+    return (
+        <ThemedView
+            variant={showBadge ? 'default' : 'surface'}
+            className={`flex-row items-center ${showBadge ? 'px-0 py-3' : 'rounded-2xl p-4'}`}
+            style={showBadge ? undefined : { borderWidth: 1, borderColor: colors.border }}
+        >
+            {/* Leading: Avatar or Icon */}
+            {renderLeading()}
 
             {/* Name + subtitle */}
             <ThemedView

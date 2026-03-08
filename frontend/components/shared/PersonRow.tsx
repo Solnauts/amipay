@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { Avatar } from '@/components/ui/Avatar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
+import { getAvatarSource } from '@/src/store/contactsStore';
 
 type Props = {
     name: string;
@@ -124,7 +125,7 @@ export function PersonRow({
             {/* Avatar — image if URI provided, initials otherwise */}
             {avatarUri ? (
                 <Image
-                    source={{ uri: avatarUri }}
+                    source={getAvatarSource(avatarUri)}
                     style={{ width: 48, height: 48, borderRadius: 24, marginRight: 12 }}
                 />
             ) : (

@@ -3,13 +3,14 @@
 
 import React from 'react';
 import {
-  SafeAreaView,
   View,
   TouchableOpacity,
   StyleSheet,
   useColorScheme,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -34,47 +35,40 @@ export function WalletConnectScreen({ onConnect, authStep }: Props) {
 
       {/* ── Top branding area ── */}
       <ThemedView variant="default" style={styles.topSection}>
-        {/* Logo / brand mark */}
-        <View style={styles.logoRing}>
-          <LinearGradient
-            colors={['#A78BFA', '#8B5CF6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.logoGradient}
-          >
-            <MaterialIcons name="account-balance-wallet" size={40} color="#fff" />
-          </LinearGradient>
-        </View>
+        {/* Wallet Image */}
+        <Image
+          source={require('@/assets/images/wallet.png')}
+          style={styles.walletImage}
+          resizeMode="contain"
+        />
 
-        {/* App name */}
+        {/* App Welcome */}
         <ThemedText
           style={{
-            fontSize: 32,
+            fontSize: 42,
             fontWeight: '800',
             fontFamily: 'Poppins_700Bold',
-            marginTop: 24,
-            letterSpacing: -0.5,
+            marginTop: 40,
+            textAlign: 'center',
+            lineHeight: 50,
           }}
         >
-          AmyPay
-        </ThemedText>
-        <ThemedText variant="muted" style={{ fontSize: 15, marginTop: 8, textAlign: 'center', lineHeight: 22 }}>
-          Your Solana-powered payment wallet.{'\n'}Connect to get started.
+          Welcome to{'\n'}Amipay
         </ThemedText>
 
-        {/* Feature pills */}
-        <View style={styles.pillRow}>
-          {['Instant Transfers', 'Secure', 'Devnet'].map((label) => (
-            <View
-              key={label}
-              style={[styles.pill, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <ThemedText variant="muted" style={{ fontSize: 12, fontFamily: 'Poppins_500Medium' }}>
-                {label}
-              </ThemedText>
-            </View>
-          ))}
-        </View>
+        <ThemedText
+          variant="muted"
+          style={{
+            fontSize: 16,
+            marginTop: 16,
+            textAlign: 'center',
+            lineHeight: 24,
+            paddingHorizontal: 20,
+            fontFamily: 'Poppins_500Medium',
+          }}
+        >
+          Link your wallet to unlock AI-powered cross-border transfers.
+        </ThemedText>
       </ThemedView>
 
       {/* ── Bottom CTA ── */}
@@ -94,13 +88,11 @@ export function WalletConnectScreen({ onConnect, authStep }: Props) {
           >
             {authStep !== 'idle' ? (
               <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <MaterialIcons name="account-balance-wallet" size={20} color="#fff" />
-            )}
+            ) : null}
             <ThemedText style={styles.connectBtnText}>
               {authStep === 'connecting' ? 'Opening Wallet…'
                 : authStep === 'logging_in' ? 'Verifying…'
-                : 'Connect Wallet'}
+                  : 'Connect Wallet'}
             </ThemedText>
           </LinearGradient>
         </TouchableOpacity>
@@ -118,34 +110,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
   },
-  logoRing: {
-    borderRadius: 40,
-    overflow: 'hidden',
-    // Outer glow effect via shadow
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  logoGradient: {
-    width: 80,
-    height: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 28,
-  },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
+  walletImage: {
+    width: 320,
+    height: 320,
+    marginTop: -20,
   },
   bottomSection: {
     paddingHorizontal: 24,
@@ -167,13 +137,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 18,
     gap: 10,
     // Inset top highlight — matches Deposit/Withdraw button
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.50)',
-    borderLeftColor:   'transparent',
-    borderRightColor:  'transparent',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
     borderBottomColor: 'transparent',
   },
   connectBtnText: {

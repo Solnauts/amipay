@@ -2,8 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 // Home screen components
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { BalanceSection } from '@/components/home/BalanceSection';
@@ -12,6 +11,9 @@ import { FavouriteSection } from '@/components/home/FavouriteSection';
 import { AIPayBanner } from '@/components/home/AIPayBanner';
 import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
 import { OnboardingScreen } from '@/components/home/OnboardingScreen';
+import { SplashScreen as AppSplashScreen } from '@/components/ui/SplashScreen';
+import { IntroScreen } from '@/components/ui/IntroScreen';
+import { appPrefsStore } from '@/src/store/appPrefsStore';
 
 import { useBalance } from '@/hooks/useBalance';
 
@@ -20,6 +22,21 @@ export default function HomeScreen() {
   const { balance, refetch } = useBalance();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const [showIntro, setShowIntro] = useState(!appPrefsStore.hasSeenIntro());
+
+  // Show splash for 2 seconds on first load
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSplashVisible(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleFinishIntro = () => {
+    appPrefsStore.setSeenIntro(true);
+    setShowIntro(false);
+  };
 
   // Re-fetch when screen gains focus
   useFocusEffect(
@@ -35,6 +52,16 @@ export default function HomeScreen() {
     await refetch();
     setRefreshing(false);
   };
+
+  // ── Splash Screen (Always first logic) ──────────────
+  if (isSplashVisible) {
+    return <AppSplashScreen />;
+  }
+
+  // ── Gate 0: Intro Flow ─────────────────────────────────────
+  if (showIntro) {
+    return <IntroScreen onFinish={handleFinishIntro} />;
+  }
 
   // ── Gate 1: Not connected ───────────────────────────────
   if (authStep === 'idle') {
@@ -53,31 +80,28 @@ export default function HomeScreen() {
 
   // ── Home screen ─────────────────────────────────────────
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#8B5CF6"
-            colors={['#8B5CF6']}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <HomeHeader />
-
-        <BalanceSection
-          balance={balance}
-          connecting={false}
-        />
-
-        <PeopleSection />
-        <FavouriteSection />
-        <AIPayBanner />
-      </ScrollView>
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#8B5CF6"
+              colors={['#8B5CF6']}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <HomeHeader />
+          <BalanceSection balance={balance} connecting={false} />
+          <PeopleSection />
+          <FavouriteSection />
+          <AIPayBanner />
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

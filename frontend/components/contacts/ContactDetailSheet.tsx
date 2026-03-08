@@ -14,14 +14,16 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { GradientButton } from '@/components/ui/GradientButton';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { Contact } from '@/components/cards/cardsData';
 import { Colors } from '@/constants/theme';
+import { getAvatarSource } from '@/src/store/contactsStore';
 import { transactionsStore } from '@/src/store/transactionsStore';
 import { TransactionRecord } from '@/src/types/api';
 
@@ -42,13 +44,13 @@ function formatAmount(raw: number, sent: boolean): string {
 
 function timeAgo(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime();
-  const mins  = Math.floor(diff / 60_000);
+  const mins = Math.floor(diff / 60_000);
   const hours = Math.floor(diff / 3_600_000);
-  const days  = Math.floor(diff / 86_400_000);
+  const days = Math.floor(diff / 86_400_000);
 
-  if (days > 0)  return days  === 1 ? '1 day ago'  : `${days} days ago`;
+  if (days > 0) return days === 1 ? '1 day ago' : `${days} days ago`;
   if (hours > 0) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
-  if (mins > 0)  return mins  === 1 ? '1 min ago'  : `${mins} mins ago`;
+  if (mins > 0) return mins === 1 ? '1 min ago' : `${mins} mins ago`;
 
   return 'Just now';
 }
@@ -56,6 +58,7 @@ function timeAgo(isoDate: string): string {
 // ── Component ──────────────────────────────────────────────────────
 
 export function ContactDetailSheet({ contact, colors, onClose }: Props) {
+  const insets = useSafeAreaInsets();
 
   const handleSend = () => {
     onClose();
@@ -118,7 +121,13 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
 
       {/* Sheet */}
       <View style={styles.sheetWrapper} pointerEvents="box-none">
-        <ThemedView variant="surface" style={styles.sheet}>
+        <ThemedView
+          variant="surface"
+          style={[
+            styles.sheet,
+            { paddingBottom: (insets.bottom || 24) + 100 } // Ensure Send button is visible
+          ]}
+        >
 
           {/* Handle */}
           <View
@@ -127,7 +136,7 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
 
           {/* Header */}
           <View className="flex-row items-center gap-3 mb-5">
-            <Image source={{ uri: contact.avatar }} style={styles.avatar} />
+            <Image source={getAvatarSource(contact.avatar)} style={styles.avatar} />
 
             <View className="flex-1">
               <ThemedText type="defaultSemiBold" className="text-base">
@@ -154,12 +163,11 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
           </View>
 
           {/* Send Button */}
-          <View style={{ flexDirection: 'row', marginBottom: 20 }}>
-            <GradientButton
+          <View style={{ marginBottom: 20 }}>
+            <ActionButton
               label="Send"
               onPress={handleSend}
               icon="paperplane.fill"
-              variant="primary"
             />
           </View>
 
@@ -283,7 +291,7 @@ export function ContactDetailSheet({ contact, colors, onClose }: Props) {
                       style={{
                         fontWeight: '600',
                         fontSize: 13,
-                        color: isSent ? colors.text : '#16a34a',
+                        color: isSent ? colors.error : '#16a34a',
                       }}
                     >
                       {amtStr}

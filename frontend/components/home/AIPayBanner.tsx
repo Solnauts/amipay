@@ -14,11 +14,22 @@ export function AIPayBanner({ onLearnMore }: { onLearnMore?: () => void }) {
 
         {/* Text content */}
         <View style={styles.content}>
-          <Text style={styles.title}>Try AI Pay</Text>
+          <Text style={styles.title}>Get Free Test USDC</Text>
           <Text style={styles.subtitle}>
-            Don't want to type addresses? Just tell Amipay what to do. Try saying "Send $50 to Mom."
+            Fund your devnet wallet.
+            Airdrop test USDC to start using AI Pay.
           </Text>
-          <TouchableOpacity onPress={onLearnMore} activeOpacity={0.8} style={styles.learnMoreBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              if (onLearnMore) onLearnMore();
+              else {
+                const { router } = require('expo-router');
+                router.push('/pay');
+              }
+            }}
+            activeOpacity={0.8}
+            style={styles.learnMoreBtn}
+          >
             <Text style={styles.learnMoreText}>Learn More</Text>
           </TouchableOpacity>
         </View>
@@ -88,11 +99,10 @@ const styles = StyleSheet.create({
   },
 
   title: {
-  
     color: '#000000',
     fontSize: 16,
     fontWeight: '800',
-    fontFamily: 'Poppins',
+    fontFamily: 'Poppins_700Bold',
     lineHeight: 22,
     marginBottom: 4,
   },
@@ -102,7 +112,7 @@ const styles = StyleSheet.create({
     color: '#577353',
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'Poppins',
+    fontFamily: 'Poppins_600SemiBold',
     lineHeight: 20,
     marginBottom: 8,
   },
@@ -119,7 +129,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 12,
     fontWeight: '800',
-    fontFamily: 'Poppins',
+    fontFamily: 'Poppins_700Bold',
     letterSpacing: -0.2,
   },
 

@@ -3,6 +3,7 @@ import { TouchableOpacity, Image } from 'react-native';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Avatar } from '@/components/ui/Avatar';
 import type { Contact } from './homeData';
+import { getAvatarSource } from '@/src/store/contactsStore';
 
 type Props = {
   contact: Contact;
@@ -27,7 +28,7 @@ export function ContactItem({ contact, size = 'md', onPress }: Props) {
     >
       {contact.imageUri ? (
         <Image
-          source={{ uri: contact.imageUri }}
+          source={getAvatarSource(contact.imageUri)}
           style={{ width: dim, height: dim, borderRadius: dim / 2 }}
           resizeMode="cover"
         />

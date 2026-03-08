@@ -6,7 +6,6 @@ import "react-native-reanimated";
 import { useColorScheme } from "react-native";
 import { Colors } from "@/constants/theme";
 import { WalletProvider } from "@/context/WalletContext";
-import { ThemedView } from "@/components/ui/ThemedView";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   useFonts,
@@ -46,17 +45,15 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <WalletProvider>
-        <ThemedView style={{ flex: 1, backgroundColor: themeColors.background }}>
-          <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              <Stack.Screen name="pay" options={{ presentation: 'modal', headerShown: false }} />
-              <Stack.Screen name="all-transactions" options={{ headerShown: false }} />
-            </Stack>
-            <StatusBar style={isDark ? "light" : "dark"} />
-          </ThemeProvider>
-        </ThemedView>
+        <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+          <Stack screenOptions={{ contentStyle: { backgroundColor: themeColors.background } }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="pay" options={{ presentation: 'modal', headerShown: false }} />
+            <Stack.Screen name="all-transactions" options={{ headerShown: false }} />
+          </Stack>
+          <StatusBar style={isDark ? "light" : "dark"} />
+        </ThemeProvider>
       </WalletProvider>
     </SafeAreaProvider>
   );

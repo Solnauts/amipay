@@ -75,7 +75,7 @@ export default function AllTransactionsScreen() {
 
         <ThemedView className="flex-1 items-center">
           <ThemedText type="subtitle" variant="default">
-            All Transactions
+            Transaction History
           </ThemedText>
 
           <ThemedText variant="muted" className="text-xs mt-0.5">

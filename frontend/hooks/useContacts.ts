@@ -11,6 +11,7 @@
 //       ↓ failure → rollback MMKV + re-throw so modal can show the error
 
 import { useCallback, useEffect, useState } from 'react';
+import { getAvatarIndexForSeed } from '@/assets/avatars';
 import { contactsStore, StoredContact } from '@/src/store/contactsStore';
 import { authService } from '@/src/services/api/AuthService';
 
@@ -46,7 +47,7 @@ export function useContacts() {
         // recipient_name is the display name; alias_used is the @handle
         name: r.recipient_name ?? r.name ?? r.alias_used ?? 'Unknown',
         alias: r.alias_used ?? r.alias ?? '',
-        avatar: `https://api.dicebear.com/7.x/adventurer/png?seed=${encodeURIComponent(r.alias_used ?? r.alias ?? String(r.id))}&size=128`,
+        avatar: `local:${getAvatarIndexForSeed(r.alias_used ?? r.alias ?? String(r.id))}`,
         savedAt: 0,
       }));
       console.log('[Contacts] Mapped contacts:', JSON.stringify(apiContacts, null, 2));

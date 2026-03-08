@@ -77,7 +77,7 @@ export default function ActivityScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+    <SafeAreaView edges={['top']} className="flex-1 bg-background dark:bg-background-dark">
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 48 }}
@@ -101,20 +101,10 @@ export default function ActivityScreen() {
         {/* Tokens */}
         <TokensSection />
 
-        {/* Divider */}
-        <ThemedView
-          style={{
-            height: 1,
-            backgroundColor: colors.border,
-            marginHorizontal: 24,
-            marginBottom: 8,
-          }}
-        />
-
         {/* Recent Transactions header */}
-        <ThemedView className="flex-row items-center justify-between px-6 mb-2 mt-2">
+        <ThemedView className="flex-row items-center justify-between px-6 mb-4 mt-6">
           <ThemedText type="defaultSemiBold" variant="default" className="text-base">
-            Recent Transaction
+            Recent Transactions
           </ThemedText>
 
           <TouchableOpacity

@@ -1,46 +1,50 @@
 /**
- * GradientButton — purple gradient pill button used throughout the app.
+ * GradientButton — violet gradient pill button (NativeWind).
  *
- * Variants
- * ────────
- * 'primary'   violet gradient (#A78BFA → #8B5CF6), violet border
- * 'send'      violet→blue gradient (#A583FF → #3454F7), violet border
- * 'outline'   transparent fill, theme border, themed text
- *
- * The visual appearance is identical to the existing inline implementations
- * in BalanceSection and ButtonComponent.
+ * Matches the Figma design:
+ *   • violet-400 → violet-500 vertical gradient
+ *   • h-14 (56px), rounded-[50px]
+ *   • inset white top highlight (border-t rgba-white-50)
+ *   • outer shadow
+ *   • Inter medium, white text, capitalised
  */
 
 import React from 'react';
-import { TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ThemedText } from '@/components/ui/ThemedText';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 type SFSymbolName = React.ComponentProps<typeof IconSymbol>['name'];
-
-type Variant = 'primary' | 'send' | 'outline';
+type Variant = 'primary' | 'send' | 'outline' | 'success';
 
 type Props = {
     label: string;
     onPress: () => void;
     disabled?: boolean;
     loading?: boolean;
-    /** SFSymbol icon name */
     icon?: SFSymbolName;
     variant?: Variant;
 };
 
 const GRADIENT_COLORS: Record<Variant, readonly [string, string]> = {
-    primary: ['#A78BFA', '#8B5CF6'],
+    primary: ['#A78BFA', '#8B5CF6'],   // violet-400 → violet-500
     send: ['#A583FF', '#3454F7'],
     outline: ['transparent', 'transparent'],
+    success: ['#34D399', '#10B981'],   // emerald-400 → emerald-500
 };
 
 const BORDER_COLORS: Record<Variant, string> = {
     primary: '#8B5CF6',
     send: '#7d4bfe',
     outline: '#8B5CF6',
+    success: '#10B981',
+};
+
+const TEXT_COLORS: Record<Variant, string> = {
+    primary: '#ffffff',
+    send: '#ffffff',
+    outline: '#8B5CF6',
+    success: '#ffffff',
 };
 
 export function GradientButton({
@@ -53,11 +57,11 @@ export function GradientButton({
 }: Props) {
     return (
         <TouchableOpacity
-            activeOpacity={0.92}
+            activeOpacity={0.88}
             onPress={onPress}
             disabled={disabled || loading}
             style={[
-                styles.actionBtn,
+                styles.pill,
                 {
                     borderColor: BORDER_COLORS[variant],
                     opacity: disabled || loading ? 0.5 : 1,
@@ -70,47 +74,56 @@ export function GradientButton({
                 end={{ x: 0, y: 1 }}
                 style={styles.gradient}
             >
+                {/* inset top-white highlight */}
+                <LinearGradient
+                    colors={['rgba(255,255,255,0.30)', 'transparent']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                />
+
                 {loading ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
+                    <ActivityIndicator color={TEXT_COLORS[variant]} size="small" />
                 ) : icon ? (
-                    <IconSymbol name={icon} size={16} color="#ffffff" />
+                    <IconSymbol name={icon} size={18} color={TEXT_COLORS[variant]} />
                 ) : null}
-                <ThemedText style={styles.btnText}>{label}</ThemedText>
+
+                <Text style={[styles.label, { color: TEXT_COLORS[variant] }]}>
+                    {label}
+                </Text>
             </LinearGradient>
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    actionBtn: {
+    pill: {
         width: '100%',
-        borderRadius: 50,
+        height: 56,           // h-14
+        borderRadius: 50,     // rounded-[50px]
         borderWidth: 1,
+        overflow: 'hidden',
+        // outer shadows
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.10,
+        shadowOpacity: 0.08,
         shadowRadius: 14,
-        elevation: 5,
-        overflow: 'hidden',
+        elevation: 4,
     },
     gradient: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
         gap: 8,
-        borderRadius: 50,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.50)',
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderBottomColor: 'transparent',
+        paddingHorizontal: 28, // px-7
     },
-    btnText: {
-        color: '#ffffff',
-        fontWeight: '600',
-        fontSize: 15,
-        fontFamily: 'System',
-        letterSpacing: 0.2,
+    label: {
+        fontSize: 16,           // text-base
+        fontWeight: '500',      // font-medium
+        fontFamily: 'Inter',
+        textTransform: 'capitalize',
+        letterSpacing: 0.1,
     },
 });

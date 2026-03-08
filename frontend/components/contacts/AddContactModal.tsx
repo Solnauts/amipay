@@ -14,7 +14,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { GradientButton } from '@/components/ui/GradientButton';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { Colors } from '@/constants/theme';
 import { useWallet } from '@/context/WalletContext';
 
@@ -89,7 +89,7 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
 
   return (
     <Modal transparent visible={isOpen} animationType="fade" onRequestClose={handleClose}>
-      
+
       {/* Backdrop */}
       <TouchableOpacity
         activeOpacity={1}
@@ -212,11 +212,10 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
 
           {/* Button */}
           <View style={{ marginTop: 10 }}>
-            <GradientButton
+            <ActionButton
               label={loading ? 'Adding...' : 'Add Contact'}
               onPress={handleAdd}
               disabled={!canAdd}
-              variant="primary"
             />
           </View>
 

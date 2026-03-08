@@ -1,4 +1,4 @@
-import { useColorScheme, Text, TextProps } from "react-native";
+import { useColorScheme, Text, TextProps, TextStyle, StyleProp } from "react-native";
 import { Colors } from "@/constants/theme";
 
 interface ThemedTextProps extends TextProps {
@@ -16,7 +16,7 @@ export function ThemedText({ className, variant = "default", type = "default", s
     muted: colors.textMuted,
   };
 
-  const typeStyles: Record<string, object> = {
+  const typeStyles: Record<string, TextStyle> = {
     default: { fontFamily: 'Poppins_400Regular' },
     title: { fontSize: 28, fontWeight: "bold", fontFamily: 'Poppins_700Bold' },
     subtitle: { fontSize: 20, fontWeight: "600", fontFamily: 'Poppins_600SemiBold' },
@@ -26,7 +26,7 @@ export function ThemedText({ className, variant = "default", type = "default", s
   return (
     <Text
       className={`${className || ""}`}
-      style={[{ color: variantColors[variant], ...typeStyles[type] }, style as object]}
+      style={[{ color: variantColors[variant], ...typeStyles[type] } as TextStyle, style as StyleProp<TextStyle>]}
       {...props}
     />
   );

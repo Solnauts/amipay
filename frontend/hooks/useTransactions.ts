@@ -82,7 +82,15 @@ function mapToActivity(tr: TransactionRecord): ActivityTransaction {
   };
 }
 
-export const useTransactions = () => {
+export interface UseTransactionsReturn {
+  transactions: ActivityTransaction[];
+  rawRecords: TransactionRecord[];
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export const useTransactions = (): UseTransactionsReturn => {
   // 1. Boot from local cache immediately (no flicker / no spinner on re-visit)
   const [rawRecords, setRawRecords] = useState<TransactionRecord[]>(() =>
     transactionsStore.getAll(),
