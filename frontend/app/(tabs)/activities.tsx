@@ -98,7 +98,7 @@ export default function ActivityScreen() {
         {/* Balance */}
         <BalanceSection balance={balance} connecting={false} />
 
-        {/* Tokens */}
+        {/* ── Your Tokens — USDC / SOL / SEEKER ── */}
         <TokensSection />
 
         {/* Recent Transactions header */}
