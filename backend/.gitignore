@@ -1,4 +1,3 @@
 target
 migrations
-env
-
+.env
