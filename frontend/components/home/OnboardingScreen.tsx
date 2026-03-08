@@ -66,35 +66,28 @@ function PinBoxes({ pin, error }: { pin: string; error: boolean }) {
   );
 }
 
-function NumericKeypad({ onPress, colorScheme }: { onPress: (key: string) => void; colorScheme: 'light' | 'dark' }) {
-  const isDark = colorScheme === 'dark';
-  const wrapBg = isDark ? '#2a2a2a' : '#E8E8E8';
-  const cellBg = isDark ? '#1e1e1e' : '#fff';
-  const emptyBg = isDark ? '#2a2a2a' : '#E8E8E8';
-  const digitColor = isDark ? '#f9fafb' : '#111';
-  const lettersColor = isDark ? '#9ca3af' : '#555';
-  const backspaceColor = isDark ? '#f9fafb' : '#333';
+function NumericKeypad({ onPress, colors }: { onPress: (key: string) => void; colors: (typeof Colors)[keyof typeof Colors] }) {
   return (
-    <View style={[kbStyles.wrap, { backgroundColor: wrapBg }]}>
+    <View style={[kbStyles.wrap, { backgroundColor: colors.muted }]}>
       {KEYPAD_ROWS.map((row, ri) => (
         <View key={ri} style={kbStyles.row}>
           {row.map(({ digit, letters }) => {
-            if (!digit) return <View key="empty" style={[kbStyles.emptyCell, { backgroundColor: emptyBg }]} />;
+            if (!digit) return <View key="empty" style={[kbStyles.emptyCell, { backgroundColor: colors.muted }]} />;
             const isBackspace = digit === '⌫';
             return (
               <TouchableOpacity
                 key={digit}
                 activeOpacity={0.7}
                 onPress={() => onPress(digit)}
-                style={[kbStyles.cell, { backgroundColor: cellBg }]}
+                style={[kbStyles.cell, { backgroundColor: colors.surface }]}
               >
                 {isBackspace ? (
-                  <MaterialIcons name="backspace" size={22} color={backspaceColor} />
+                  <MaterialIcons name="backspace" size={22} color={colors.text} />
                 ) : (
                   <View style={kbStyles.cellInner}>
-                    <ThemedText style={[kbStyles.digit, { color: digitColor }]}>{digit}</ThemedText>
+                    <ThemedText style={[kbStyles.digit, { color: colors.text }]}>{digit}</ThemedText>
                     {letters ? (
-                      <ThemedText style={[kbStyles.letters, { color: lettersColor }]}>{letters}</ThemedText>
+                      <ThemedText style={[kbStyles.letters, { color: colors.mutedForeground }]}>{letters}</ThemedText>
                     ) : null}
                   </View>
                 )}
@@ -341,7 +334,7 @@ export function OnboardingScreen() {
       />
 
       {/* Custom numeric keypad */}
-      <NumericKeypad onPress={handleKeyPress} colorScheme={colorScheme} />
+      <NumericKeypad onPress={handleKeyPress} colors={colors} />
     </SafeAreaView>
   );
 }
