@@ -9,7 +9,6 @@ import {
   View,
   TextInput,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -17,6 +16,7 @@ import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { Colors } from '@/constants/theme';
+import { useWallet } from '@/context/WalletContext';
 
 // ─── Validation ─────────────────────────────────────────────
 
@@ -36,13 +36,27 @@ type Props = {
 // ─── Component ──────────────────────────────────────────────
 
 export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
+  const { user } = useWallet();
+
+  const myAmiPayId = user?.name ? `${user.name}@amipay`.toLowerCase() : null;
+
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isValidFormat = useMemo(() => isValidAmypayId(id), [id]);
-  const canAdd = name.trim().length > 0 && isValidFormat && !loading;
+
+  const isSelf = useMemo(
+    () => myAmiPayId !== null && id.trim().toLowerCase() === myAmiPayId,
+    [id, myAmiPayId],
+  );
+
+  const canAdd =
+    name.trim().length > 0 &&
+    isValidFormat &&
+    !isSelf &&
+    !loading;
 
   const handleClose = () => {
     setName('');
@@ -54,6 +68,11 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
 
   const handleAdd = async () => {
     if (!canAdd) return;
+
+    if (isSelf) {
+      setError("You can't add yourself as a contact.");
+      return;
+    }
 
     setError(null);
     setLoading(true);
@@ -162,7 +181,14 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
                 <ThemedText style={{ fontSize: 12, color: colors.error }}>
                   {error}
                 </ThemedText>
-              ) : id.trim() ? (
+              ) : isSelf ? (
+                <View style={styles.statusRow}>
+                  <MaterialIcons name="block" size={14} color={colors.error} />
+                  <ThemedText style={{ fontSize: 12, color: colors.error }}>
+                    You can't add yourself as a contact
+                  </ThemedText>
+                </View>
+              ) : id.trim().length > 0 ? (
                 <View style={styles.statusRow}>
                   <MaterialIcons
                     name={isValidFormat ? 'check-circle' : 'cancel'}

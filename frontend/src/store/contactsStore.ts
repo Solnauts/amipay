@@ -23,6 +23,7 @@ export type StoredContact = {
   alias: string;          // e.g. "Ridhi@amypay"
   avatar: string;         // Deterministic dicebear URL (generated from alias)
   savedAt: number;        // Unix ms — used to sort newest-first
+  isFavorite?: boolean;   // Local-only flag for homescreen pinning
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -87,5 +88,11 @@ export const contactsStore = {
       }
     }
     this.setAll(merged);
+  },
+
+  // ── Toggle favorite (local only) ───────────────────────────────────────────
+  toggleFavorite(id: string): void {
+    const current = this.getAll();
+    this.setAll(current.map((c) => (c.id === id ? { ...c, isFavorite: !c.isFavorite } : c)));
   },
 };

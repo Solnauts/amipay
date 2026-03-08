@@ -38,6 +38,7 @@ function toContact(sc: StoredContact): Contact {
     avatar: sc.avatar,
     username: sc.alias,
     shortAddress: '',
+    recipientUserId: sc.recipientUserId,
   };
 }
 
@@ -77,7 +78,7 @@ export default function ContactsScreen() {
       <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
         <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-        {/* Search Bar */}
+        {/* Search */}
         <ThemedView className="flex-row items-center gap-2 px-4 py-3">
           <ThemedView
             className="flex-1 flex-row items-center rounded-full px-3.5 h-14 gap-2"
@@ -123,9 +124,10 @@ export default function ContactsScreen() {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 120 }}
         >
-          {/* Recent contacts */}
+          {/* Recent */}
           {!query.trim() && recentContacts.length > 0 && (
             <ScrollView
               horizontal
@@ -149,8 +151,16 @@ export default function ContactsScreen() {
             </ScrollView>
           )}
 
-          {/* Section Label */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8 }}>
+          {/* Section label */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              marginBottom: 8,
+              gap: 8,
+            }}
+          >
             <ThemedText type="defaultSemiBold" style={{ fontSize: 14 }}>
               {searchResults ? 'Results' : 'Saved Contacts'}
             </ThemedText>
@@ -158,7 +168,7 @@ export default function ContactsScreen() {
             {syncing && <ActivityIndicator size="small" color={colors.primary} />}
           </View>
 
-          {/* Contact List */}
+          {/* Contact list */}
           {listContacts.length === 0 ? (
             <ThemedText variant="muted" className="px-4 text-sm mt-2">
               {syncing ? 'Loading contacts…' : 'No contacts yet. Tap + to add one.'}
@@ -174,7 +184,7 @@ export default function ContactsScreen() {
           )}
         </ScrollView>
 
-        {/* Contact Detail */}
+        {/* Contact detail */}
         {selected && (
           <ContactDetailSheet
             contact={selected}
@@ -183,7 +193,7 @@ export default function ContactsScreen() {
           />
         )}
 
-        {/* Add Contact */}
+        {/* Add contact modal */}
         <AddContactModal
           isOpen={addContactOpen}
           onClose={() => setAddContactOpen(false)}

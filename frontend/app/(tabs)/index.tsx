@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { SafeAreaView, ScrollView, RefreshControl } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Home screen components
 import { HomeHeader } from '@/components/home/HomeHeader';
@@ -11,59 +12,46 @@ import { FavouriteSection } from '@/components/home/FavouriteSection';
 import { AIPayBanner } from '@/components/home/AIPayBanner';
 import { WalletConnectScreen } from '@/components/home/WalletConnectScreen';
 import { OnboardingScreen } from '@/components/home/OnboardingScreen';
-import { userService } from '@/src/services/api/UserService';
+
+import { useBalance } from '@/hooks/useBalance';
 
 export default function HomeScreen() {
   const { authStep, connect } = useWallet();
-  const [balance, setBalance] = useState<number | null>(null);
+  const { balance, refetch } = useBalance();
+
   const [refreshing, setRefreshing] = useState(false);
-
-  const fetchBalance = async () => {
-    try {
-      const usdc = await userService.getUsdcBalance();
-      console.log('[Balance] API returned:', usdc, typeof usdc);
-      setBalance(typeof usdc === 'number' ? usdc : null);
-    } catch (e) {
-      console.warn('[Balance] fetch failed:', e);
-      setBalance(null);
-    }
-  };
-
-  // Initial fetch when auth completes
-  useEffect(() => {
-    if (authStep === 'ready') fetchBalance();
-    else setBalance(null);
-  }, [authStep]);
 
   // Re-fetch when screen gains focus
   useFocusEffect(
     useCallback(() => {
-      if (authStep === 'ready') fetchBalance();
-    }, [authStep]),
+      if (authStep === 'ready') {
+        refetch();
+      }
+    }, [authStep, refetch]),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchBalance();
+    await refetch();
     setRefreshing(false);
   };
 
-  // ── Gate 1: Not connected ─────────────────────────────────────────
+  // ── Gate 1: Not connected ───────────────────────────────
   if (authStep === 'idle') {
     return <WalletConnectScreen onConnect={connect} authStep={authStep} />;
   }
 
-  // ── Gate 2: Connecting / logging in ───────────────────────────────
+  // ── Gate 2: Connecting / logging in ─────────────────────
   if (authStep === 'connecting' || authStep === 'logging_in') {
     return <WalletConnectScreen onConnect={connect} authStep={authStep} />;
   }
 
-  // ── Gate 3: New user onboarding ───────────────────────────────────
+  // ── Gate 3: New user onboarding ─────────────────────────
   if (authStep === 'onboarding') {
     return <OnboardingScreen />;
   }
 
-  // ── Home screen ───────────────────────────────────────────────────
+  // ── Home screen ─────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <ScrollView
@@ -80,7 +68,12 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <HomeHeader />
-        <BalanceSection balance={balance} connecting={false} />
+
+        <BalanceSection
+          balance={balance}
+          connecting={false}
+        />
+
         <PeopleSection />
         <FavouriteSection />
         <AIPayBanner />

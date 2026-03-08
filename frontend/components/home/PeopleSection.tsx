@@ -5,28 +5,50 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { Colors } from '@/constants/theme';
 import { ContactItem } from './ContactItem';
-import { PEOPLE } from './homeData';
+import { StoredContact } from '@/src/store/contactsStore';
+import { useContacts } from '@/hooks/useContacts';
 import type { Contact } from './homeData';
 import { Feather } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 
 const COLUMNS = 4;
 
+function toLegacyContact(sc: StoredContact): Contact {
+  return {
+    id: sc.id,
+    name: sc.name,
+    initials: sc.name.charAt(0).toUpperCase(),
+    color: '#8B5CF6',
+    imageUri: sc.avatar,
+  };
+}
+
 /**
- * "People" section — shows a 2-row grid of recent contacts.
+ * "People" section — shows a grid composed of actual stored contacts.
  * The last slot is always the "More" chevron button.
  */
 export function PeopleSection() {
   const colors = Colors[useColorScheme() ?? 'light'];
+  const { contacts: allStored } = useContacts();
+  const people = allStored.map(toLegacyContact);
 
-  // Split into rows of COLUMNS
-  const rows: Contact[][] = [];
-  for (let i = 0; i < PEOPLE.length; i += COLUMNS) {
-    rows.push(PEOPLE.slice(i, i + COLUMNS));
+  // Split people into rows of COLUMNS, making room for the "More" button in the last row
+  const rows: (Contact | null)[][] = [];
+  const limit = 7; // Show 7 contacts + 1 "More" button
+  const displayPeople = people.slice(0, limit);
+
+  for (let i = 0; i < displayPeople.length; i += COLUMNS) {
+    rows.push(displayPeople.slice(i, i + COLUMNS));
   }
-  // Fill the last row so the More button sits in the right slot
+
+  // Handle row filling for the last row (where the "More" button should be)
+  if (rows.length === 0) {
+    rows.push([null, null, null]); // Just an empty slots row for the button
+  }
   const lastRow = rows[rows.length - 1];
-  while (lastRow.length < COLUMNS - 1) lastRow.push({ id: '', initials: '', name: '', color: 'transparent' });
+  while (lastRow.length < COLUMNS - 1) {
+    lastRow.push(null);
+  }
 
   return (
     <ThemedView className="px-6 mb-6">
@@ -37,12 +59,12 @@ export function PeopleSection() {
       {rows.map((row, rowIdx) => (
         <ThemedView key={rowIdx} className="flex-row justify-between mb-3">
           {row.map((contact, colIdx) =>
-            contact.name ? (
+            contact ? (
               <ContactItem
                 key={`${rowIdx}-${colIdx}`}
                 contact={contact}
                 size="md"
-                onPress={() => router.push(`/(tabs)/rewards?contactId=${contact.id}` as any)}
+                onPress={() => router.push(`/(tabs)/contacts?contactId=${contact.id}` as any)}
               />
             ) : (
               <ThemedView key={`empty-${rowIdx}-${colIdx}`} style={{ width: 64 }} />
@@ -52,7 +74,7 @@ export function PeopleSection() {
           {/* "More" button — only on the last row */}
           {rowIdx === rows.length - 1 && (
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/rewards' as any)}
+              onPress={() => router.push('/(tabs)/contacts' as any)}
               activeOpacity={0.75}
               className="items-center gap-1.5"
               style={{ width: 64 }}

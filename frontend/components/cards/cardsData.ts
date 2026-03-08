@@ -7,6 +7,7 @@ export type Contact = {
   avatar: string;           // image URI (placeholder for mock)
   username: string;         // e.g. "Ridhi@amypay"
   shortAddress: string;     // e.g. "0xsdde...De"
+  recipientUserId?: number; // backend user_id — used to filter transactions
 };
 
 export type Group = {

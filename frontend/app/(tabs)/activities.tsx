@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   ScrollView,
   RefreshControl,
@@ -7,8 +7,9 @@ import {
   useColorScheme,
   ActivityIndicator,
 } from 'react-native';
+
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 // ── Shared home components ─────────────────────────────────────────────────
 import { HomeHeader } from '@/components/home/HomeHeader';
@@ -17,6 +18,7 @@ import { BalanceSection } from '@/components/home/BalanceSection';
 // ── Activity-specific components ───────────────────────────────────────────
 import { TokensSection } from '@/components/activity/TokensSection';
 import { TransactionGroup } from '@/components/activity/TransactionGroup';
+
 import { useTransactions } from '@/hooks/useTransactions';
 import { useBalance } from '@/hooks/useBalance';
 
@@ -39,6 +41,13 @@ export default function ActivityScreen() {
   const { balance, refetch: refetchBalance } = useBalance();
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // Sync balance when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      refetchBalance();
+    }, [refetchBalance]),
+  );
 
   const allGroups: TxGroup[] = useMemo(
     () => getFilteredGroups(transactions, 'all', ''),

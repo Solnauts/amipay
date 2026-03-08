@@ -55,8 +55,8 @@ const WalletContext = createContext<WalletContextState>({
 // ─── App Identity (shown inside the wallet popup) ─────────────────────────────
 
 const APP_IDENTITY = {
-  name: 'Remitly',
-  uri: 'https://mysolanaapp.com',
+  name: 'Amipay',
+  uri: 'https://amipay.com',
   icon: 'favicon.png',
 };
 
