@@ -66,28 +66,28 @@ function PinBoxes({ pin, error }: { pin: string; error: boolean }) {
   );
 }
 
-function NumericKeypad({ onPress }: { onPress: (key: string) => void }) {
+function NumericKeypad({ onPress, colors }: { onPress: (key: string) => void; colors: (typeof Colors)[keyof typeof Colors] }) {
   return (
-    <View style={kbStyles.wrap}>
+    <View style={[kbStyles.wrap, { backgroundColor: colors.muted }]}>
       {KEYPAD_ROWS.map((row, ri) => (
         <View key={ri} style={kbStyles.row}>
           {row.map(({ digit, letters }) => {
-            if (!digit) return <View key="empty" style={kbStyles.emptyCell} />;
+            if (!digit) return <View key="empty" style={[kbStyles.emptyCell, { backgroundColor: colors.muted }]} />;
             const isBackspace = digit === '⌫';
             return (
               <TouchableOpacity
                 key={digit}
                 activeOpacity={0.7}
                 onPress={() => onPress(digit)}
-                style={kbStyles.cell}
+                style={[kbStyles.cell, { backgroundColor: colors.surface }]}
               >
                 {isBackspace ? (
-                  <MaterialIcons name="backspace" size={22} color="#333" />
+                  <MaterialIcons name="backspace" size={22} color={colors.text} />
                 ) : (
                   <View style={kbStyles.cellInner}>
-                    <ThemedText style={kbStyles.digit}>{digit}</ThemedText>
+                    <ThemedText style={[kbStyles.digit, { color: colors.text }]}>{digit}</ThemedText>
                     {letters ? (
-                      <ThemedText style={kbStyles.letters}>{letters}</ThemedText>
+                      <ThemedText style={[kbStyles.letters, { color: colors.mutedForeground }]}>{letters}</ThemedText>
                     ) : null}
                   </View>
                 )}
@@ -285,8 +285,8 @@ export function OnboardingScreen() {
   const pinFull = activePin.length === PIN_LENGTH;
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: '#fff' }]}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       {/* Back button */}
       <TouchableOpacity
@@ -302,15 +302,15 @@ export function OnboardingScreen() {
           }
         }}
       >
-        <MaterialIcons name="chevron-left" size={28} color="#111" />
+        <MaterialIcons name="chevron-left" size={28} color={colors.text} />
       </TouchableOpacity>
 
       {/* Header */}
       <View style={styles.pinHeader}>
-        <ThemedText style={styles.pinTitle}>
+        <ThemedText style={[styles.pinTitle, { color: colors.text }]}>
           {isPinStep ? 'Set up your PIN' : 'Confirm your PIN'}
         </ThemedText>
-        <ThemedText style={styles.pinSubtitle}>
+        <ThemedText style={[styles.pinSubtitle, { color: colors.textMuted }]}>
           {isPinStep
             ? 'Choose a secure 6-digit PIN to protect your account.'
             : 'Re-enter your PIN to confirm.'}
@@ -334,7 +334,7 @@ export function OnboardingScreen() {
       />
 
       {/* Custom numeric keypad */}
-      <NumericKeypad onPress={handleKeyPress} />
+      <NumericKeypad onPress={handleKeyPress} colors={colors} />
     </SafeAreaView>
   );
 }
