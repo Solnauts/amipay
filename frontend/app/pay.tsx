@@ -221,8 +221,14 @@ export default function PayScreen() {
     resetConversation,
   } = useAiPayWs({ token: sessionToken });
 
-  const [input, setInput] = useState(to ? `Send to ${to} ` : '');
+  // Pre-fill input when coming from a contact — user just needs to type the amount.
+  // Format: "Send to Mom $" so the intent is clear and cursor lands after "$".
+  const [input, setInput] = useState(to ? `Send to ${to} $` : '');
   const listRef = useRef<FlatList>(null);
+
+  // Track which pendingActionIds have already been submitted so the PIN
+  // prompt never reappears for an action the user already confirmed.
+  const handledActionIds = useRef<Set<number>>(new Set());
 
   // Track which message is requesting a PIN
   const [pinPrompt, setPinPrompt] = useState<{
@@ -230,14 +236,15 @@ export default function PayScreen() {
     pendingActionId: number;
   } | null>(null);
 
-  // Detect when a server message has a pendingActionId → show PIN input
   const lastMsg = messages[messages.length - 1];
+  // Exclude action IDs already submitted — prevents PIN reappearing after payment.
   const shouldShowPin =
     lastMsg &&
     !lastMsg.isUser &&
     !lastMsg.isError &&
     lastMsg.pendingActionId != null &&
-    pinPrompt === null;
+    pinPrompt === null &&
+    !handledActionIds.current.has(lastMsg.pendingActionId!);
 
   // Auto-show PIN prompt when server requests it
   React.useEffect(() => {
@@ -262,6 +269,9 @@ export default function PayScreen() {
   const handlePinSubmit = useCallback(
     (pin: string) => {
       if (!pinPrompt) return;
+      // Mark this action as handled BEFORE clearing the prompt so the
+      // shouldShowPin guard fires correctly on the same render cycle.
+      handledActionIds.current.add(pinPrompt.pendingActionId);
       sendActionResponse(pinPrompt.conversationId, pinPrompt.pendingActionId, pin);
       setPinPrompt(null);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -270,6 +280,13 @@ export default function PayScreen() {
   );
 
   return (
+    // KeyboardAvoidingView wraps the ENTIRE screen so the FlatList shrinks
+    // when the keyboard appears — both iOS (padding) and Android (height).
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
     <ThemedView variant="default" className="flex-1">
 
       {/* ── Header ── */}
@@ -288,7 +305,7 @@ export default function PayScreen() {
         </TouchableOpacity>
 
         {/* Title + connection dot */}
-        <View className="flex-row items-center gap-2">
+        <View className="flex-row items-center gap-2 ">
           <ThemedText type="subtitle" variant="default">AI Pay</ThemedText>
           <View
             className="w-2 h-2 rounded-full"
@@ -356,10 +373,7 @@ export default function PayScreen() {
       )}
 
       {/* ── Bottom area ── */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
+      <View>
         {/* Suggestion chips */}
         <ScrollView
           horizontal
@@ -386,7 +400,7 @@ export default function PayScreen() {
           ))}
         </ScrollView>
 
-        {/* Input bar */}
+        {/* Input bar — visible above keyboard because KAV wraps the whole screen */}
         <ThemedView
           variant="default"
           className="flex-row items-center px-4 py-3 gap-3"
@@ -436,7 +450,8 @@ export default function PayScreen() {
             </ThemedText>
           </TouchableOpacity>
         </ThemedView>
-      </KeyboardAvoidingView>
+      </View>
     </ThemedView>
+    </KeyboardAvoidingView>
   );
 }

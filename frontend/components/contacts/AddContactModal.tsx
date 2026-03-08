@@ -22,6 +22,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { Colors } from '@/constants/theme';
+import { useWallet } from '@/context/WalletContext';
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 
@@ -51,13 +52,22 @@ type Props = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
+  const { user } = useWallet();
+
+  // Current user's own amipay ID — used not to add themselves
+  const myAmiPayId = user?.name ? `${user.name}@amipay`.toLowerCase() : null;
+
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isValidFormat = useMemo(() => isValidAmypayId(id), [id]);
-  const canAdd = name.trim().length > 0 && isValidFormat && !loading;
+  const isSelf = useMemo(
+    () => myAmiPayId !== null && id.trim().toLowerCase() === myAmiPayId,
+    [id, myAmiPayId],
+  );
+  const canAdd = name.trim().length > 0 && isValidFormat && !isSelf && !loading;
 
   // ── Reset & close ──────────────────────────────────────────────────────
   const handleClose = () => {
@@ -71,6 +81,10 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
   // ── Submit ─────────────────────────────────────────────────────────────
   const handleAdd = async () => {
     if (!canAdd) return;
+    if (isSelf) {
+      setError("You can't add yourself as a contact.");
+      return;
+    }
     setError(null);
     setLoading(true);
 
@@ -177,6 +191,20 @@ export function AddContactModal({ isOpen, onClose, onAdd, colors }: Props) {
                   numberOfLines={2}
                 >
                   {error}
+                </ThemedText>
+              </ThemedView>
+            ) : isSelf ? (
+              // Self-add guard — visible live as the user types their own ID
+              <ThemedView className="flex-row items-center gap-1">
+                <MaterialIcons name="block" size={14} color={colors.error} />
+                <ThemedText
+                  style={{
+                    fontSize: 12,
+                    color: colors.error,
+                    fontFamily: 'Poppins_400Regular',
+                  }}
+                >
+                  You can't add yourself as a contact
                 </ThemedText>
               </ThemedView>
             ) : id.trim().length > 0 ? (
