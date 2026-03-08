@@ -1,4 +1,7 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Linking } from 'react-native';
+
+const AIRDROP_URL =
+  'https://raydium.io/swap/?inputMint=sol&outputMint=USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT';
 
 export function AIPayBanner({ onLearnMore }: { onLearnMore?: () => void }) {
   return (
@@ -16,21 +19,20 @@ export function AIPayBanner({ onLearnMore }: { onLearnMore?: () => void }) {
         <View style={styles.content}>
           <Text style={styles.title}>Get Free Test USDC</Text>
           <Text style={styles.subtitle}>
-            Fund your devnet wallet.
-            Airdrop test USDC to start using AI Pay.
+            Airdrop USDC to your devnet wallet and start sending payments with AI Pay instantly.
           </Text>
           <TouchableOpacity
             onPress={() => {
-              if (onLearnMore) onLearnMore();
-              else {
-                const { router } = require('expo-router');
-                router.push('/pay');
+              if (onLearnMore) {
+                onLearnMore();
+              } else {
+                Linking.openURL(AIRDROP_URL);
               }
             }}
             activeOpacity={0.8}
             style={styles.learnMoreBtn}
           >
-            <Text style={styles.learnMoreText}>Learn More</Text>
+            <Text style={styles.learnMoreText}>Airdrop USDC ✦</Text>
           </TouchableOpacity>
         </View>
 

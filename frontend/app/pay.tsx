@@ -107,9 +107,11 @@ function PinInput({
 function ChatBubble({
   msg,
   colors,
+  colorScheme,
 }: {
   msg: ChatMessage;
   colors: (typeof Colors)[keyof typeof Colors];
+  colorScheme: 'light' | 'dark';
 }) {
   const isUser = msg.isUser;
 
@@ -142,7 +144,7 @@ function ChatBubble({
             ? colors.surface
             : msg.isError
               ? '#fef2f2'
-              : '#ede9fe',
+              : colors.violetMuted,
           borderBottomRightRadius: isUser ? 4 : 16,
           borderBottomLeftRadius: isUser ? 16 : 4,
           borderWidth: isUser ? 1 : msg.isError ? 1 : 0,
@@ -151,7 +153,13 @@ function ChatBubble({
       >
         <ThemedText
           className="text-sm leading-5"
-          style={{ color: msg.isError ? '#dc2626' : colors.text }}
+          style={{
+            color: msg.isError
+              ? '#dc2626'
+              : isUser
+                ? colors.text
+                : colorScheme === 'dark' ? '#ffffff' : '#5b21b6',
+          }}
         >
           {msg.text}
         </ThemedText>
@@ -172,9 +180,9 @@ function TypingIndicator({ colors }: { colors: (typeof Colors)[keyof typeof Colo
       </View>
       <View
         className="rounded-2xl px-5 py-3"
-        style={{ backgroundColor: '#ede9fe' }}
+        style={{ backgroundColor: colors.violetMuted }}
       >
-        <ActivityIndicator size="small" color="#8b5cf6" />
+        <ActivityIndicator size="small" color="#ffffff" />
       </View>
     </View>
   );
@@ -344,9 +352,9 @@ export default function PayScreen() {
               </View>
               <View
                 className="rounded-2xl px-4 py-3 max-w-xs"
-                style={{ backgroundColor: '#ede9fe', borderBottomLeftRadius: 4 }}
+                style={{ backgroundColor: colors.violetMuted, borderBottomLeftRadius: 4 }}
               >
-                <ThemedText className="text-sm leading-5" style={{ color: colors.text }}>
+                <ThemedText className="text-sm leading-5" style={{ color: colorScheme === 'dark' ? '#ffffff' : '#5b21b6' }}>
                   Hi! I'm your AI payment assistant. Just tell me who you want to send money to and how much.{'\n\n'}Try saying "Send $50 to Mom" or "Check my balance".
                 </ThemedText>
               </View>
@@ -358,7 +366,7 @@ export default function PayScreen() {
             ref={listRef}
             data={messages}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <ChatBubble msg={item} colors={colors} />}
+            renderItem={({ item }) => <ChatBubble msg={item} colors={colors} colorScheme={colorScheme} />}
             ListFooterComponent={isWaiting ? <TypingIndicator colors={colors} /> : null}
             contentContainerStyle={{ paddingTop: 16, paddingBottom: 8 }}
             showsVerticalScrollIndicator={false}
