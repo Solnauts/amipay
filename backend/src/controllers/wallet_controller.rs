@@ -878,11 +878,7 @@ pub async fn get_wallet_address(
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "data": match wallet_address {
-            UserInfoResponse::Text(addr) => {
-             //print the usdc ata
-             println!("usdc-ata : {}", addr);
-                addr
-            }
+            UserInfoResponse::Text(addr) => addr,
             _ => "".to_string(),
         }
     })))
@@ -1085,7 +1081,7 @@ pub async fn get_user_recipients(req: HttpRequest) -> actix_web::Result<impl Res
     })))
 }
 
-//function to get all transactions of the user 
+//function to get all transactions of the user
 #[get("/wallet/all_transactions")]
 pub async fn get_all_transactions(req: HttpRequest) -> actix_web::Result<impl Responder> {
     let token = extract_bearer_token(&req)?;
@@ -1101,7 +1097,7 @@ pub async fn get_all_transactions(req: HttpRequest) -> actix_web::Result<impl Re
     //get the transactions using userid
     let transactions = web::block(move || {
         let conn = &mut establish_connection()?;
-      crate::database::model_functions::get_transactions_for_user(conn, user_id)
+        crate::database::model_functions::get_transactions_for_user(conn, user_id)
     })
     .await
     .map_err(|e| AppError::Internal {
@@ -1115,8 +1111,3 @@ pub async fn get_all_transactions(req: HttpRequest) -> actix_web::Result<impl Re
         "transactions": transactions.unwrap()
     })))
 }
-
-
-
-
-

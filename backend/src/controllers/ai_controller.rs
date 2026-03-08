@@ -87,8 +87,6 @@ pub struct MainResponse {
 ///
 /// Returns a typed `AiError` instead of panicking.
 pub async fn get_ai_response(data: RequestBody) -> Result<MainResponse, AiError> {
-    println!("AI request received, calling cloud API...");
-
     // ── Read config from env ────────────────────────────────────────────
     let api_key = std::env::var("AI_API_KEY").map_err(|_| AiError::ClientBuildFailed {
         reason: "AI_API_KEY env var is not set".to_string(),
@@ -141,8 +139,6 @@ pub async fn get_ai_response(data: RequestBody) -> Result<MainResponse, AiError>
         .map_err(|e| AiError::RequestFailed {
             reason: format!("failed to read response body: {}", e),
         })?;
-
-    println!("AI raw response: {}", response_text);
 
     // ── Parse the chat completion envelope ───────────────────────────────
     let chat_response: ChatCompletionResponse =

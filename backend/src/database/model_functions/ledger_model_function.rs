@@ -140,11 +140,6 @@ pub fn update_user_amount_from_ledger(
             reason: e.to_string(),
         })?;
 
-    println!(
-        "[balance] user {} → received={} sent={} net={}",
-        target_user_id, calc.total_received, calc.total_sent, calc.net_balance
-    );
-
     Ok(calc.net_balance)
 }
 

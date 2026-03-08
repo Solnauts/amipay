@@ -119,7 +119,6 @@ pub async fn main_caller(
                                 .await;
                         }
                         ClientMessage::ActionResponse(value) => {
-                            println!("action response received: {}", value.pending_action_id);
                             handle_action_response(value, session.clone()).await;
                         }
                     }
@@ -138,8 +137,7 @@ pub async fn main_caller(
                     .await;
                 }
 
-                Message::Close(reason) => {
-                    println!("Client sent close frame: {:?}", reason);
+                Message::Close(_) => {
                     break;
                 }
 
