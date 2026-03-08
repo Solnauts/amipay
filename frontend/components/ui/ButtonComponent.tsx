@@ -1,0 +1,1 @@
+export { GradientButton as default, GradientButton } from '@/components/ui/GradientButton';

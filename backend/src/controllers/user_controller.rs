@@ -1,88 +1,147 @@
-use actix_web::{HttpResponse, Responder, error, get, post, web};
-use serde::{Deserialize, Serialize};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_commitment_config::CommitmentConfig;
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::Transaction,
-};
-use std::str::FromStr;
+use crate::database::establish_connection;
+use crate::database::model_functions::create_user;
+use crate::errors::AppError;
+use crate::utility::create_user_ata;
+use actix_web::{HttpResponse, Responder, post, web};
+use bcrypt::{DEFAULT_COST, hash};
+use serde::Deserialize;
 
-#[derive(Deserialize, Debug, Serialize)]
-pub struct NewUser {
-    name: String,
-    password: String,
+// ─── Contact Number Login Types ─────────────────────────────────────────────
+
+#[derive(Deserialize, Debug)]
+pub struct ContactPayload {
+    pub username: Option<String>,
+    pub contact_number: Option<i32>,
+    pub userpin: i32,
+    pub email: Option<String>,
 }
-use crate::database::model_functions::get_user;
 
-#[post("/trigger-transaction")]
-async fn trigger_solana_and_db() -> actix_web::Result<impl Responder> {
-    // SETUP SOLANA RPC CLIENT (Async)
-    // usage of nonblocking client is crucial for Actix performance
-    let rpc_url = "https://api.devnet.solana.com".to_string();
-    let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
+#[derive(Debug)]
+pub struct NormalizedUser {
+    pub username: String,
+    pub unique_id: String,
+    pub user_pin: String,
+    pub method_type: String,
+    pub email: Option<String>,
+}
 
-    // DEFINE KEYS & INSTRUCTION
-    let program_id = Pubkey::from_str("HeHSU8GmNjDF7kwM7j2fbheeigdZD9AJzeMC2u5SGCs5")
-        .map_err(|e| error::ErrorBadRequest(format!("Invalid Program ID: {}", e)))?;
+impl ContactPayload {
+    /// Normalize the contact number payload into a NormalizedUser.
+    pub fn normalize(self) -> Result<NormalizedUser, AppError> {
+        let user_pin = hash(self.userpin.to_string(), DEFAULT_COST).map_err(|e| {
+            AppError::Internal {
+                code: 5302,
+                reason: format!("bcrypt hash failed for pin: {}", e),
+            }
+        })?;
 
-    // Load your wallet (Payer)
-    // This is just for demonstration (generating a random ephemeral keypair).
-    let payer = Keypair::new();
+        let contact = self.contact_number.ok_or(AppError::Validation(
+            crate::errors::ValidationError::MissingField {
+                field: "contact_number".to_string(),
+            },
+        ))?;
 
-    //check this in solana
-    // Construct the instruction specific to your contract
-    let instruction = Instruction::new_with_bincode(
-        program_id,
-        &[0], // DATA: Put your instruction data/arguments here
-        vec![
-            // ACCOUNTS: Add the accounts your contract requires
-            AccountMeta::new(payer.pubkey(), true),
-        ],
-    );
+        let user_contact = hash(contact.to_string(), DEFAULT_COST).map_err(|e| {
+            AppError::Internal {
+                code: 5302,
+                reason: format!("bcrypt hash failed for contact: {}", e),
+            }
+        })?;
 
-    // 3. BUILD AND SEND TRANSACTION
-    // We must get the latest blockhash strictly before sending
-    let latest_blockhash = client
-        .get_latest_blockhash()
-        .await
-        .map_err(|e| error::ErrorInternalServerError(format!("RPC Error: {}", e)))?;
+        Ok(NormalizedUser {
+            username: self.username.unwrap_or_else(|| "Guest".to_string()),
+            unique_id: user_contact,
+            method_type: "phone".to_string(),
+            user_pin,
+            email: self.email,
+        })
+    }
+}
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer.pubkey()),
-        &[&payer],
-        latest_blockhash,
-    );
+// ─── Account Info Types ─────────────────────────────────────────────────────
 
-    // Send and wait for confirmation (Async)
-    let signature = client
-        .send_and_confirm_transaction(&transaction)
-        .await
-        .map_err(|e| error::ErrorInternalServerError(format!("Solana Tx Failed: {}", e)))?;
+pub struct AccountBalanceInfo {
+    pub user_id: String,
+}
 
-    println!("Solana Transaction Confirmed. Signature: {}", signature);
+pub struct RecipientInfo {
+    pub userid: String,
+    pub recipientid: String,
+}
 
-    // 4. CALL DATABASE (Blocking)
+pub struct TransactionHistoryInfo {
+    pub userid: String,
+}
 
-    //learn about the web::block
-    // We use `web::block` to offload it to the thread pool.
-    let db_result = web::block(move || get_user()).await?; // Handle thread pool errors
+pub enum UserAccountInfo {
+    RecipientInfo(RecipientInfo),
+    AccountBalanceInfo(AccountBalanceInfo),
+    TransactionHistoryInfo(TransactionHistoryInfo),
+}
 
-    // 5. SEND HTTP RESPONSE
+pub struct NormalizedUserInfo {
+    pub method: String,
+    pub user_id: String,
+    pub recipient_id: Option<String>,
+}
+
+impl UserAccountInfo {
+    pub fn normalize(self) -> NormalizedUserInfo {
+        match self {
+            UserAccountInfo::AccountBalanceInfo(data) => NormalizedUserInfo {
+                method: "account_info".to_string(),
+                user_id: data.user_id,
+                recipient_id: None,
+            },
+            UserAccountInfo::RecipientInfo(data) => NormalizedUserInfo {
+                method: "recipient_info".to_string(),
+                user_id: data.userid,
+                recipient_id: Some(data.recipientid),
+            },
+
+            UserAccountInfo::TransactionHistoryInfo(data) => NormalizedUserInfo {
+                method: "transaction_history".to_string(),
+                user_id: data.userid,
+                recipient_id: None,
+            },
+        }
+    }
+}
+
+// ─── Route Handler: Contact Number Create Account ───────────────────────────
+
+#[post("/createaccount")]
+async fn create_user_handler(data: web::Json<ContactPayload>) -> actix_web::Result<impl Responder> {
+    // Normalize and hash the contact payload
+    let user = data.into_inner().normalize()?;
+
+    // Create the Solana USDC ATA for this user
+    let user_ata = create_user_ata(user.unique_id.clone()).map_err(|e| -> AppError { e.into() })?;
+    let user_usdc_ata = user_ata.value.to_string();
+
+    // Insert the new user into the database
+    let _db_result = web::block(move || {
+        let conn = &mut establish_connection()?;
+        create_user(
+            conn,
+            user.username,
+            user.user_pin,
+            user.unique_id,
+            user.method_type,
+            user.email,
+            user_usdc_ata,
+        )
+        .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::Internal {
+        code: 5010,
+        reason: format!("blocking task failed: {}", e),
+    })?
+    .map_err(|e: AppError| e)?;
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
-        "database_message": db_result
+        "message": "User account created successfully"
     })))
-}
-
-async fn create_wallet(data: web::Json<NewUser>) -> impl Responder {
-    //extract the data from the data
-    let web::Json(NewUser { name, password }) = data;
-
-    //call the create_user database function
-
-    HttpResponse::Ok().body("user successfully created")
 }
