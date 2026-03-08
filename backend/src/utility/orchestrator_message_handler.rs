@@ -132,7 +132,11 @@ pub async fn handle_user_message(
 
     // 3. Call AI to parse intent (transfer, check_balance, etc.)
     let intent_response = match get_ai_response(serialized_message).await {
-        Ok(resp) => resp,
+        Ok(resp) => {
+            println!("AI response: {:?}", resp);
+            resp
+        }
+
         Err(e) => {
             send_app_error(stream, e.into(), conversation_id, None).await;
             return;

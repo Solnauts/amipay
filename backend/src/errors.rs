@@ -476,7 +476,7 @@ impl std::error::Error for SolanaError {}
 pub enum AiError {
     /// 5201 — HTTP client could not be built
     ClientBuildFailed { reason: String },
-    /// 5202 — Request to Ollama failed
+    /// 5202 — Request to AI API failed
     RequestFailed { reason: String },
     /// 5203 — Raw response could not be deserialized
     ResponseParseFailed { reason: String },
