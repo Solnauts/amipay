@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { transactionService } from '../src/services';
 import { TransactionRecord } from '../src/types/api';
 import { ActivityTransaction, TxType } from '../components/activity/activityData';
+import { transactionsStore } from '../src/store/transactionsStore';
 
 // Backend stores amounts in micro-units (6 decimal places)
 // e.g. 10_000_000 → 10.00 USDC
@@ -82,10 +83,20 @@ function mapToActivity(tr: TransactionRecord): ActivityTransaction {
 }
 
 export const useTransactions = () => {
-  const [transactions, setTransactions] = useState<ActivityTransaction[]>([]);
+  // 1. Boot from local cache immediately (no flicker / no spinner on re-visit)
+  const [rawRecords, setRawRecords] = useState<TransactionRecord[]>(() =>
+    transactionsStore.getAll(),
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Derive the mapped list from the raw records so both are always in sync
+  const transactions: ActivityTransaction[] = rawRecords
+    .filter((tr) => tr && tr.id)
+    .map(mapToActivity)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // 2. Fetch from API, update cache, update state
   const fetchTransactions = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -93,14 +104,11 @@ export const useTransactions = () => {
       const resp = await transactionService.getAllTransactions();
 
       if (resp && resp.transactions) {
-        const mapped = resp.transactions
-          .filter(tr => tr && tr.id)
-          .map(mapToActivity);
-
-        // Most recent first
-        mapped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        setTransactions(mapped);
+        const sorted = [...resp.transactions].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        transactionsStore.setAll(sorted);
+        setRawRecords(sorted);
       }
     } catch (err: any) {
       console.error('[useTransactions] fetch error:', err);
@@ -110,9 +118,16 @@ export const useTransactions = () => {
     }
   }, []);
 
+  // Fetch once on mount (first-time load / cold start)
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  return { transactions, isLoading, error, refresh: fetchTransactions };
+  return {
+    transactions,
+    rawRecords,          // ← raw TransactionRecord[] for contact-level filtering
+    isLoading,
+    error,
+    refresh: fetchTransactions,
+  };
 };

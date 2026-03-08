@@ -41,6 +41,7 @@ function toContact(sc: StoredContact): Contact {
     avatar: sc.avatar,
     username: sc.alias,
     shortAddress: '',
+    recipientUserId: sc.recipientUserId,
   };
 }
 

@@ -296,15 +296,7 @@ export default function PayScreen() {
           />
         </View>
 
-        {/* New conversation */}
-        <TouchableOpacity
-          onPress={resetConversation}
-          activeOpacity={0.7}
-          className="w-9 h-9 rounded-full items-center justify-center"
-          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-        >
-          <MaterialIcons name="add" size={18} color={colors.text} />
-        </TouchableOpacity>
+      
       </ThemedView>
 
       {/* Connection banner */}
