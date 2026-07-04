@@ -37,6 +37,6 @@ COPY --from=builder /app/backend/target/release/backend /usr/local/bin/backend
 RUN mkdir -p /app
 
 WORKDIR /app
-EXPOSE 4000
+EXPOSE 9000
 
 CMD ["backend"]
