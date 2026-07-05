@@ -16,8 +16,8 @@ services:
   backend:
     container_name: amypay_backend
     build:
-      context: ./backend
-      dockerfile: dockerfile
+      context: .
+      dockerfile: backend/dockerfile
     env_file:
       - ./env 
     expose:
