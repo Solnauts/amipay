@@ -1,17 +1,33 @@
 services:
+#database 
+  database:
+    image: postgres:15
+    container_name: amypay_database
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: LesserKnown123
+      POSTGRES_DB: amypay_db
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   backend:
     build:
-      context: .
-      dockerfile: backend/dockerfile
+      context: ./backend
+      dockerfile: dockerfile
     env_file:
-      - backend/.env
+      - ./env 
     expose:
       - "9000"
     #include the networks 
     networks: 
       - amypay_network
     restart: unless-stopped
-
+    cpus : "1"
+    mem_limit: "512m"
+  
 networks:
   amypay_network:
     driver: bridge
