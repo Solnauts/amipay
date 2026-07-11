@@ -2,3 +2,7 @@ Modelfile
 databaseutility
 env
 .env
+.env.docker
+frontend/.env
+frontend/.env.docker
+project.json

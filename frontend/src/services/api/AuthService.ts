@@ -1,4 +1,5 @@
 import BaseService from './BaseService';
+import { API_BASE_URL } from '../../config/api';
 import {
   NonceResponse,
   WalletLoginRequest,
@@ -31,9 +32,7 @@ class AuthService extends BaseService {
   private static instance: AuthService;
 
   private constructor() {
-    // 10.0.2.2 = Android emulator alias for host machine localhost
-    // For a physical device on same WiFi, use your Mac's local IP (e.g. 192.168.x.x)
-    super(process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000');
+    super(API_BASE_URL);
   }
 
   public static getInstance(): AuthService {

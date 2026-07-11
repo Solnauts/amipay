@@ -1,5 +1,6 @@
 import { CreateRecipientRequest, Recipient } from '../../types/api';
 import BaseService from './BaseService';
+import { API_BASE_URL } from '../../config/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RecipientService — Singleton
@@ -9,7 +10,7 @@ class RecipientService extends BaseService {
   private static instance: RecipientService;
 
   private constructor() {
-    super(process.env.EXPO_PUBLIC_API_URL!);
+    super(API_BASE_URL);
   }
 
   public static getInstance(): RecipientService {

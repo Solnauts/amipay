@@ -1,6 +1,7 @@
 import { BackendUser } from '../../types/api';
 import BaseService from './BaseService';
 import { authService } from './AuthService';
+import { API_BASE_URL } from '../../config/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UserService — Singleton
@@ -10,7 +11,7 @@ class UserService extends BaseService {
   private static instance: UserService;
 
   private constructor() {
-    super(process.env.EXPO_PUBLIC_API_URL!);
+    super(API_BASE_URL);
 
     // Forward JWT from authService on every request
     this.client.interceptors.request.use((config) => {

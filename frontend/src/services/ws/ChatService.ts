@@ -4,6 +4,7 @@ import {
   WsUserMessage,
 } from '../../types/api';
 import { authService } from '../api/AuthService';
+import { WS_BASE_URL } from '../../config/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ChatService — Singleton WebSocket Manager
@@ -48,7 +49,7 @@ class ChatService {
     const authHeader = authService.getAuthHeader();
     const token = authHeader?.replace('Bearer ', '') ?? null;
 
-    const wsBase = process.env.EXPO_PUBLIC_WS_URL!;
+    const wsBase = WS_BASE_URL;
     const url = token
       ? `${wsBase}?token=${encodeURIComponent(token)}`
       : wsBase;

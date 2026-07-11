@@ -1,6 +1,7 @@
 import { DepositRequest, DepositResponse, ClaimRequest, ClaimResponse, AllTransactionsResponse } from '../../types/api';
 import BaseService from './BaseService';
 import { authService } from './AuthService';
+import { API_BASE_URL } from '../../config/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TransactionService — Singleton
@@ -10,7 +11,7 @@ class TransactionService extends BaseService {
   private static instance: TransactionService;
 
   private constructor() {
-    super(process.env.EXPO_PUBLIC_API_URL!);
+    super(API_BASE_URL);
 
     // Forward the JWT from authService on every request.
     // authService.setToken() only sets it on authService's own axios instance,

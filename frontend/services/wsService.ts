@@ -12,21 +12,9 @@
 
 // ─── Server URL ──────────────────────────────────────────────────────────────
 
-/**
- * Derive the WebSocket base URL from the same API URL used by HTTP services.
- * Converts http:// → ws:// and https:// → wss://
- */
-function getWsBaseUrl(): string {
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000';
-    // Strip trailing slash if present
-    const cleaned = apiUrl.replace(/\/+$/, '');
-    if (cleaned.startsWith('https://')) {
-        return cleaned.replace('https://', 'wss://');
-    }
-    return cleaned.replace('http://', 'ws://');
-}
+import { WS_BASE_URL } from '../src/config/api';
 
-const WS_BASE_URL = getWsBaseUrl();
+
 const WS_ENDPOINT = '/main_caller';
 
 // ─── Types (mirror backend ws_types.rs) ─────────────────────────────────────
@@ -220,7 +208,7 @@ export class WsService {
             this.startPing();
         };
 
-        this.ws.onmessage = (event: WebSocketMessageEvent) => {
+        this.ws.onmessage = (event: MessageEvent) => {
             this.handleMessage(event.data);
         };
 
@@ -231,7 +219,7 @@ export class WsService {
             // onclose will fire after onerror — reconnect logic lives there
         };
 
-        this.ws.onclose = (event: WebSocketCloseEvent) => {
+        this.ws.onclose = (event: CloseEvent) => {
             console.log(`[WsService] 🔌 closed code=${event.code} reason=${event.reason}`);
             this.stopPing();
             this.setConnected(false);
