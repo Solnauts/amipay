@@ -1,4 +1,4 @@
-import { CreateRecipientRequest, Recipient } from '../../types/api';
+import { AddRecipientRequest, RecipientRecord } from '../../types/api';
 import BaseService from './BaseService';
 import { API_BASE_URL } from '../../config/api';
 
@@ -22,9 +22,9 @@ class RecipientService extends BaseService {
 
   // ── Get All ────────────────────────────────────────────────────────────────
   // GET /api/recipients
-  async getAll(): Promise<Recipient[]> {
+  async getAll(): Promise<RecipientRecord[]> {
     try {
-      const response = await this.client.get<Recipient[]>('/api/recipients');
+      const response = await this.client.get<RecipientRecord[]>('/api/recipients');
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -33,9 +33,9 @@ class RecipientService extends BaseService {
 
   // ── Create ─────────────────────────────────────────────────────────────────
   // POST /api/recipients
-  async create(data: CreateRecipientRequest): Promise<Recipient> {
+  async create(data: AddRecipientRequest): Promise<RecipientRecord> {
     try {
-      const response = await this.client.post<Recipient>(
+      const response = await this.client.post<RecipientRecord>(
         '/api/recipients',
         data,
       );
@@ -49,10 +49,10 @@ class RecipientService extends BaseService {
   // PUT /api/recipients/:id
   async update(
     id: number,
-    data: Partial<CreateRecipientRequest>,
-  ): Promise<Recipient> {
+    data: Partial<AddRecipientRequest>,
+  ): Promise<RecipientRecord> {
     try {
-      const response = await this.client.put<Recipient>(
+      const response = await this.client.put<RecipientRecord>(
         `/api/recipients/${id}`,
         data,
       );
