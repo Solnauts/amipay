@@ -8,11 +8,14 @@ services:
       POSTGRES_PASSWORD: LesserKnown123
       POSTGRES_DB: amypay_db
     ports:
-      - "5435:5435"
+      - "5435:5432"
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - amypay_network
 
+ #backend  
   backend:
     container_name: amypay_backend
     build:
