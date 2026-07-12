@@ -19,9 +19,11 @@ services:
       context: .
       dockerfile: backend/dockerfile
     env_file:
-      - ./env 
+      - ./.env 
     expose:
       - "9000"
+    depends_on:
+      - database
     #include the networks 
     networks: 
       - amypay_network
